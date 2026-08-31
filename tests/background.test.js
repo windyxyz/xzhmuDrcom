@@ -29,6 +29,7 @@ function loadBackground(options = {}) {
   const badgeUpdates = [];
   const storageAccessLevels = [];
   const registeredContentScripts = [];
+  const removedLocalKeys = [];
   const grantedOrigins = new Set(options.grantedOrigins || []);
   const context = vm.createContext({
     AbortController,
@@ -106,7 +107,15 @@ function loadBackground(options = {}) {
             return Object.fromEntries(names.filter((key) => key in localStore).map((key) => [key, structuredClone(localStore[key])]));
           },
           set: async (patch) => {
+            if (options.localSetError) throw options.localSetError;
             Object.assign(localStore, structuredClone(patch));
+          },
+          remove: async (keys) => {
+            const names = Array.isArray(keys) ? keys : [keys];
+            for (const key of names) {
+              removedLocalKeys.push(key);
+              delete localStore[key];
+            }
           },
           setAccessLevel: async (options) => {
             storageAccessLevels.push(structuredClone(options));
@@ -142,6 +151,7 @@ function loadBackground(options = {}) {
     __listeners: listeners,
     __localStore: localStore,
     __registeredContentScripts: registeredContentScripts,
+    __removedLocalKeys: removedLocalKeys,
     __sessionStore: sessionStore,
     __storageAccessLevels: storageAccessLevels,
     __updatedTabs: updatedTabs
@@ -237,7 +247,7 @@ test("旧版本配置升级后默认启用可恢复的门户接管", () => {
     }
   });
 
-  assert.equal(normalized.schemaVersion, 11);
+  assert.equal(normalized.schemaVersion, 12);
   assert.equal(normalized.config.ui.modernizePortal, true);
   assert.equal(normalized.config.ui.hideOriginalPortal, true);
   assert.equal(normalized.config.ui.accent, "#007aff");
@@ -245,6 +255,38 @@ test("旧版本配置升级后默认启用可恢复的门户接管", () => {
   assert.equal(normalized.config.ui.backgroundBlur, 14);
   assert.equal(normalized.config.ui.backgroundDim, 0.42);
   assert.equal(normalized.config.ui.backgroundScale, 1.04);
+});
+
+test("schema 12 迁移成功写回后删除旧顶层凭据且重复执行保持幂等", async () => {
+  const localStore = { username: " legacy-user ", password: "legacy-secret" };
+  const background = loadBackground({ localStore });
+
+  const first = await background.getState();
+  const firstAccountId = first.accounts[0].id;
+  const second = await background.getState();
+
+  assert.equal(first.schemaVersion, 12);
+  assert.equal(first.accounts.length, 1);
+  assert.equal(first.accounts[0].username, "legacy-user");
+  assert.equal(second.accounts.length, 1);
+  assert.equal(second.accounts[0].id, firstAccountId);
+  assert.equal("username" in localStore, false);
+  assert.equal("password" in localStore, false);
+  assert.deepEqual(background.__removedLocalKeys, ["username", "password"]);
+});
+
+test("旧凭据迁移写回失败时不会提前删除源字段", async () => {
+  const localStore = { username: "legacy-user", password: "legacy-secret" };
+  const background = loadBackground({
+    localStore,
+    localSetError: new Error("模拟 storage.local 写入失败")
+  });
+
+  await assert.rejects(background.getState(), /写入失败/);
+
+  assert.equal(localStore.username, "legacy-user");
+  assert.equal(localStore.password, "legacy-secret");
+  assert.deepEqual(background.__removedLocalKeys, []);
 });
 
 function account(overrides = {}) {

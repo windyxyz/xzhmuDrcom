@@ -2,7 +2,7 @@
 
 const STORAGE_KEY = "drcomAssistantState";
 const SESSION_KEY = "drcomAssistantSession";
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
 const KEEPALIVE_ALARM = "drcomAssistant.keepAlive";
 const RETRY_ALARM = "drcomAssistant.retry";
 const RECENT_REQUEST_LIMIT = 10;
@@ -239,28 +239,35 @@ async function handleMessage(message, sender) {
 
 async function getState() {
   const stored = await chrome.storage.local.get([STORAGE_KEY, "username", "password"]);
-  let state = stored[STORAGE_KEY];
+  const storedState = stored[STORAGE_KEY];
+  let state = storedState ? clone(storedState) : null;
+  const hasLegacyCredentials = Boolean(stored.username && stored.password);
 
-  if (!state && stored.username && stored.password) {
-    state = {
-      ...clone(DEFAULT_STATE),
-      accounts: [{
-        id: createId(),
-        label: "默认账号",
-        username: String(stored.username),
-        suffix: "",
-        password: String(stored.password),
-        network: clone(DEFAULT_STATE.config.network),
-        note: "从旧版配置迁移",
-        updatedAt: new Date().toISOString()
-      }]
+  if (hasLegacyCredentials) {
+    state = state || clone(DEFAULT_STATE);
+    const legacyAccount = {
+      id: createId(),
+      label: "默认账号",
+      username: String(stored.username),
+      suffix: "",
+      password: String(stored.password),
+      network: clone(DEFAULT_STATE.config.network),
+      note: "从旧版配置迁移",
+      updatedAt: new Date().toISOString()
     };
-    state.selectedAccountId = state.accounts[0].id;
+    state.accounts = [...(Array.isArray(state.accounts) ? state.accounts : []), legacyAccount];
+    if (!state.selectedAccountId) state.selectedAccountId = legacyAccount.id;
   }
 
   const normalized = normalizeState(state || DEFAULT_STATE);
-  if (!state || state.schemaVersion !== SCHEMA_VERSION) {
+  const needsWrite = !storedState
+    || storedState.schemaVersion !== SCHEMA_VERSION
+    || hasLegacyCredentials;
+  if (needsWrite) {
     await setState(normalized);
+  }
+  if (hasLegacyCredentials) {
+    await chrome.storage.local.remove(["username", "password"]);
   }
 
   return normalized;
