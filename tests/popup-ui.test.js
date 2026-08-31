@@ -37,8 +37,10 @@ function loadPopup(options = {}) {
     },
     setTimeout
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "popup.js"), "utf8");
-  new vm.Script(source, { filename: "popup.js" }).runInContext(context);
+  for (const file of ["account-utils.js", "popup.js"]) {
+    const source = readFileSync(join(__dirname, "..", "CRX", file), "utf8");
+    new vm.Script(source, { filename: file }).runInContext(context);
+  }
   return { context, createdElements, elements };
 }
 
@@ -73,8 +75,10 @@ test("忙碌态结束后不会启用本来就不可用的账号选择框", () =>
     },
     setTimeout
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "popup.js"), "utf8");
-  new vm.Script(source, { filename: "popup.js" }).runInContext(context);
+  for (const file of ["account-utils.js", "popup.js"]) {
+    const source = readFileSync(join(__dirname, "..", "CRX", file), "utf8");
+    new vm.Script(source, { filename: file }).runInContext(context);
+  }
 
   context.setBusy(true);
   context.setBusy(false);

@@ -82,6 +82,7 @@ test("首次安装体验和共享视觉资产会随扩展打包", () => {
     "welcome.html",
     "welcome.css",
     "welcome.js",
+    "account-utils.js",
     "appearance.js",
     "design-tokens.css"
   ];
@@ -160,7 +161,7 @@ test("门户共享令牌和纯逻辑模块在内容脚本之前加载", () => {
   const manifest = JSON.parse(readExtensionFile("manifest.json"));
   const portalScript = manifest.content_scripts[0];
   assert.deepEqual(portalScript.css, ["design-tokens.css", "portal.css"]);
-  assert.deepEqual(portalScript.js, ["appearance.js", "portal-ui.js", "portal-modernizer.js"]);
+  assert.deepEqual(portalScript.js, ["account-utils.js", "appearance.js", "portal-ui.js", "portal-modernizer.js"]);
 });
 
 test("弹窗状态更新可被辅助技术感知且刷新操作有明确名称", () => {

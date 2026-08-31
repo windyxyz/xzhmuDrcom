@@ -1,5 +1,7 @@
 "use strict";
 
+var accountUtils = globalThis.DrcomAccountUtils;
+
 const STORAGE_KEY = "drcomAssistantState";
 const SESSION_KEY = "drcomAssistantSession";
 const SCHEMA_VERSION = 12;
@@ -197,25 +199,6 @@ function sanitizeRequestRecord(input) {
   };
 }
 
-function normalizeAccountValue(value) {
-  let raw = stringValue(value).trim();
-  if (!raw) {
-    return "";
-  }
-
-  for (let i = 0; i < 2; i += 1) {
-    if (!/%[0-9a-f]{2}/i.test(raw)) break;
-    try {
-      const decoded = decodeURIComponent(raw);
-      if (decoded === raw) break;
-      raw = decoded;
-    } catch (error) {
-      break;
-    }
-  }
-  return raw;
-}
-
 function mergeDefaults(input, defaults) {
   if (Array.isArray(defaults)) {
     return Array.isArray(input) ? clone(input) : clone(defaults);
@@ -313,7 +296,7 @@ async function getSessionState() {
 
 function sanitizeActiveIdentity(input) {
   if (!input || typeof input !== "object") return null;
-  const parsed = splitAccountValue(input.username, input.suffix);
+  const parsed = accountUtils.parse(input.username, input.suffix);
   if (!parsed.username) return null;
   return {
     accountId: stringValue(input.accountId),
@@ -322,7 +305,7 @@ function sanitizeActiveIdentity(input) {
     network: {
       wlanUserIp: stringValue(input.network && input.network.wlanUserIp).trim(),
       wlanUserIpv6: stringValue(input.network && input.network.wlanUserIpv6).trim(),
-      wlanUserMac: normalizeMac(input.network && input.network.wlanUserMac),
+      wlanUserMac: accountUtils.normalizeMac(input.network && input.network.wlanUserMac),
       wlanAcIp: stringValue(input.network && input.network.wlanAcIp).trim(),
       wlanAcName: stringValue(input.network && input.network.wlanAcName).trim()
     },
@@ -471,4 +454,3 @@ function stringValue(value) {
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
-

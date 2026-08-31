@@ -1,19 +1,21 @@
 "use strict";
 
+var accountUtils = globalThis.DrcomAccountUtils;
+
 function sanitizeAccount(input) {
   input = input && typeof input === "object" ? input : {};
-  const parsed = splitAccountValue(input.username, input.suffix);
+  const parsed = accountUtils.parse(input.username, input.suffix);
   const updatedAt = normalizeTimestamp(input.updatedAt);
   return {
     id: stringValue(input.id) || createId(),
-    label: stringValue(input.label).trim() || makeAccountLabel(parsed.username, parsed.suffix),
+    label: stringValue(input.label).trim() || accountUtils.label(parsed.username, parsed.suffix),
     username: parsed.username,
     suffix: parsed.suffix,
     password: stringValue(input.password),
     network: {
       wlanUserIp: stringValue(input.network && input.network.wlanUserIp).trim(),
       wlanUserIpv6: stringValue(input.network && input.network.wlanUserIpv6).trim(),
-      wlanUserMac: normalizeMac(input.network && input.network.wlanUserMac),
+      wlanUserMac: accountUtils.normalizeMac(input.network && input.network.wlanUserMac),
       wlanAcIp: stringValue(input.network && input.network.wlanAcIp).trim(),
       wlanAcName: stringValue(input.network && input.network.wlanAcName).trim()
     },
@@ -22,17 +24,12 @@ function sanitizeAccount(input) {
   };
 }
 
-function accountNaturalKey(input) {
-  const parsed = splitAccountValue(input && input.username, input && input.suffix);
-  return parsed.username ? `${parsed.username}\u0000${parsed.suffix.toLowerCase()}` : "";
-}
-
 function deduplicateAccounts(inputs, selectedAccountId = "") {
   const groups = new Map();
   for (const raw of inputs) {
     const account = sanitizeAccount(raw);
     if (!account.username || !account.password) continue;
-    const key = accountNaturalKey(account);
+    const key = accountUtils.naturalKey(account);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push({ raw: raw || {}, account });
   }
@@ -92,8 +89,8 @@ async function saveAccount(input) {
     const idIndex = stringValue(input && input.id)
       ? state.accounts.findIndex((item) => item.id === account.id)
       : -1;
-    const naturalKey = accountNaturalKey(account);
-    const naturalKeyIndex = state.accounts.findIndex((item) => accountNaturalKey(item) === naturalKey);
+    const naturalKey = accountUtils.naturalKey(account);
+    const naturalKeyIndex = state.accounts.findIndex((item) => accountUtils.naturalKey(item) === naturalKey);
     const index = idIndex >= 0 ? idIndex : naturalKeyIndex;
     if (index >= 0) {
       account.id = state.accounts[index].id;
@@ -129,11 +126,11 @@ async function selectAccount(accountId) {
 }
 
 async function updateAccountNetwork(userAccount, patch) {
-  const parsed = splitAccountValue(userAccount);
+  const parsed = accountUtils.parse(userAccount);
   const mutation = await mutateState((state) => {
     const selected = state.accounts.find((account) => account.id === state.selectedAccountId) || null;
     const matched = state.accounts.find((item) => {
-      const current = splitAccountValue(item.username, item.suffix);
+      const current = accountUtils.parse(item.username, item.suffix);
       if (!parsed.username || current.username !== parsed.username) return false;
       return parsed.suffix ? current.suffix === parsed.suffix : true;
     }) || null;
@@ -144,7 +141,7 @@ async function updateAccountNetwork(userAccount, patch) {
     const networkPatch = {
       wlanUserIp: stringValue(patch.wlanUserIp).trim(),
       wlanUserIpv6: stringValue(patch.wlanUserIpv6).trim(),
-      wlanUserMac: normalizeMac(patch.wlanUserMac),
+      wlanUserMac: accountUtils.normalizeMac(patch.wlanUserMac),
       wlanAcIp: stringValue(patch.wlanAcIp).trim(),
       wlanAcName: stringValue(patch.wlanAcName).trim()
     };
@@ -159,59 +156,5 @@ async function updateAccountNetwork(userAccount, patch) {
   }
   const account = mutation.state.accounts.find((item) => item.id === mutation.value);
   return { ok: true, state: mutation.state, account };
-}
-
-function splitAccountValue(value, fallbackSuffix = "") {
-  let raw = normalizeAccountValue(value).trim();
-  raw = raw.replace(/^\s*0+\s*$/, "");
-  if (raw.startsWith(",0,")) {
-    raw = raw.slice(3);
-  }
-
-  const suffixMatch = raw.match(/@(telecom|unicom|cmcc)$/i);
-  const suffixFromRaw = suffixMatch ? `@${suffixMatch[1].toLowerCase()}` : "";
-  const suffix = suffixFromRaw || normalizeSuffix(fallbackSuffix);
-  const username = suffixFromRaw ? raw.slice(0, -suffixFromRaw.length) : raw;
-  return { username: username.trim(), suffix };
-}
-
-function normalizeSuffix(value) {
-  const raw = normalizeAccountValue(value).trim().toLowerCase();
-  if (!raw || raw === "校园网" || raw === "campus" || raw === "none") {
-    return "";
-  }
-  const aliases = {
-    telecom: "@telecom",
-    "@telecom": "@telecom",
-    "电信": "@telecom",
-    unicom: "@unicom",
-    "@unicom": "@unicom",
-    "联通": "@unicom",
-    cmcc: "@cmcc",
-    "@cmcc": "@cmcc",
-    "mobile": "@cmcc",
-    "移动": "@cmcc"
-  };
-  if (aliases[raw]) {
-    return aliases[raw];
-  }
-  return /^@[a-z0-9._-]+$/i.test(raw) ? raw : "";
-}
-
-function suffixLabel(suffix) {
-  return { "": "校园网", "@telecom": "电信", "@unicom": "联通", "@cmcc": "移动" }[normalizeSuffix(suffix)] || normalizeSuffix(suffix) || "校园网";
-}
-
-function makeAccountLabel(username, suffix) {
-  const name = stringValue(username).trim() || "未命名账号";
-  return `${name} ${suffixLabel(suffix)}`;
-}
-
-function maskUsername(value) {
-  const text = stringValue(value).trim();
-  if (text.length <= 4) {
-    return text ? "****" : "";
-  }
-  return `${text.slice(0, 2)}***${text.slice(-2)}`;
 }
 

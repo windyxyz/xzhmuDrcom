@@ -1,82 +1,27 @@
 "use strict";
 
 (function attachPortalUi(root, factory) {
-  const api = factory();
+  const accountUtils = typeof module === "object" && module.exports
+    ? require("./account-utils.js")
+    : root.DrcomAccountUtils;
+  const api = factory(accountUtils);
   if (typeof module === "object" && module.exports) {
     module.exports = api;
   }
   if (root) {
     root.DrcomPortalUI = api;
   }
-})(typeof globalThis === "object" ? globalThis : this, () => {
-  function decodeMaybe(value) {
-    let text = String(value || "");
-    for (let index = 0; index < 2; index += 1) {
-      if (!/%[0-9a-f]{2}/i.test(text)) break;
-      try {
-        const decoded = decodeURIComponent(text);
-        if (decoded === text) break;
-        text = decoded;
-      } catch (error) {
-        break;
-      }
-    }
-    return text;
-  }
-
-  function normalizeSuffix(value) {
-    const raw = decodeMaybe(String(value || "").trim()).toLowerCase();
-    if (!raw || raw === "校园网" || raw === "campus" || raw === "none") return "";
-    const aliases = {
-      telecom: "@telecom",
-      "@telecom": "@telecom",
-      "电信": "@telecom",
-      unicom: "@unicom",
-      "@unicom": "@unicom",
-      "联通": "@unicom",
-      cmcc: "@cmcc",
-      "@cmcc": "@cmcc",
-      mobile: "@cmcc",
-      "移动": "@cmcc"
-    };
-    if (aliases[raw]) return aliases[raw];
-    return /^@[a-z0-9._-]+$/i.test(raw) ? raw : "";
-  }
-
-  function parseAccount(value, fallbackSuffix = "") {
-    let raw = decodeMaybe(String(value || "").trim());
-    raw = raw.replace(/^\s*0+\s*$/, "");
-    if (raw.startsWith(",0,")) raw = raw.slice(3);
-    const suffixMatch = raw.match(/@(telecom|unicom|cmcc)$/i);
-    const suffixFromRaw = suffixMatch ? `@${suffixMatch[1].toLowerCase()}` : "";
-    const suffix = suffixFromRaw || normalizeSuffix(fallbackSuffix);
-    const username = suffixFromRaw ? raw.slice(0, -suffixFromRaw.length) : raw;
-    return { username: username.trim(), suffix };
-  }
-
-  function suffixLabel(suffix) {
-    return {
-      "": "校园网",
-      "@telecom": "电信",
-      "@unicom": "联通",
-      "@cmcc": "移动"
-    }[normalizeSuffix(suffix)] || normalizeSuffix(suffix) || "校园网";
-  }
-
-  function normalizeMac(value) {
-    return String(value || "").replace(/[^0-9a-f]/gi, "").toUpperCase();
-  }
-
+})(typeof globalThis === "object" ? globalThis : this, (accountUtils) => {
   function buildAccount(form = {}, network = {}) {
-    const parsed = parseAccount(form.username, form.suffix);
+    const parsed = accountUtils.parse(form.username, form.suffix);
     return {
-      label: `${parsed.username || "未命名账号"} ${suffixLabel(parsed.suffix)}`,
+      label: accountUtils.label(parsed.username, parsed.suffix),
       username: parsed.username,
       suffix: parsed.suffix,
       password: String(form.password || ""),
       network: {
         wlanUserIp: String(network.wlanUserIp || "").trim(),
-        wlanUserMac: normalizeMac(network.wlanUserMac),
+        wlanUserMac: accountUtils.normalizeMac(network.wlanUserMac),
         wlanUserIpv6: String(network.wlanUserIpv6 || "").trim(),
         wlanAcIp: String(network.wlanAcIp || "").trim(),
         wlanAcName: String(network.wlanAcName || "").trim()
@@ -165,10 +110,10 @@
 
   return {
     buildAccount,
-    normalizeSuffix,
-    parseAccount,
+    normalizeSuffix: accountUtils.normalizeSuffix,
+    parseAccount: accountUtils.parse,
     renderPortalMarkup,
     shouldTakeOver,
-    suffixLabel
+    suffixLabel: accountUtils.suffixLabel
   };
 });

@@ -1,5 +1,7 @@
 "use strict";
 
+var accountUtils = globalThis.DrcomAccountUtils;
+
 async function loginSelectedAccount(reason, options = {}) {
   const state = await getState();
   if (!state.selectedAccountId) {
@@ -237,7 +239,7 @@ async function recordLogoutOutcome(result) {
 async function resolveLogoutNetwork(account, config) {
   const network = { ...config.network, ...account.network };
   if (isUsableMac(network.wlanUserMac)) {
-    network.wlanUserMac = normalizeMac(network.wlanUserMac);
+    network.wlanUserMac = accountUtils.normalizeMac(network.wlanUserMac);
     return network;
   }
 
@@ -252,7 +254,7 @@ async function resolveLogoutNetwork(account, config) {
     } catch (error) {}
   }
 
-  network.wlanUserMac = normalizeMac(network.wlanUserMac) || "000000000000";
+  network.wlanUserMac = accountUtils.normalizeMac(network.wlanUserMac) || "000000000000";
   return network;
 }
 
@@ -359,4 +361,3 @@ async function setupAutomation(state) {
     });
   }
 }
-

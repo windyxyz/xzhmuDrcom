@@ -39,6 +39,7 @@
         "portal.css"
       ],
       "js": [
+        "account-utils.js",
         "appearance.js",
         "portal-ui.js",
         "portal-modernizer.js"

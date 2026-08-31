@@ -1,5 +1,10 @@
 "use strict";
 
+const accountUtils = globalThis.DrcomAccountUtils;
+const splitAccount = accountUtils.parse;
+const suffixLabel = accountUtils.suffixLabel;
+const makeAccountLabel = accountUtils.label;
+
 const BACKGROUND_IMAGE_BUDGET_BYTES = 3 * 1024 * 1024;
 const BACKGROUND_SOURCE_LIMIT_BYTES = 48 * 1024 * 1024;
 const BACKGROUND_TARGET_DIMENSIONS = [2560, 2240, 1920, 1600, 1280, 960];
@@ -745,64 +750,9 @@ function readBlobAsDataUrl(blob) {
   });
 }
 
-function splitAccount(value, fallbackSuffix = "") {
-  let raw = decodeMaybe(String(value || "").trim());
-  raw = raw.replace(/^\s*0+\s*$/, "");
-  if (raw.startsWith(",0,")) raw = raw.slice(3);
-  const match = raw.match(/@(telecom|unicom|cmcc)$/i);
-  const suffixFromRaw = match ? "@" + match[1].toLowerCase() : "";
-  const suffix = suffixFromRaw || normalizeSuffix(fallbackSuffix);
-  const username = suffixFromRaw ? raw.slice(0, -suffixFromRaw.length) : raw;
-  return { username: username.trim(), suffix };
-}
-
-function normalizeSuffix(value) {
-  const raw = decodeMaybe(String(value || "").trim()).toLowerCase();
-  if (!raw || raw === "校园网" || raw === "campus" || raw === "none") return "";
-  const aliases = {
-    telecom: "@telecom",
-    "@telecom": "@telecom",
-    "电信": "@telecom",
-    unicom: "@unicom",
-    "@unicom": "@unicom",
-    "联通": "@unicom",
-    cmcc: "@cmcc",
-    "@cmcc": "@cmcc",
-    mobile: "@cmcc",
-    "移动": "@cmcc"
-  };
-  if (aliases[raw]) return aliases[raw];
-  return /^@[a-z0-9._-]+$/i.test(raw) ? raw : "";
-}
-
-function suffixLabel(suffix) {
-  return { "": "校园网", "@telecom": "电信", "@unicom": "联通", "@cmcc": "移动" }[normalizeSuffix(suffix)] || normalizeSuffix(suffix) || "校园网";
-}
-
-function makeAccountLabel(username, suffix) {
-  return (username || "未命名账号") + " " + suffixLabel(suffix);
-}
-
-function decodeMaybe(value) {
-  let text = String(value || "");
-  for (let i = 0; i < 2; i += 1) {
-    if (!/%[0-9a-f]{2}/i.test(text)) break;
-    try {
-      const decoded = decodeURIComponent(text);
-      if (decoded === text) break;
-      text = decoded;
-    } catch (error) {
-      break;
-    }
-  }
-  return text;
-}
-
 function maskAccount(account) {
   const parsed = splitAccount(account.username || "", account.suffix || "");
-  const username = parsed.username;
-  const masked = username.length <= 4 ? username : username.slice(0, 2) + "***" + username.slice(-2);
-  return masked + " · " + suffixLabel(parsed.suffix);
+  return accountUtils.mask(parsed.username) + " · " + suffixLabel(parsed.suffix);
 }
 
 function formatTime(value) {

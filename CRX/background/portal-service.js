@@ -45,7 +45,7 @@ async function syncPortalContentScript(state) {
     id: CUSTOM_PORTAL_SCRIPT_ID,
     matches: [pattern],
     css: ["design-tokens.css", "portal.css"],
-    js: ["appearance.js", "portal-ui.js", "portal-modernizer.js"],
+    js: ["account-utils.js", "appearance.js", "portal-ui.js", "portal-modernizer.js"],
     runAt: "document_start",
     persistAcrossSessions: true
   }]);
@@ -149,4 +149,3 @@ function safePortalAppearance(input) {
 function isWebPageSender(sender) {
   return Boolean(sender && typeof sender.url === "string" && /^https?:/i.test(sender.url));
 }
-

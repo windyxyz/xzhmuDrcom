@@ -6,6 +6,13 @@ const { join } = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
+function loadOptions(context) {
+  for (const file of ["account-utils.js", "options.js"]) {
+    const source = readFileSync(join(__dirname, "..", "CRX", file), "utf8");
+    new vm.Script(source, { filename: file }).runInContext(context);
+  }
+}
+
 test("保活关闭时禁用间隔输入，开启后恢复", () => {
   const keepAlive = { checked: false };
   const minutes = { disabled: false };
@@ -26,8 +33,7 @@ test("保活关闭时禁用间隔输入，开启后恢复", () => {
     },
     setTimeout
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "options.js"), "utf8");
-  new vm.Script(source, { filename: "options.js" }).runInContext(context);
+  loadOptions(context);
 
   context.syncDependentControls();
   assert.equal(minutes.disabled, true);
@@ -53,8 +59,7 @@ test("保活间隔支持分钟和秒并遵守 Chrome 的三十秒下限", () => 
     },
     setTimeout
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "options.js"), "utf8");
-  new vm.Script(source, { filename: "options.js" }).runInContext(context);
+  loadOptions(context);
 
   assert.equal(context.readKeepAliveInterval(), 2.5);
   assert.deepEqual(JSON.parse(JSON.stringify(context.splitKeepAliveInterval(0))), { minutes: 0, seconds: 30 });
@@ -68,8 +73,7 @@ test("设置页连接概览会把在线、待登录和错误状态转换为明�
     document: { addEventListener() {}, getElementById() { return null; } },
     setTimeout
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "options.js"), "utf8");
-  new vm.Script(source, { filename: "options.js" }).runInContext(context);
+  loadOptions(context);
 
   assert.equal(context.connectionSummary({ online: true }).label, "已连接");
   assert.equal(context.connectionSummary({ phase: "captive" }).label, "需要登录");
@@ -98,8 +102,7 @@ test("外观表单会保存主题、自定义背景和可读性参数", () => {
     },
     setTimeout
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "options.js"), "utf8");
-  new vm.Script(source, { filename: "options.js" }).runInContext(context);
+  loadOptions(context);
 
   const result = JSON.parse(JSON.stringify(context.readAppearanceConfig()));
   assert.deepEqual(result, {
@@ -142,8 +145,7 @@ test("外观图片选择后会立即持久化，不依赖页面底部的总保�
     },
     setTimeout
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "options.js"), "utf8");
-  new vm.Script(source, { filename: "options.js" }).runInContext(context);
+  loadOptions(context);
 
   await context.persistAppearance();
 
@@ -173,8 +175,7 @@ test("背景图片预算会拒绝超过三兆字节的数据", () => {
     },
     setTimeout
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "options.js"), "utf8");
-  new vm.Script(source, { filename: "options.js" }).runInContext(context);
+  loadOptions(context);
 
   assert.throws(
     () => context.assertBackgroundImageBudget("A".repeat(3 * 1024 * 1024 + 1)),
@@ -209,8 +210,7 @@ test("设置页会显示当前背景图片占用与预算上限", () => {
     },
     setTimeout
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "options.js"), "utf8");
-  new vm.Script(source, { filename: "options.js" }).runInContext(context);
+  loadOptions(context);
 
   context.syncAppearanceControls();
 
@@ -272,8 +272,7 @@ test("超过保存预算的高分辨率背景会自动多轮压缩到三兆以�
     FileReader: FakeFileReader,
     setTimeout
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "options.js"), "utf8");
-  new vm.Script(source, { filename: "options.js" }).runInContext(context);
+  loadOptions(context);
 
   const result = await context.optimizeBackgroundImage({
     type: "image/jpeg",
@@ -304,8 +303,7 @@ test("背景图片处理失败后会清空文件输入以便重试同一文件",
     },
     setTimeout
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "options.js"), "utf8");
-  new vm.Script(source, { filename: "options.js" }).runInContext(context);
+  loadOptions(context);
 
   await assert.rejects(() => context.handleBackgroundFile({ target: fileInput }), /请选择 PNG/);
   assert.equal(fileInput.value, "");
@@ -323,8 +321,7 @@ test("设置页账号删除按钮包含具体账号的无障碍名称", () => {
     },
     setTimeout
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "options.js"), "utf8");
-  new vm.Script(source, { filename: "options.js" }).runInContext(context);
+  loadOptions(context);
   new vm.Script(`state = {
     selectedAccountId: "account-1",
     accounts: [{
@@ -361,8 +358,7 @@ test("自定义网关只请求对应来源并在现代界面启用时请求脚�
     setTimeout,
     URL
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "options.js"), "utf8");
-  new vm.Script(source, { filename: "options.js" }).runInContext(context);
+  loadOptions(context);
 
   await context.requestGatewayAccess({
     portalUrl: "https://gateway.example/login",
@@ -389,8 +385,7 @@ test("设置状态尚未加载时打开认证页不会崩溃或误跳默认地�
     },
     setTimeout
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "options.js"), "utf8");
-  new vm.Script(source, { filename: "options.js" }).runInContext(context);
+  loadOptions(context);
 
   assert.equal(context.openConfiguredPortal(), false);
   assert.deepEqual(opened, []);

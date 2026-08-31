@@ -1,5 +1,7 @@
 "use strict";
 
+var accountUtils = globalThis.DrcomAccountUtils;
+
 async function fetchDrcom(request, kind) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 9000);
@@ -64,7 +66,7 @@ function buildLoginRequest(account, config) {
   url.searchParams.set("user_password", account.password);
   url.searchParams.set("wlan_user_ip", network.wlanUserIp || "");
   url.searchParams.set("wlan_user_ipv6", network.wlanUserIpv6 || "");
-  url.searchParams.set("wlan_user_mac", normalizeMac(network.wlanUserMac) || "000000000000");
+  url.searchParams.set("wlan_user_mac", accountUtils.normalizeMac(network.wlanUserMac) || "000000000000");
   url.searchParams.set("wlan_ac_ip", network.wlanAcIp || "");
   url.searchParams.set("wlan_ac_name", network.wlanAcName || "");
   url.searchParams.set("jsVersion", config.login.jsVersion || "3.3.2");
@@ -99,7 +101,7 @@ function buildLogoutRequest(account, config, networkOverride = null) {
   url.searchParams.set("a", "unbind_mac");
   url.searchParams.set("callback", `${config.login.callbackPrefix}${ts}`);
   url.searchParams.set("user_account", composeLogoutUserAccount(account));
-  url.searchParams.set("wlan_user_mac", normalizeMac(network.wlanUserMac) || "000000000000");
+  url.searchParams.set("wlan_user_mac", accountUtils.normalizeMac(network.wlanUserMac) || "000000000000");
   url.searchParams.set("wlan_user_ip", network.wlanUserIp || "");
   url.searchParams.set("jsVersion", config.login.jsVersion || "3.3.2");
   url.searchParams.set("v", createNonce());
@@ -119,17 +121,17 @@ function buildLegacyLogoutRequest(config) {
 }
 
 function plainStudentId(value) {
-  return splitAccountValue(value).username;
+  return accountUtils.parse(value).username;
 }
 
 function composeUserAccount(account, config) {
-  const parsed = splitAccountValue(account.username, account.suffix);
+  const parsed = accountUtils.parse(account.username, account.suffix);
   const prefix = stringValue(config.login.accountPrefix) || ",0,";
   return `${prefix}${parsed.username}${parsed.suffix}`;
 }
 
 function composeLogoutUserAccount(account) {
-  const parsed = splitAccountValue(account.username, account.suffix);
+  const parsed = accountUtils.parse(account.username, account.suffix);
   return `${parsed.username}${parsed.suffix}`;
 }
 
@@ -257,9 +259,9 @@ function redactSensitiveUrl(value) {
     }
     if (url.searchParams.has("user_account")) {
       const current = url.searchParams.get("user_account") || "";
-      const parsed = splitAccountValue(current);
-      const hasPrefix = normalizeAccountValue(current).startsWith(",0,");
-      url.searchParams.set("user_account", `${hasPrefix ? ",0," : ""}${maskUsername(parsed.username)}${parsed.suffix}`);
+      const parsed = accountUtils.parse(current);
+      const hasPrefix = accountUtils.decode(current).trim().startsWith(",0,");
+      url.searchParams.set("user_account", `${hasPrefix ? ",0," : ""}${accountUtils.mask(parsed.username)}${parsed.suffix}`);
     }
     return url.toString();
   } catch (error) {
@@ -280,22 +282,22 @@ function redactSensitiveText(value) {
   return raw
     .replace(quotedPasswordPattern, (match, prefix, quote) => `${prefix}${quote}******${quote}`)
     .replace(quotedAccountPattern, (match, prefix, quote, accountValue) => {
-      const normalized = normalizeAccountValue(accountValue);
-      const parsed = splitAccountValue(normalized);
+      const normalized = accountUtils.decode(accountValue).trim();
+      const parsed = accountUtils.parse(normalized);
       const hasPrefix = normalized.startsWith(",0,");
-      return `${prefix}${quote}${hasPrefix ? ",0," : ""}${maskUsername(parsed.username)}${parsed.suffix}${quote}`;
+      return `${prefix}${quote}${hasPrefix ? ",0," : ""}${accountUtils.mask(parsed.username)}${parsed.suffix}${quote}`;
     })
     .replace(passwordPattern, "$1******")
     .replace(accountPattern, (match, prefix, accountValue) => {
-      const normalized = normalizeAccountValue(accountValue);
-      const parsed = splitAccountValue(normalized);
+      const normalized = accountUtils.decode(accountValue).trim();
+      const parsed = accountUtils.parse(normalized);
       const hasPrefix = normalized.startsWith(",0,");
-      return `${prefix}${hasPrefix ? ",0," : ""}${maskUsername(parsed.username)}${parsed.suffix}`;
+      return `${prefix}${hasPrefix ? ",0," : ""}${accountUtils.mask(parsed.username)}${parsed.suffix}`;
     });
 }
 
 function isUsableMac(value) {
-  const mac = normalizeMac(value);
+  const mac = accountUtils.normalizeMac(value);
   return /^[0-9A-F]{12}$/.test(mac) && mac !== "000000000000";
 }
 
@@ -310,15 +312,11 @@ function extractMacFromResponse(data, raw) {
 
   for (const candidate of candidates) {
     const text = stringValue(candidate);
-    const direct = normalizeMac(text);
+    const direct = accountUtils.normalizeMac(text);
     if (isUsableMac(direct)) return direct;
     const match = text.match(/(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}|\b[0-9a-f]{12}\b/i);
-    if (match && isUsableMac(match[0])) return normalizeMac(match[0]);
+    if (match && isUsableMac(match[0])) return accountUtils.normalizeMac(match[0]);
   }
   return "";
-}
-
-function normalizeMac(value) {
-  return stringValue(value).replace(/[^0-9a-f]/gi, "").toUpperCase();
 }
 

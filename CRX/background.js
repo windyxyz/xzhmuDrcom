@@ -1,6 +1,7 @@
 "use strict";
 
 importScripts(
+  "account-utils.js",
   "background/state-store.js",
   "background/drcom-client.js",
   "background/account-service.js",
