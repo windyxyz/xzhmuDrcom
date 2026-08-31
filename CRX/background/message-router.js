@@ -15,11 +15,14 @@ async function handleMessage(message, sender) {
   const action = message && message.action;
   const fromWebPage = isWebPageSender(sender);
 
-  if (fromWebPage && !WEB_PAGE_ACTIONS.has(action)) {
-    if (action === "state:get") {
-      throw new Error("网页内容脚本不能读取完整扩展状态");
+  if (fromWebPage) {
+    await validatePortalSender(sender);
+    if (!WEB_PAGE_ACTIONS.has(action)) {
+      if (action === "state:get") {
+        throw new Error("网页内容脚本不能读取完整扩展状态");
+      }
+      throw new Error("网页内容脚本无权执行此操作");
     }
-    throw new Error("网页内容脚本无权执行此操作");
   }
 
   switch (action) {
@@ -106,4 +109,3 @@ async function handleMessage(message, sender) {
       throw new Error(`未知操作：${action || "空"}`);
   }
 }
-

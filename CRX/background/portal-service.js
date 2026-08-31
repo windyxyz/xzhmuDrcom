@@ -149,3 +149,41 @@ function safePortalAppearance(input) {
 function isWebPageSender(sender) {
   return Boolean(sender && typeof sender.url === "string" && /^https?:/i.test(sender.url));
 }
+
+async function validatePortalSender(sender) {
+  const trustedOrigin = "http://10.10.10.2";
+  if (!sender || sender.id !== chrome.runtime.id) {
+    throw new Error("拒绝非本扩展发起的网页消息");
+  }
+  if (sender.frameId !== 0) {
+    throw new Error("网页消息只允许来自门户顶层 frame");
+  }
+  if (sender.origin !== trustedOrigin) {
+    throw new Error("网页消息来源不是受信任门户");
+  }
+  try {
+    if (new URL(sender.url).origin !== trustedOrigin) {
+      throw new Error("网页消息 URL 不是受信任门户");
+    }
+  } catch (error) {
+    throw new Error("网页消息 URL 不是受信任门户");
+  }
+  if (!sender.tab || typeof sender.tab.id !== "number") {
+    throw new Error("网页消息缺少有效标签页");
+  }
+
+  let currentTab;
+  try {
+    currentTab = await chrome.tabs.get(sender.tab.id);
+  } catch (error) {
+    throw new Error("无法确认网页消息标签页");
+  }
+  try {
+    if (!currentTab || new URL(currentTab.url || "").origin !== trustedOrigin) {
+      throw new Error("标签页已经离开受信任门户");
+    }
+  } catch (error) {
+    throw new Error("标签页已经离开受信任门户");
+  }
+  return true;
+}

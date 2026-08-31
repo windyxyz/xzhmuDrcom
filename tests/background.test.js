@@ -22,6 +22,7 @@ function loadBackground(options = {}) {
   });
   const createdTabs = [];
   const updatedTabs = [];
+  const openedOptions = [];
   const localStore = options.localStore || {};
   const sessionStore = options.sessionStore || {};
   const alarms = options.alarms || {};
@@ -69,11 +70,15 @@ function loadBackground(options = {}) {
         onAlarm: event("alarm")
       },
       runtime: {
+        id: "test-extension-id",
         getURL: (path) => `chrome-extension://test/${path}`,
         lastError: null,
         onInstalled: event("installed"),
         onMessage: event("message"),
-        onStartup: event("startup")
+        onStartup: event("startup"),
+        async openOptionsPage() {
+          openedOptions.push(true);
+        }
       },
       permissions: {
         async contains(request) {
@@ -134,6 +139,10 @@ function loadBackground(options = {}) {
         }
       },
       tabs: {
+        async get(tabId) {
+          const configured = options.currentTabs && options.currentTabs[tabId];
+          return structuredClone(configured || { id: tabId, url: "http://10.10.10.2/" });
+        },
         create(options) {
           createdTabs.push(options);
         },
@@ -150,6 +159,7 @@ function loadBackground(options = {}) {
     __createdTabs: createdTabs,
     __listeners: listeners,
     __localStore: localStore,
+    __openedOptions: openedOptions,
     __registeredContentScripts: registeredContentScripts,
     __removedLocalKeys: removedLocalKeys,
     __sessionStore: sessionStore,
@@ -167,6 +177,21 @@ function loadBackground(options = {}) {
   const source = readFileSync(join(__dirname, "..", "CRX", "background.js"), "utf8");
   new vm.Script(source, { filename: "background.js" }).runInContext(context);
   return context;
+}
+
+function portalSender(overrides = {}) {
+  return {
+    id: "test-extension-id",
+    frameId: 0,
+    origin: "http://10.10.10.2",
+    url: "http://10.10.10.2/",
+    ...overrides,
+    tab: {
+      id: 1,
+      url: "http://10.10.10.2/",
+      ...(overrides.tab || {})
+    }
+  };
 }
 
 test("后台入口只负责依赖加载和事件注册", () => {
@@ -225,12 +250,12 @@ test("门户安全配置不携带背景数据且专用外观接口单独返回�
 
   const result = await background.handleMessage(
     { action: "portal:config:get" },
-    { url: "http://10.10.10.2/" }
+    portalSender()
   );
   const plain = JSON.parse(JSON.stringify(result));
   const appearanceResult = JSON.parse(JSON.stringify(await background.handleMessage(
     { action: "portal:appearance:get" },
-    { url: "http://10.10.10.2/" }
+    portalSender()
   )));
 
   assert.deepEqual(plain, {
@@ -482,7 +507,7 @@ test("网页内容脚本不能读取完整扩展状态", async () => {
   await assert.rejects(
     background.handleMessage(
       { action: "state:get" },
-      { url: "http://10.10.10.2/" }
+      portalSender()
     ),
     /不能读取完整扩展状态/
   );
@@ -490,7 +515,7 @@ test("网页内容脚本不能读取完整扩展状态", async () => {
 
 test("网页内容脚本不能执行设置页专属的破坏性操作", async () => {
   const background = loadBackground();
-  const sender = { url: "http://10.10.10.2/" };
+  const sender = portalSender();
 
   for (const action of ["account:delete", "account:select", "requestLog:clear", "config:save", "config:reset"]) {
     await assert.rejects(
@@ -498,6 +523,46 @@ test("网页内容脚本不能执行设置页专属的破坏性操作", async ()
       /无权执行此操作/
     );
   }
+});
+
+test("网页消息只接受自身扩展顶层 frame 与当前门户标签", async () => {
+  const invalidSenders = [
+    portalSender({ id: "forged-extension" }),
+    portalSender({ frameId: 1 }),
+    portalSender({ origin: "https://10.10.10.2", url: "https://10.10.10.2/" }),
+    portalSender({ origin: "http://evil.example", url: "http://evil.example/" }),
+    portalSender({ tab: { id: null } })
+  ];
+
+  for (const sender of invalidSenders) {
+    const background = loadBackground();
+    await assert.rejects(
+      background.handleMessage({ action: "portal:config:get" }, sender),
+      /来源|顶层|门户|标签页|扩展/
+    );
+  }
+
+  const staleTabBackground = loadBackground({
+    currentTabs: { 1: { id: 1, url: "http://example.com/" } }
+  });
+  await assert.rejects(
+    staleTabBackground.handleMessage({ action: "portal:config:get" }, portalSender()),
+    /标签页|门户/
+  );
+});
+
+test("options:open 仅在全部网页来源校验通过后执行", async () => {
+  const background = loadBackground();
+
+  const result = await background.handleMessage({ action: "options:open" }, portalSender());
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), { ok: true });
+  assert.equal(background.__openedOptions.length, 1);
+
+  await assert.rejects(
+    background.handleMessage({ action: "options:open" }, portalSender({ frameId: 2 })),
+    /顶层/
+  );
+  assert.equal(background.__openedOptions.length, 1);
 });
 
 test("请求记录会脱敏 URL、消息和原始返回文本", () => {
