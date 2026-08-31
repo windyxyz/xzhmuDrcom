@@ -800,8 +800,7 @@ async function logout(accountId = "", transientAccount = null) {
   if (!account) {
     const legacyRequest = buildLegacyLogoutRequest(state.config);
     const legacyResult = await fetchDrcom(legacyRequest, "logout");
-    if (legacyResult.success) await setActiveIdentity(null);
-    return legacyResult;
+    return recordLogoutOutcome(legacyResult);
   }
 
   const network = await resolveLogoutNetwork(account, state.config);
@@ -815,8 +814,23 @@ async function logout(accountId = "", transientAccount = null) {
     };
   }
 
-  if (result.success) await setActiveIdentity(null);
-  return result;
+  return recordLogoutOutcome(result);
+}
+
+async function recordLogoutOutcome(result) {
+  if (!result || !result.success) return result;
+  await chrome.alarms.clear(RETRY_ALARM);
+  const { session } = await mutateSession((draft) => {
+    draft.activeIdentity = null;
+    draft.connection = {
+      ...DEFAULT_CONNECTION_STATE,
+      phase: "offline",
+      message: result.message || "已下线。",
+      updatedAt: Date.now()
+    };
+  });
+  await updateActionBadge(session.connection);
+  return { ...result, online: false, phase: "offline" };
 }
 
 async function resolveLogoutNetwork(account, config) {

@@ -753,6 +753,10 @@ test("临时登录身份跨后台重启保留且退出不会误用当前选中�
   const restartedWorker = loadBackground({ sessionStore, fetch: fetchStub });
   restartedWorker.getState = firstWorker.getState;
   restartedWorker.addRequestRecord = async () => undefined;
+  restartedWorker.__alarms["drcomAssistant.retry"] = {
+    name: "drcomAssistant.retry",
+    when: Date.now() + 30000
+  };
   const logout = await restartedWorker.logout();
   const logoutRequest = requests.find((url) => url.searchParams.get("a") === "unbind_mac");
 
@@ -760,6 +764,63 @@ test("临时登录身份跨后台重启保留且退出不会误用当前选中�
   assert.equal(logoutRequest.searchParams.get("user_account"), "temporary-user@unicom");
   assert.equal(logoutRequest.searchParams.get("wlan_user_ip"), "10.0.0.99");
   assert.equal(sessionStore.drcomAssistantSession.activeIdentity, null);
+  assert.equal(sessionStore.drcomAssistantSession.connection.phase, "offline");
+  assert.equal(sessionStore.drcomAssistantSession.connection.attempt, 0);
+  assert.equal(sessionStore.drcomAssistantSession.connection.nextRetryAt, 0);
+  assert.equal(restartedWorker.__alarms["drcomAssistant.retry"], undefined);
+});
+
+test("下线失败时保留真实在线状态和活动身份", async () => {
+  const sessionStore = {
+    drcomAssistantSession: {
+      guards: {},
+      connection: {
+        phase: "online",
+        attempt: 0,
+        nextRetryAt: 0,
+        blocked: false,
+        message: "已连接",
+        updatedAt: 100
+      },
+      activeIdentity: {
+        accountId: "",
+        username: "temporary-user",
+        suffix: "@unicom",
+        source: "transient",
+        authenticatedAt: 100,
+        network: { wlanUserIp: "10.0.0.99", wlanUserMac: "AABBCCDDEEFF" }
+      }
+    }
+  };
+  const background = loadBackground({
+    sessionStore,
+    fetch: async () => ({
+      ok: true,
+      status: 200,
+      async text() {
+        return '{"result":"0","message":"logout failed"}';
+      }
+    })
+  });
+  background.getState = async () => ({
+    selectedAccountId: "account-1",
+    accounts: [account({ username: "selected-user" })],
+    recentRequests: [],
+    config: {
+      apiUrl: "http://10.10.10.2:801/eportal/",
+      login: { callbackPrefix: "dr", jsVersion: "3.3.2" },
+      network: { wlanUserIp: "", wlanUserMac: "000000000000" }
+    }
+  });
+  background.addRequestRecord = async () => undefined;
+
+  const result = await background.logout();
+
+  assert.equal(result.success, false);
+  assert.match(result.message, /logout failed|下线失败/i);
+  assert.equal(sessionStore.drcomAssistantSession.connection.phase, "online");
+  assert.equal(sessionStore.drcomAssistantSession.connection.message, "已连接");
+  assert.equal(sessionStore.drcomAssistantSession.activeIdentity.username, "temporary-user");
 });
 
 test("明确失败的登录与下线响应不会因为出现 success 或 logout 字样被误判", () => {
