@@ -290,6 +290,29 @@
             </div>
           </section>
 
+          <section class="diagnostics-card" aria-labelledby="portal-diagnostics-title">
+            <div class="setting-row diagnostics-heading">
+              <div>
+                <h3 id="portal-diagnostics-title">门户诊断模式</h3>
+                <p>仅在本机记录脱敏后的页面结构和操作类型；不会记录输入值、密码、账号、IP 或 MAC。</p>
+              </div>
+              <label class="switch">
+                <input id="portal-diagnostics-enabled" type="checkbox">
+                <span aria-hidden="true"></span>
+                <span class="sr-only">启用门户诊断模式</span>
+              </label>
+            </div>
+            <p id="portal-diagnostics-status" role="status" aria-live="polite">诊断模式已关闭</p>
+            <dl class="diagnostics-stats">
+              <div><dt>本地占用</dt><dd id="portal-diagnostics-storage">0 B / 1 MiB</dd></div>
+              <div><dt>会话</dt><dd id="portal-diagnostics-sessions">0 / 10</dd></div>
+            </dl>
+            <div class="diagnostics-actions">
+              <button id="export-portal-diagnostics" class="secondary" type="button">导出诊断 JSON</button>
+              <button id="clear-portal-diagnostics" class="danger-secondary" type="button">清空诊断记录</button>
+            </div>
+          </section>
+
           <section class="advanced-group" aria-labelledby="gateway-settings-title">
             <div class="subsection-heading">
               <h3 id="gateway-settings-title">网关与接口</h3>

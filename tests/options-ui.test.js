@@ -13,6 +13,153 @@ function loadOptions(context) {
   }
 }
 
+function createOptionsHarness(options = {}) {
+  const messages = [];
+  const confirmations = [];
+  const elements = new Map(Object.entries({
+    "portal-diagnostics-enabled": { checked: false, disabled: false },
+    "portal-diagnostics-status": { textContent: "" },
+    "portal-diagnostics-storage": { textContent: "" },
+    "portal-diagnostics-sessions": { textContent: "" },
+    "export-portal-diagnostics": { disabled: false },
+    "clear-portal-diagnostics": { disabled: false },
+    toast: { hidden: true, textContent: "" }
+  }));
+  const diagnostics = options.diagnostics || {
+    ok: true,
+    enabled: false,
+    bytes: 0,
+    sessionCount: 0,
+    limits: { bytes: 1024 * 1024, sessions: 10 },
+    sessions: []
+  };
+  const context = vm.createContext({
+    Blob,
+    URL: options.URL || URL,
+    chrome: {
+      runtime: {
+        lastError: null,
+        sendMessage(message, callback) {
+          messages.push(structuredClone(message));
+          if (options.sendMessage) {
+            Promise.resolve().then(() => options.sendMessage(message)).then(callback, (error) => {
+              context.chrome.runtime.lastError = { message: error.message };
+              callback();
+              context.chrome.runtime.lastError = null;
+            });
+            return;
+          }
+          if (message.action === "diagnostics:get") callback(diagnostics);
+          else if (message.action === "diagnostics:export") callback({ ok: true, export: options.export || diagnostics });
+          else if (message.action === "diagnostics:clear") callback({ ok: true });
+          else if (message.action === "diagnostics:set") callback({ ok: true, enabled: message.enabled, limits: diagnostics.limits });
+          else callback({ ok: true });
+        }
+      }
+    },
+    clearTimeout,
+    console,
+    document: {
+      addEventListener() {},
+      getElementById(id) { return elements.get(id) || null; },
+      createElement() {
+        return { click() {} };
+      }
+    },
+    DrcomConfirmDialog: {
+      async ask(input) {
+        confirmations.push(structuredClone(input));
+        return options.confirmResult !== false;
+      }
+    },
+    setTimeout
+  });
+  loadOptions(context);
+  return { confirmations, context, elements, messages };
+}
+
+test("门户诊断加载会显示精确开关、占用和会话状态", async () => {
+  const harness = createOptionsHarness({ diagnostics: {
+    ok: true,
+    enabled: true,
+    bytes: 1536,
+    sessionCount: 2,
+    limits: { bytes: 1024 * 1024, sessions: 10 },
+    sessions: []
+  } });
+  await harness.context.loadPortalDiagnostics();
+  assert.equal(harness.elements.get("portal-diagnostics-enabled").checked, true);
+  assert.equal(harness.elements.get("portal-diagnostics-status").textContent, "诊断模式已开启");
+  assert.equal(harness.elements.get("portal-diagnostics-storage").textContent, "1.5 KB / 1 MiB");
+  assert.equal(harness.elements.get("portal-diagnostics-sessions").textContent, "2 / 10");
+});
+
+test("门户诊断开关请求失败时不乐观改变显示状态并可恢复", async () => {
+  let fail = true;
+  let enabled = false;
+  const harness = createOptionsHarness({ sendMessage(message) {
+    if (message.action === "diagnostics:get") return { ok: true, enabled, bytes: 0, sessionCount: 0, limits: { bytes: 1024 * 1024, sessions: 10 } };
+    if (message.action === "diagnostics:set" && fail) { fail = false; throw new Error("后台不可用"); }
+    if (message.action === "diagnostics:set") enabled = message.enabled;
+    return { ok: true, enabled: message.enabled, limits: { bytes: 1024 * 1024, sessions: 10 } };
+  } });
+  const toggle = harness.elements.get("portal-diagnostics-enabled");
+  await harness.context.setPortalDiagnosticsEnabled(true);
+  assert.equal(toggle.checked, false);
+  assert.match(harness.elements.get("toast").textContent, /后台不可用/);
+  await harness.context.setPortalDiagnosticsEnabled(true);
+  assert.equal(toggle.checked, true);
+  await harness.context.setPortalDiagnosticsEnabled(false);
+  assert.equal(toggle.checked, false);
+});
+
+test("导出门户诊断会生成脱敏 JSON 文件并释放对象 URL", async () => {
+  const calls = { create: [], revoke: [], click: 0 };
+  const harness = createOptionsHarness({
+    export: { generatedAt: "2026-09-01T00:00:00.000Z", sessions: [{ event: "click" }] },
+    URL: {
+      createObjectURL(blob) { calls.create.push(blob); return "blob:diagnostics"; },
+      revokeObjectURL(url) { calls.revoke.push(url); }
+    }
+  });
+  harness.context.document.createElement = () => ({
+    href: "",
+    download: "",
+    click() { calls.click += 1; }
+  });
+  await harness.context.exportPortalDiagnostics();
+  assert.equal(calls.create.length, 1);
+  assert.equal(calls.create[0].type, "application/json");
+  assert.match(await calls.create[0].text(), /"generatedAt": "2026-09-01T00:00:00.000Z"/);
+  assert.equal(calls.click, 1);
+  assert.deepEqual(calls.revoke, ["blob:diagnostics"]);
+  assert.equal(
+    harness.context.portalDiagnosticsExportFilename(new Date("2026-09-01T12:34:56.789Z")),
+    "drcom-portal-diagnostics-2026-09-01T12-34-56-789Z.json"
+  );
+});
+
+test("清空诊断记录需要统一确认且取消时不发送删除消息", async () => {
+  const harness = createOptionsHarness({ confirmResult: false });
+  await harness.context.clearPortalDiagnostics();
+  assert.equal(harness.messages.some((item) => item.action === "diagnostics:clear"), false);
+  assert.equal(harness.confirmations[0].danger, true);
+});
+
+test("确认清空诊断记录后刷新诊断状态", async () => {
+  let gets = 0;
+  const harness = createOptionsHarness({ sendMessage(message) {
+    if (message.action === "diagnostics:get") {
+      gets += 1;
+      return { ok: true, enabled: true, bytes: gets === 1 ? 42 : 0, sessionCount: gets === 1 ? 1 : 0, limits: { bytes: 1024 * 1024, sessions: 10 } };
+    }
+    return { ok: true };
+  } });
+  await harness.context.clearPortalDiagnostics();
+  assert.equal(harness.messages.filter((item) => item.action === "diagnostics:clear").length, 1);
+  assert.equal(gets, 1);
+});
+
 test("保活关闭时禁用间隔输入，开启后恢复", () => {
   const keepAlive = { checked: false };
   const minutes = { disabled: false };

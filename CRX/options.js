@@ -22,6 +22,7 @@ async function init() {
   bindEvents();
   try {
     await loadState();
+    await loadPortalDiagnostics();
   } catch (error) {
     toast(error.message || String(error));
   }
@@ -33,6 +34,13 @@ function bindEvents() {
   $("settings-form").addEventListener("submit", runAsync(saveSettings));
   $("reset-config").addEventListener("click", runAsync(resetConfig));
   $("clear-request-log").addEventListener("click", runAsync(clearRequestLog));
+  $("portal-diagnostics-enabled").addEventListener("change", (event) => {
+    const desired = event.target.checked;
+    const previous = !desired;
+    runAsync(() => setPortalDiagnosticsEnabled(desired, previous))();
+  });
+  $("export-portal-diagnostics").addEventListener("click", runAsync(exportPortalDiagnostics));
+  $("clear-portal-diagnostics").addEventListener("click", runAsync(clearPortalDiagnostics));
   $("overview-open-portal").addEventListener("click", openConfiguredPortal);
   $("test-connection").addEventListener("click", runAsync(testConnection));
   $("account-form").addEventListener("submit", runAsync(saveEditedAccount));
@@ -98,6 +106,110 @@ async function loadState() {
     renderConnectionOverview(connection.connection);
   } catch (error) {
     renderConnectionOverview(null);
+  }
+}
+
+function portalDiagnosticsLimitBytes(diagnostics) {
+  return Number(diagnostics && diagnostics.limits && (diagnostics.limits.maxBytes ?? diagnostics.limits.bytes)) || 1024 * 1024;
+}
+
+function portalDiagnosticsLimitSessions(diagnostics) {
+  return Number(diagnostics && diagnostics.limits && (diagnostics.limits.maxSessions ?? diagnostics.limits.sessions)) || 10;
+}
+
+function formatPortalDiagnosticsSize(bytes) {
+  const value = Math.max(0, Number(bytes) || 0);
+  if (value < 1024) return Math.round(value) + " B";
+  if (value < 1024 * 1024) return Math.round(value / 102.4) / 10 + " KB";
+  return Math.round(value / (1024 * 1024) * 10) / 10 + " MiB";
+}
+
+function renderPortalDiagnostics(diagnostics) {
+  const input = $("portal-diagnostics-enabled");
+  const status = $("portal-diagnostics-status");
+  const storage = $("portal-diagnostics-storage");
+  const sessions = $("portal-diagnostics-sessions");
+  if (!diagnostics || diagnostics.ok === false) return;
+  const enabled = diagnostics.enabled === true;
+  const bytes = Math.max(0, Number(diagnostics.bytes) || 0);
+  const sessionCount = Math.max(0, Number(diagnostics.sessionCount) || 0);
+  if (input) input.checked = enabled;
+  if (status) status.textContent = enabled ? "诊断模式已开启" : "诊断模式已关闭";
+  if (storage) storage.textContent = formatPortalDiagnosticsSize(bytes) + " / " + formatPortalDiagnosticsSize(portalDiagnosticsLimitBytes(diagnostics));
+  if (sessions) sessions.textContent = sessionCount + " / " + portalDiagnosticsLimitSessions(diagnostics);
+}
+
+async function loadPortalDiagnostics() {
+  const result = await sendMessage({ action: "diagnostics:get" });
+  renderPortalDiagnostics(result);
+  return result;
+}
+
+function portalDiagnosticsExportFilename(now = new Date()) {
+  return "drcom-portal-diagnostics-" + now.toISOString().replace(/[:.]/g, "-") + ".json";
+}
+
+async function setPortalDiagnosticsEnabled(enabled, previous = null) {
+  const input = $("portal-diagnostics-enabled");
+  const before = previous === null ? Boolean(input && input.checked) : Boolean(previous);
+  if (input) {
+    input.checked = before;
+    input.disabled = true;
+  }
+  try {
+    const result = await sendMessage({ action: "diagnostics:set", enabled: enabled === true });
+    await loadPortalDiagnostics();
+    return result;
+  } catch (error) {
+    if (input) input.checked = before;
+    toast(error.message || String(error));
+    return false;
+  } finally {
+    if (input) input.disabled = false;
+  }
+}
+
+async function exportPortalDiagnostics() {
+  const button = $("export-portal-diagnostics");
+  if (button) button.disabled = true;
+  try {
+    const result = await sendMessage({ action: "diagnostics:export" });
+    const blob = new Blob([JSON.stringify(result.export, null, 2) + "\n"], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    try {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = portalDiagnosticsExportFilename();
+      link.click();
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+    return true;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function clearPortalDiagnostics() {
+  const confirmer = globalThis.DrcomConfirm?.confirm || globalThis.DrcomConfirmDialog?.ask;
+  if (typeof confirmer !== "function") throw new Error("确认对话框不可用");
+  const controller = globalThis.DrcomConfirm || globalThis.DrcomConfirmDialog;
+  const confirmed = await confirmer.call(controller, {
+    title: "清空门户诊断记录？",
+    message: "将删除本机保存的全部门户诊断会话，诊断开关保持不变。此操作无法撤销。",
+    confirmText: "清空记录",
+    confirmLabel: "清空记录",
+    danger: true
+  });
+  if (!confirmed) return false;
+  const button = $("clear-portal-diagnostics");
+  if (button) button.disabled = true;
+  try {
+    await sendMessage({ action: "diagnostics:clear" });
+    await loadPortalDiagnostics();
+    return true;
+  } finally {
+    if (button) button.disabled = false;
   }
 }
 

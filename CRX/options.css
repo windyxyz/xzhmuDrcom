@@ -317,6 +317,33 @@ summary { cursor: pointer; }
 .advanced-content { padding: 0 24px; }
 .advanced-group { display: grid; gap: 18px; padding: 28px 0; border-bottom: 1px solid var(--color-separator); }
 .advanced-group:last-child { border-bottom: 0; }
+.diagnostics-card {
+  gap: 16px;
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-surface);
+  background: color-mix(in oklch, var(--color-surface-raised) 82%, transparent);
+}
+.diagnostics-heading { min-height: 0; padding: 0; border-bottom: 0; align-items: flex-start; }
+.diagnostics-heading h3 { color: var(--color-text); font-size: 16px; }
+.diagnostics-heading p { max-width: 600px; margin-top: 5px; color: var(--color-text-secondary); font-size: 13px; line-height: 1.5; }
+.switch { position: relative; width: 48px; height: 28px; flex: 0 0 auto; }
+.switch input { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0; padding: 0; cursor: pointer; opacity: 0; }
+.switch > span:not(.sr-only) { position: absolute; inset: 0; border-radius: 999px; background: var(--color-surface-secondary); box-shadow: inset 0 0 0 1px var(--color-separator); transition: background-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease); }
+.switch > span:not(.sr-only)::before { content: ""; position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; border-radius: 50%; background: var(--color-surface-raised); box-shadow: 0 2px 7px oklch(0.12 0.01 255 / 0.24); transition: transform 190ms var(--motion-spring); }
+.switch input:checked + span { background: var(--color-accent); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--color-accent) 82%, var(--color-text)); }
+.switch input:checked + span::before { transform: translateX(20px); }
+.switch:has(input:focus-visible) > span:not(.sr-only) { box-shadow: var(--focus-ring); }
+.diagnostics-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.diagnostics-stats > div { padding: 11px 12px; border-radius: var(--radius-control); background: var(--color-surface-secondary); }
+.diagnostics-stats dt { color: var(--color-text-secondary); font-size: 12px; }
+.diagnostics-stats dd { margin: 4px 0 0; color: var(--color-text); font-size: 14px; font-variant-numeric: tabular-nums; }
+.diagnostics-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.diagnostics-actions button { min-height: 44px; }
+.danger-secondary { border: 1px solid color-mix(in oklch, var(--color-danger) 42%, var(--color-separator-strong)); color: var(--color-danger); background: var(--color-surface-raised); }
+.danger-secondary:hover { background: color-mix(in oklch, var(--color-danger) 8%, var(--color-surface-raised)); }
+.sr-only { position: absolute !important; width: 1px !important; height: 1px !important; min-height: 0 !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
 .compact-list { margin-top: -4px; }
 .inline-actions { justify-content: flex-end; }
 .section-head { align-items: start; }
@@ -366,6 +393,9 @@ summary { cursor: pointer; }
   .background-actions > * { width: 100%; }
   .settings-row:not(.check-row) { align-items: stretch; flex-direction: column; gap: 12px; }
   .settings-row.overview-row { align-items: center; flex-direction: row; }
+  .diagnostics-card { padding: 16px; }
+  .diagnostics-heading { align-items: stretch; flex-direction: row !important; }
+  .diagnostics-actions button { width: 100%; }
   .setting-icon { width: 38px; height: 38px; border-radius: 11px; }
   .duration-control { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .duration-control label > span { text-align: left; }
@@ -386,6 +416,7 @@ summary { cursor: pointer; }
 @media (pointer: coarse) { .primary, .secondary, .danger, .small-danger, .compact-button, summary { min-height: 44px; touch-action: manipulation; } }
 @media (prefers-reduced-transparency: reduce) { .settings-window, .settings-sidebar, .settings-section, .advanced-settings, .settings-actions, .background-preview > div { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--color-surface-raised); } }
 @media (forced-colors: active) { .simple-account.active { outline: 2px solid Highlight; } .check-row > input { appearance: auto; width: 24px; flex-basis: 24px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; } }
 
 @media (hover: hover) and (pointer: fine) {
   .sidebar-nav button:hover { background: var(--color-accent-soft); }

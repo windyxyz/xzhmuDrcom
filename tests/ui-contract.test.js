@@ -135,6 +135,33 @@ test("设置页把低频配置统一放进高级设置", () => {
   assert.deepEqual(common.filter((id) => advanced.has(id)), []);
 });
 
+test("portal diagnostics controls live inside advanced settings", () => {
+  const source = readExtensionFile("options.html");
+  const advanced = descendantIds(source, "advanced-settings");
+  for (const id of [
+    "portal-diagnostics-enabled",
+    "portal-diagnostics-status",
+    "portal-diagnostics-storage",
+    "portal-diagnostics-sessions",
+    "export-portal-diagnostics",
+    "clear-portal-diagnostics"
+  ]) {
+    assert.ok(advanced.has(id), `${id} must be inside advanced settings`);
+  }
+});
+
+test("portal diagnostics card exposes live status, privacy warning, and keyboard actions", () => {
+  const source = readExtensionFile("options.html");
+  assert.match(source, /class="diagnostics-card"[^>]*aria-labelledby="portal-diagnostics-title"/);
+  assert.match(source, /仅在本机记录脱敏后的页面结构和操作类型/);
+  assert.match(source, /id="portal-diagnostics-status"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(source, /<button[^>]*id="export-portal-diagnostics"[^>]*type="button"/);
+  assert.match(source, /<button[^>]*id="clear-portal-diagnostics"[^>]*type="button"/);
+  assert.match(readExtensionFile("options.css"), /diagnostics-card/);
+  assert.match(readExtensionFile("options.css"), /diagnostics-actions button[^}]*min-height: 44px/);
+  assert.match(readExtensionFile("options.css"), /prefers-reduced-motion/);
+});
+
 test("正式界面使用功能性玻璃层并提供降级与减弱透明度支持", () => {
   const tokens = readExtensionFile("design-tokens.css");
   const options = readExtensionFile("options.html");
