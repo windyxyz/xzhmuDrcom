@@ -150,7 +150,12 @@
         <header class="drcom-header glass-chrome">
           <span class="drcom-brand-mark" aria-hidden="true"></span>
           <strong>校园网助手</strong>
-          <button id="drcom-restore-original" type="button">使用原始登录页</button>
+          <div class="drcom-header-actions">
+            <button id="drcom-open-options" type="button" aria-label="个性化" title="个性化">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9 4a7.8 7.8 0 0 0-.1-1l2-1.5-2-3.5-2.4 1a8 8 0 0 0-1.7-1L15.5 3h-4L11 5.9a8 8 0 0 0-1.7 1L7 6 5 9.5 7.1 11a7.8 7.8 0 0 0 0 2L5 14.5 7 18l2.4-1a8 8 0 0 0 1.7 1l.5 3h4l.5-3a8 8 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5a7.8 7.8 0 0 0 .1-1Z"/></svg>
+            </button>
+            <button id="drcom-restore-original" type="button">使用原始登录页</button>
+          </div>
         </header>
         <main class="drcom-surface">${content}</main>
         <footer>账号数据只保存在这台设备的浏览器中。</footer>

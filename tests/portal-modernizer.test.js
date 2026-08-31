@@ -7,6 +7,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const portalUi = require(join(__dirname, "..", "CRX", "portal-ui.js"));
+const appearance = require(join(__dirname, "..", "CRX", "appearance.js"));
 
 class FakeClassList {
   constructor() {
@@ -35,6 +36,12 @@ class FakeElement {
     this.checked = false;
     this.disabled = false;
     this.dataset = {};
+    this.attributes = new Map();
+    this.style = {
+      values: new Map(),
+      setProperty: (name, value) => this.style.values.set(name, String(value))
+    };
+    this.shadowRoot = null;
     this.listeners = new Map();
     this.childrenById = new Map();
     this._innerHTML = "";
@@ -60,6 +67,21 @@ class FakeElement {
     );
   }
 
+  setAttribute(name, value) {
+    this.attributes.set(name, String(value));
+  }
+
+  getAttribute(name) {
+    return this.attributes.get(name) ?? null;
+  }
+
+  attachShadow(options = {}) {
+    const shadow = { mode: options.mode, innerHTML: "" };
+    this.document.closedShadowRoots.set(this, shadow);
+    if (options.mode !== "closed") this.shadowRoot = shadow;
+    return shadow;
+  }
+
   set innerHTML(value) {
     this._innerHTML = String(value);
     this.childrenById.clear();
@@ -69,6 +91,9 @@ class FakeElement {
       if (!id) continue;
       const element = new FakeElement(this.document, match[1], id);
       element.checked = /\bchecked\b/i.test(match[2]);
+      for (const attribute of match[2].matchAll(/\b([a-z][a-z0-9-]*)="([^"]*)"/gi)) {
+        element.setAttribute(attribute[1], attribute[2]);
+      }
       this.childrenById.set(id, element);
     }
   }
@@ -94,6 +119,7 @@ function createHarness(options = {}) {
   };
   const document = {
     readyState: "complete",
+    closedShadowRoots: new Map(),
     documentElement,
     body: {
       innerText: options.online ? "当前已连接，可以下线" : "",
@@ -126,12 +152,17 @@ function createHarness(options = {}) {
   const responses = {
     "portal:config:get": {
       ok: true,
-      portal: { enabled: true, title: "徐医校园网", accent: "#0f766e" }
+      portal: { enabled: true, title: "徐医校园网", appearance: { theme: "light", accent: "#0f766e" } }
+    },
+    "portal:appearance:get": {
+      ok: true,
+      appearance: { theme: "light", accent: "#0f766e", background: "fresh", backgroundImage: "" }
     },
     "account:save": { ok: true, accountId: "saved-account" },
     "drcom:login": { ok: true, success: true, online: true, message: "登录成功" },
     "drcom:logout": { ok: true, success: true, online: false, message: "已下线" },
     "redirect:markPortalTab": { ok: true },
+    "options:open": { ok: true },
     ...(options.responses || {})
   };
   const context = vm.createContext({
@@ -159,6 +190,7 @@ function createHarness(options = {}) {
   });
   context.globalThis = context;
   context.DrcomPortalUI = portalUi;
+  context.DrcomAppearance = appearance;
   return { context, document, messages, responses };
 }
 
@@ -196,7 +228,7 @@ test("现代登录表单保存账号后发起认证并切换到在线状态", as
 
   assert.deepEqual(
     harness.messages.map((message) => message.action),
-    ["portal:config:get", "account:save", "drcom:login"]
+    ["portal:config:get", "portal:appearance:get", "account:save", "drcom:login"]
   );
   assert.match(harness.document.getElementById("drcom-modern-root").innerHTML, /已经连接校园网/);
 });
@@ -217,4 +249,41 @@ test("下线认证失败时门户界面保持在线并显示错误", async () =>
   const root = harness.document.getElementById("drcom-modern-root");
   assert.match(root.innerHTML, /已经连接校园网/);
   assert.equal(harness.document.getElementById("drcom-form-status").textContent, "下线失败");
+});
+
+test("自定义背景只写入 closed Shadow DOM 且个性化按钮打开设置", async () => {
+  const image = "data:image/webp;base64,AAAA";
+  const harness = createHarness({
+    responses: {
+      "portal:appearance:get": {
+        ok: true,
+        appearance: {
+          theme: "dark",
+          accent: "#0f766e",
+          background: "custom",
+          backgroundImage: image,
+          backgroundBlur: 18,
+          backgroundDim: 0.46,
+          backgroundScale: 1.06
+        }
+      }
+    }
+  });
+
+  await loadModernizer(harness);
+
+  const root = harness.document.getElementById("drcom-modern-root");
+  const host = harness.document.getElementById("drcom-private-appearance");
+  assert.ok(host);
+  assert.equal(host.shadowRoot, null);
+  assert.doesNotMatch(root.innerHTML, /data:image/);
+  assert.doesNotMatch(JSON.stringify([...root.style.values]), /data:image/);
+  assert.doesNotMatch(JSON.stringify([...host.attributes]), /data:image/);
+  assert.match(harness.document.closedShadowRoots.get(host).innerHTML, /data:image\/webp;base64,AAAA/);
+
+  const personalize = harness.document.getElementById("drcom-open-options");
+  assert.equal(personalize.getAttribute("aria-label"), "个性化");
+  assert.equal(personalize.getAttribute("title"), "个性化");
+  await personalize.emit("click");
+  assert.equal(harness.messages.at(-1).action, "options:open");
 });

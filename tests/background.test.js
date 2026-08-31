@@ -166,7 +166,7 @@ test("首次安装会打开欢迎页，扩展更新不会重复打开", async ()
   assert.deepEqual(JSON.parse(JSON.stringify(background.__createdTabs)), []);
 });
 
-test("门户内容脚本只能读取非敏感界面配置", async () => {
+test("门户安全配置不携带背景数据且专用外观接口单独返回完整配置", async () => {
   const background = loadBackground();
   background.getState = async () => ({
     accounts: [account()],
@@ -192,6 +192,10 @@ test("门户内容脚本只能读取非敏感界面配置", async () => {
     { url: "http://10.10.10.2/" }
   );
   const plain = JSON.parse(JSON.stringify(result));
+  const appearanceResult = JSON.parse(JSON.stringify(await background.handleMessage(
+    { action: "portal:appearance:get" },
+    { url: "http://10.10.10.2/" }
+  )));
 
   assert.deepEqual(plain, {
     ok: true,
@@ -200,16 +204,24 @@ test("门户内容脚本只能读取非敏感界面配置", async () => {
       title: "徐医校园网",
       appearance: {
         theme: "light",
-        accent: "#0f766e",
-        background: "custom",
-        backgroundImage: "data:image/webp;base64,AAAA",
-        backgroundBlur: 18,
-        backgroundDim: 0.46,
-        backgroundScale: 1.06
+        accent: "#0f766e"
       }
     }
   });
+  assert.deepEqual(appearanceResult, {
+    ok: true,
+    appearance: {
+      theme: "light",
+      accent: "#0f766e",
+      background: "custom",
+      backgroundImage: "data:image/webp;base64,AAAA",
+        backgroundBlur: 18,
+        backgroundDim: 0.46,
+        backgroundScale: 1.06
+    }
+  });
   assert.doesNotMatch(JSON.stringify(plain), /accounts|password|apiUrl|wlanUserIp/);
+  assert.doesNotMatch(JSON.stringify(plain), /data:image|backgroundImage/);
 });
 
 test("旧版本配置升级后默认启用可恢复的门户接管", () => {

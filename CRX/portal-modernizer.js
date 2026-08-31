@@ -25,6 +25,8 @@
   async function mountModernPortalWhenEligible() {
     const response = await sendMessage({ action: "portal:config:get" });
     const config = response.portal || {};
+    const appearanceResponse = await sendMessage({ action: "portal:appearance:get" });
+    config.appearance = appearanceResponse.appearance || config.appearance || {};
     const online = isOnlinePage();
     const hasPasswordField = Boolean(document.querySelector('input[type="password"]'));
     if (!ui.shouldTakeOver({ enabled: config.enabled === true, online, hasPasswordField })) {
@@ -46,12 +48,45 @@
       host: portalHost(config.portalUrl)
     });
     if (globalThis.DrcomAppearance) {
-      globalThis.DrcomAppearance.applyToRoot(root, config.appearance || {});
+      const normalized = globalThis.DrcomAppearance.normalizeAppearance(config.appearance || {});
+      globalThis.DrcomAppearance.applyToRoot(root, {
+        ...normalized,
+        background: "fresh",
+        backgroundImage: ""
+      });
+      root.dataset.appearanceBackground = normalized.background;
+      installPrivateAppearance(normalized);
     }
     document.body.append(root);
     document.documentElement.classList.add("drcom-modern-active");
     bindPortalEvents(root, online);
     if (!online) prefillFromOriginalPage(root);
+  }
+
+  function installPrivateAppearance(input) {
+    document.getElementById("drcom-private-appearance")?.remove();
+    if (!globalThis.DrcomAppearance) return;
+    const appearance = globalThis.DrcomAppearance.normalizeAppearance(input || {});
+    if (appearance.background !== "custom" || !appearance.backgroundImage) return;
+
+    const host = document.createElement("div");
+    host.id = "drcom-private-appearance";
+    host.setAttribute("aria-hidden", "true");
+    const shadow = host.attachShadow({ mode: "closed" });
+    const image = appearance.backgroundImage.replace(/["\\\r\n\f]/g, "");
+    const dark = appearance.theme === "dark";
+    shadow.innerHTML = `
+      <style>
+        :host { all: initial; }
+        .layer, .image, .veil { position: absolute; inset: 0; pointer-events: none; }
+        .layer { overflow: hidden; background: #f2f3f5; }
+        .image { inset: -48px; background: center / cover no-repeat url("${image}"); filter: blur(${appearance.backgroundBlur}px); transform: scale(${appearance.backgroundScale}); }
+        .veil { background: rgba(${dark ? "8, 12, 20" : "238, 241, 246"}, ${appearance.backgroundDim}); }
+        @media (prefers-color-scheme: dark) { .system .veil { background: rgba(8, 12, 20, ${appearance.backgroundDim}); } }
+      </style>
+      <div class="layer ${appearance.theme === "system" ? "system" : ""}"><div class="image"></div><div class="veil"></div></div>
+    `;
+    document.body.append(host);
   }
 
   function portalHost(value) {
@@ -62,10 +97,14 @@
   function restoreOriginalPortal() {
     document.documentElement.classList.remove("drcom-modern-active");
     document.getElementById("drcom-modern-root")?.remove();
+    document.getElementById("drcom-private-appearance")?.remove();
   }
 
   function bindPortalEvents(root, online) {
     root.querySelector("#drcom-restore-original")?.addEventListener("click", restoreOriginalPortal);
+    root.querySelector("#drcom-open-options")?.addEventListener("click", () => {
+      void sendMessage({ action: "options:open" });
+    });
     if (online) {
       root.querySelector("#drcom-logout")?.addEventListener("click", () => void logoutFromPortal(root));
       return;

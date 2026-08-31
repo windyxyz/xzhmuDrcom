@@ -1,5 +1,6 @@
 html.drcom-modern-active, html.drcom-modern-active body { min-height: 100% !important; min-height: 100dvh !important; margin: 0 !important; overflow: auto !important; color-scheme: light dark; background: var(--color-canvas) !important; }
-html.drcom-modern-active body > :not(#drcom-modern-root) { display: none !important; }
+html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appearance) { display: none !important; }
+#drcom-private-appearance { position: fixed; z-index: 2147483646; inset: 0; display: block !important; overflow: hidden; pointer-events: none; }
 #drcom-modern-root, #drcom-modern-root * { box-sizing: border-box; }
 #drcom-modern-root {
   position: fixed;
@@ -16,12 +17,7 @@ html.drcom-modern-active body > :not(#drcom-modern-root) { display: none !import
   -webkit-text-size-adjust: 100%;
   isolation: isolate;
 }
-
-#drcom-modern-root[data-appearance-background="custom"]::before, #drcom-modern-root[data-appearance-background="custom"]::after { content: ""; position: fixed; z-index: 0; inset: -48px; pointer-events: none; }
-#drcom-modern-root[data-appearance-background="custom"]::before { background-image: var(--appearance-image); background-position: center; background-size: cover; filter: blur(var(--appearance-blur)); transform: scale(var(--appearance-scale)); }
-#drcom-modern-root[data-appearance-background="custom"]::after { background: oklch(0.94 0.006 250 / calc(var(--appearance-dim) * 0.7)); }
-#drcom-modern-root[data-theme="dark"][data-appearance-background="custom"]::after { background: oklch(0.07 0.01 255 / var(--appearance-dim)); }
-@media (prefers-color-scheme: dark) { #drcom-modern-root:not([data-theme="light"])[data-appearance-background="custom"]::after { background: oklch(0.07 0.01 255 / var(--appearance-dim)); } }
+#drcom-modern-root[data-appearance-background="custom"] { background: transparent; }
 #drcom-modern-root > .drcom-page { position: relative; z-index: 1; }
 #drcom-modern-root button, #drcom-modern-root input, #drcom-modern-root select { font: inherit; }
 #drcom-modern-root button { cursor: pointer; }
@@ -31,6 +27,10 @@ html.drcom-modern-active body > :not(#drcom-modern-root) { display: none !import
 .drcom-header { position: sticky; z-index: 4; top: max(16px, env(safe-area-inset-top)); min-height: 58px; padding: 0 12px 0 14px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; border-radius: 20px; }
 .drcom-brand-mark { width: 30px; height: 30px; border-radius: 10px; background: var(--color-accent); }
 .drcom-header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.drcom-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+#drcom-open-options { min-width: 44px; min-height: 44px; display: inline-grid; place-items: center; border: 0; border-radius: 12px; padding: 0; color: var(--color-text-secondary); background: transparent; }
+#drcom-open-options:hover { color: var(--color-accent); background: var(--color-surface-hover); }
+#drcom-open-options svg { width: 21px; height: 21px; fill: currentColor; }
 #drcom-restore-original { min-height: 40px; border: 0; padding: 0 8px; color: var(--color-accent); background: transparent; font-size: 14px; font-weight: 650; }
 
 .drcom-surface { width: min(440px, 100%); min-width: 0; align-self: center; justify-self: center; margin: 34px 0; padding: 32px; border: 1px solid var(--color-separator); border-radius: var(--radius-surface); background: var(--color-surface-raised); }
@@ -75,7 +75,7 @@ html.drcom-modern-active body > :not(#drcom-modern-root) { display: none !import
   #drcom-modern-root h1 { font-size: 27px; }
   .drcom-login-form input, .drcom-login-form select { font-size: 16px; }
 }
-@media (max-width: 260px) { .drcom-header strong { display: none; } .drcom-header { grid-template-columns: auto 1fr; } #drcom-restore-original { justify-self: end; } .drcom-surface { padding-right: 12px; padding-left: 12px; } }
+@media (max-width: 260px) { .drcom-header strong { display: none; } .drcom-header { grid-template-columns: auto 1fr; } .drcom-header-actions { justify-self: end; } #drcom-restore-original { display: none; } .drcom-surface { padding-right: 12px; padding-left: 12px; } }
 @media (max-height: 540px) and (orientation: landscape) { .drcom-surface { margin: 12px 0; } }
 @media (pointer: coarse) { #drcom-modern-root button, #drcom-modern-root input, #drcom-modern-root select { min-height: 44px; touch-action: manipulation; } }
 @media (prefers-reduced-transparency: reduce) { #drcom-modern-root[data-appearance-background="custom"] .drcom-surface { background: var(--color-surface-raised); } }

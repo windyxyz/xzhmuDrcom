@@ -64,11 +64,13 @@ const loginFlights = new Map();
 const STATE_UNCHANGED = Symbol("state-unchanged");
 const WEB_PAGE_ACTIONS = new Set([
   "portal:config:get",
+  "portal:appearance:get",
   "account:save",
   "account:network:update",
   "drcom:login",
   "drcom:logout",
-  "redirect:markPortalTab"
+  "redirect:markPortalTab",
+  "options:open"
 ]);
 let stateMutationQueue = Promise.resolve();
 let sessionMutationQueue = Promise.resolve();
@@ -165,9 +167,14 @@ async function handleMessage(message, sender) {
           enabled: state.config.ui.modernizePortal !== false,
           title: stringValue(state.config.ui.title).trim() || DEFAULT_STATE.config.ui.title,
           portalUrl: state.config.portalUrl,
-          appearance: publicAppearance(state.config.ui)
+          appearance: safePortalAppearance(state.config.ui)
         }
       };
+    }
+
+    case "portal:appearance:get": {
+      const state = await getState();
+      return { ok: true, appearance: publicAppearance(state.config.ui) };
     }
 
     case "account:save": {
@@ -222,7 +229,7 @@ async function handleMessage(message, sender) {
 
     case "options:open":
       await clearSenderTab(sender);
-      chrome.runtime.openOptionsPage();
+      await chrome.runtime.openOptionsPage();
       return { ok: true };
 
     default:
@@ -1597,6 +1604,11 @@ function publicAppearance(input) {
     backgroundDim: clampNumber(ui.backgroundDim, 0.2, 0.72, DEFAULT_STATE.config.ui.backgroundDim),
     backgroundScale: clampNumber(ui.backgroundScale, 1, 1.15, DEFAULT_STATE.config.ui.backgroundScale)
   };
+}
+
+function safePortalAppearance(input) {
+  const appearance = publicAppearance(input);
+  return { theme: appearance.theme, accent: appearance.accent };
 }
 
 function normalizeTimestamp(value) {

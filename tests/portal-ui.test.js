@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
 const test = require("node:test");
 
@@ -88,4 +89,15 @@ test("门户界面显示当前自定义网关而不是写死默认地址", () =>
   const markup = renderPortalMarkup({ host: "gateway.example:8443" });
   assert.match(markup, /gateway\.example:8443/);
   assert.doesNotMatch(markup, />10\.10\.10\.2</);
+});
+
+test("门户个性化入口包含提示、无障碍名称和 44 像素点击区域", () => {
+  const { renderPortalMarkup } = require(portalUiPath);
+  const markup = renderPortalMarkup();
+  const css = readFileSync(join(__dirname, "..", "CRX", "portal.css"), "utf8");
+
+  assert.match(markup, /id="drcom-open-options"/);
+  assert.match(markup, /aria-label="个性化"/);
+  assert.match(markup, /title="个性化"/);
+  assert.match(css, /#drcom-open-options[^}]*min-width:\s*44px[^}]*min-height:\s*44px/s);
 });
