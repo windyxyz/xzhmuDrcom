@@ -1,12 +1,13 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { existsSync, mkdtempSync, rmSync } = require("node:fs");
+const { existsSync, mkdtempSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const { spawn } = require("node:child_process");
 const test = require("node:test");
 const { pathToFileURL } = require("node:url");
+const { cleanupBrowserProfile } = require("../scripts/browser-test-process.js");
 
 function findBrowser() {
   const candidates = [
@@ -171,9 +172,7 @@ test("375px 视口下步骤编号留在第一列且标题保持横排", { timeou
     assert.equal(layout.motionTiming, "cubic-bezier(0.2, 0.8, 0.2, 1)");
     assert.equal(layout.motionDuration, "0.24s");
   } finally {
-    child.kill();
-    await new Promise((resolve) => child.once("exit", resolve));
-    rmSync(profile, { recursive: true, force: true });
+    await cleanupBrowserProfile(child, profile);
   }
 });
 
@@ -236,9 +235,7 @@ test("390px 视口下设置页单列排版且没有横向溢出", { timeout: 20_
     assert.equal(layout.motionTiming, "cubic-bezier(0.2, 0.8, 0.2, 1)");
     assert.equal(layout.motionDuration, "0.24s");
   } finally {
-    child.kill();
-    await new Promise((resolve) => child.once("exit", resolve));
-    rmSync(profile, { recursive: true, force: true });
+    await cleanupBrowserProfile(child, profile);
   }
 });
 
@@ -297,9 +294,7 @@ test("扩展弹窗在标准任务宽度内完整显示且不横向溢出", { tim
     assert.ok(layout.titleHeight <= 28, `标题应保持一行：${JSON.stringify(layout)}`);
     assert.ok(layout.selectWidth >= 340, `表单控件应使用弹窗可用宽度：${JSON.stringify(layout)}`);
   } finally {
-    child.kill();
-    await new Promise((resolve) => child.once("exit", resolve));
-    rmSync(profile, { recursive: true, force: true });
+    await cleanupBrowserProfile(child, profile);
   }
 });
 
@@ -358,9 +353,7 @@ test("弹窗关键操作在标准宽度保持清晰的三列布局", { timeout: 
     assert.ok(layout.loginHeight <= 54, `登录按钮文字不应逐字竖排：${JSON.stringify(layout)}`);
     assert.ok(layout.savedTitleHeight <= 30, `账号标题不应逐字竖排：${JSON.stringify(layout)}`);
   } finally {
-    child.kill();
-    await new Promise((resolve) => child.once("exit", resolve));
-    rmSync(profile, { recursive: true, force: true });
+    await cleanupBrowserProfile(child, profile);
   }
 });
 
@@ -428,9 +421,7 @@ test("设置页在窄屏使用底部分类栏并且一次只显示一个设置�
     assert.equal(layout.hasDecorativeHeader, false);
     assert.ok(layout.scrollWidth <= layout.viewportWidth, `设置页不应横向溢出：${JSON.stringify(layout)}`);
   } finally {
-    child.kill();
-    await new Promise((resolve) => child.once("exit", resolve));
-    rmSync(profile, { recursive: true, force: true });
+    await cleanupBrowserProfile(child, profile);
   }
 });
 
@@ -500,9 +491,7 @@ test("800px 设置页仍使用左侧纵向玻璃侧栏", { timeout: 20_000 }, as
     assert.equal(layout.windowOverflow, "hidden");
     assert.match(layout.windowBackdropFilter, /blur\(/);
   } finally {
-    child.kill();
-    await new Promise((resolve) => child.once("exit", resolve));
-    rmSync(profile, { recursive: true, force: true });
+    await cleanupBrowserProfile(child, profile);
   }
 });
 
@@ -567,8 +556,6 @@ test("门户预览会在真实浏览器中渲染生产登录表单", { timeout: 
     assert.ok(view.scrollWidth <= view.viewportWidth, `预览不应横向溢出：${JSON.stringify(view)}`);
     assert.equal(view.previewMessage, "这是界面预览，不会发送登录请求。");
   } finally {
-    child.kill();
-    await new Promise((resolve) => child.once("exit", resolve));
-    rmSync(profile, { recursive: true, force: true });
+    await cleanupBrowserProfile(child, profile);
   }
 });
