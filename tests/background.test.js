@@ -157,10 +157,36 @@ function loadBackground(options = {}) {
     __updatedTabs: updatedTabs
   });
 
+  context.importScripts = (...paths) => {
+    for (const path of paths) {
+      const source = readFileSync(join(__dirname, "..", "CRX", path), "utf8");
+      new vm.Script(source, { filename: path }).runInContext(context);
+    }
+  };
+
   const source = readFileSync(join(__dirname, "..", "CRX", "background.js"), "utf8");
   new vm.Script(source, { filename: "background.js" }).runInContext(context);
   return context;
 }
+
+test("后台入口只负责依赖加载和事件注册", () => {
+  const source = readFileSync(join(__dirname, "..", "CRX", "background.js"), "utf8");
+  const modulePaths = [
+    "background/state-store.js",
+    "background/drcom-client.js",
+    "background/account-service.js",
+    "background/connection-service.js",
+    "background/portal-service.js",
+    "background/message-router.js"
+  ];
+
+  assert.match(source, /importScripts\(/);
+  assert.ok(source.split(/\r?\n/).length < 100);
+  for (const modulePath of modulePaths) {
+    assert.match(source, new RegExp(modulePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.doesNotThrow(() => readFileSync(join(__dirname, "..", "CRX", modulePath), "utf8"));
+  }
+});
 
 test("首次安装会打开欢迎页，扩展更新不会重复打开", async () => {
   const background = loadBackground();
