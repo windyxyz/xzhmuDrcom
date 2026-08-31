@@ -261,6 +261,97 @@ test("账号规范化不会在读取时改写更新时间", () => {
   assert.equal(normalized.updatedAt, "2026-01-02T03:04:05.000Z");
 });
 
+test("保存相同自然键账号时更新原记录而不是新增重复项", async () => {
+  const localStore = {
+    drcomAssistantState: {
+      schemaVersion: 11,
+      selectedAccountId: "account-1",
+      accounts: [account({ username: " Student ", suffix: "@TELECOM", password: "old-secret" })]
+    }
+  };
+  const background = loadBackground({ localStore });
+  const result = await background.saveAccount(account({
+    id: "", label: "新标签", username: "Student@telecom", suffix: "", password: "new-secret"
+  }));
+
+  assert.equal(result.state.accounts.length, 1);
+  assert.equal(result.account.id, "account-1");
+  assert.equal(result.account.username, "Student");
+  assert.equal(result.account.suffix, "@telecom");
+  assert.equal(result.account.password, "new-secret");
+  assert.equal(result.account.label, "新标签");
+  assert.equal(result.state.selectedAccountId, "account-1");
+});
+
+test("账号自然键保留用户名大小写并区分不同运营商后缀", async () => {
+  const localStore = {
+    drcomAssistantState: {
+      schemaVersion: 11,
+      selectedAccountId: "account-1",
+      accounts: [account({ username: "Student", suffix: "@telecom" })]
+    }
+  };
+  const background = loadBackground({ localStore });
+
+  await background.saveAccount(account({ id: "", username: "student", suffix: "@telecom" }));
+  await background.saveAccount(account({ id: "", username: "Student", suffix: "@unicom" }));
+
+  assert.equal(localStore.drcomAssistantState.accounts.length, 3);
+});
+
+test("迁移历史重复账号时优先保留选中 ID 并合并最近的非空字段", () => {
+  const background = loadBackground();
+  const normalized = background.normalizeState({
+    schemaVersion: 11,
+    selectedAccountId: "selected-old",
+    accounts: [
+      account({
+        id: "selected-old",
+        label: "旧标签",
+        username: " 202513010318 ",
+        suffix: "@TELECOM",
+        password: "old-secret",
+        network: { wlanUserIp: "10.0.0.8" },
+        updatedAt: "2026-01-01T00:00:00.000Z"
+      }),
+      account({
+        id: "recent-duplicate",
+        label: "",
+        username: "202513010318@telecom",
+        suffix: "",
+        password: "new-secret",
+        network: { wlanUserIp: "", wlanUserMac: "aabbccddeeff" },
+        updatedAt: "2026-02-01T00:00:00.000Z"
+      })
+    ]
+  });
+
+  assert.equal(normalized.accounts.length, 1);
+  assert.equal(normalized.accounts[0].id, "selected-old");
+  assert.equal(normalized.accounts[0].label, "旧标签");
+  assert.equal(normalized.accounts[0].password, "new-secret");
+  assert.equal(normalized.accounts[0].network.wlanUserIp, "10.0.0.8");
+  assert.equal(normalized.accounts[0].network.wlanUserMac, "AABBCCDDEEFF");
+  assert.equal(normalized.accounts[0].updatedAt, "2026-02-01T00:00:00.000Z");
+  assert.equal(normalized.selectedAccountId, "selected-old");
+});
+
+test("未选中历史重复账号时保留最近更新记录的 ID 并重映射选择", () => {
+  const background = loadBackground();
+  const normalized = background.normalizeState({
+    schemaVersion: 11,
+    selectedAccountId: "missing-id",
+    accounts: [
+      account({ id: "older", updatedAt: "2026-01-01T00:00:00.000Z" }),
+      account({ id: "newer", updatedAt: "2026-03-01T00:00:00.000Z" })
+    ]
+  });
+
+  assert.equal(normalized.accounts.length, 1);
+  assert.equal(normalized.accounts[0].id, "newer");
+  assert.equal(normalized.selectedAccountId, "newer");
+});
+
 test("陌生抓包账号不会污染当前选中账号的网络参数", async () => {
   const background = loadBackground();
   const state = {

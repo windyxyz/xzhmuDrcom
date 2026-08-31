@@ -270,9 +270,12 @@ function normalizeState(input) {
   const previousSchemaVersion = Number(input && input.schemaVersion) || 0;
   const state = mergeDefaults(input || {}, DEFAULT_STATE);
   state.schemaVersion = SCHEMA_VERSION;
-  state.accounts = Array.isArray(state.accounts)
-    ? state.accounts.map(sanitizeAccount).filter((account) => account.username && account.password)
-    : [];
+  const deduplicated = deduplicateAccounts(
+    Array.isArray(state.accounts) ? state.accounts : [],
+    stringValue(state.selectedAccountId)
+  );
+  state.accounts = deduplicated.accounts;
+  state.selectedAccountId = deduplicated.selectedAccountId;
 
   if (!state.accounts.some((account) => account.id === state.selectedAccountId)) {
     state.selectedAccountId = state.accounts[0] ? state.accounts[0].id : "";
@@ -337,6 +340,62 @@ function sanitizeAccount(input) {
     },
     note: stringValue(input.note).trim(),
     updatedAt
+  };
+}
+
+function accountNaturalKey(input) {
+  const parsed = splitAccountValue(input && input.username, input && input.suffix);
+  return parsed.username ? `${parsed.username}\u0000${parsed.suffix.toLowerCase()}` : "";
+}
+
+function deduplicateAccounts(inputs, selectedAccountId = "") {
+  const groups = new Map();
+  for (const raw of inputs) {
+    const account = sanitizeAccount(raw);
+    if (!account.username || !account.password) continue;
+    const key = accountNaturalKey(account);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ raw: raw || {}, account });
+  }
+
+  const remappedIds = new Map();
+  const accounts = [];
+  for (const group of groups.values()) {
+    const ordered = [...group].sort((left, right) => (
+      Date.parse(left.account.updatedAt) - Date.parse(right.account.updatedAt)
+    ));
+    const selected = group.find((entry) => entry.account.id === selectedAccountId);
+    const keeper = selected || ordered[ordered.length - 1];
+    const merged = {
+      ...keeper.raw,
+      id: keeper.account.id,
+      label: "",
+      username: keeper.account.username,
+      suffix: keeper.account.suffix,
+      password: "",
+      network: {},
+      updatedAt: ordered[ordered.length - 1].account.updatedAt
+    };
+
+    for (const entry of ordered) {
+      const raw = entry.raw && typeof entry.raw === "object" ? entry.raw : {};
+      const label = stringValue(raw.label).trim();
+      const password = stringValue(raw.password);
+      if (label) merged.label = label;
+      if (password) merged.password = password;
+      for (const field of ["wlanUserIp", "wlanUserIpv6", "wlanUserMac", "wlanAcIp", "wlanAcName"]) {
+        const value = stringValue(raw.network && raw.network[field]).trim();
+        if (value) merged.network[field] = value;
+      }
+      remappedIds.set(entry.account.id, keeper.account.id);
+    }
+
+    accounts.push(sanitizeAccount(merged));
+  }
+
+  return {
+    accounts,
+    selectedAccountId: remappedIds.get(selectedAccountId) || selectedAccountId
   };
 }
 
@@ -427,8 +486,16 @@ async function saveAccount(input) {
       throw new Error("账号和密码不能为空");
     }
 
-    const index = state.accounts.findIndex((item) => item.id === account.id);
-    if (index >= 0) state.accounts[index] = account;
+    const idIndex = stringValue(input && input.id)
+      ? state.accounts.findIndex((item) => item.id === account.id)
+      : -1;
+    const naturalKey = accountNaturalKey(account);
+    const naturalKeyIndex = state.accounts.findIndex((item) => accountNaturalKey(item) === naturalKey);
+    const index = idIndex >= 0 ? idIndex : naturalKeyIndex;
+    if (index >= 0) {
+      account.id = state.accounts[index].id;
+      state.accounts[index] = account;
+    }
     else state.accounts.unshift(account);
     state.selectedAccountId = account.id;
     return account.id;
