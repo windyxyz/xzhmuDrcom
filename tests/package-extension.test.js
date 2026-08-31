@@ -50,6 +50,7 @@ test("扩展 ZIP 只包含固定顺序的运行白名单并排除预览与源码
     assert.ok(!entries.some((entry) => entry.name.includes("portal-preview")));
     assert.ok(!entries.some((entry) => entry.name.startsWith("tests/")));
     assert.ok(!entries.some((entry) => entry.name.startsWith("docs/")));
+    assert.ok(entries.some((entry) => entry.name === "LICENSE"), "分发包必须随附 GPL-3.0 许可证");
     assert.match(readFileSync(result.checksumPath, "utf8"), new RegExp(`^[a-f0-9]{64}  ${result.fileName}\\n$`));
   } finally {
     rmSync(outputDirectory, { recursive: true, force: true });

@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Static checks
+        run: npm run check
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Browser tests
+        run: npm run test:browser
+      - name: Reproducible package tests
+        run: npm run verify:package
+      - name: Build release assets
+        run: npm run package
+      - name: Upload verified package
+        uses: actions/upload-artifact@v4
+        with:
+          name: drcom-xuzhou-medical-2.5.3
+          path: |
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error

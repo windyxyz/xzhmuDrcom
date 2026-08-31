@@ -2,7 +2,7 @@
 
 这是一个 Chrome Manifest V3 扩展，用于徐州医科大学 DrCOM 校园网网关。扩展默认仅访问 `10.10.10.2`，提供首次安装引导、可恢复的现代认证页、多账号管理、登录/下线、原认证请求捕获、浏览器启动自动登录、定时保活、短时防跳转和脱敏请求日志。2.5 版新增连接状态机、全局单通道登录、智能退避重试、后台重启恢复和存储容量保护；2.5.1 为超限背景加入多轮高质量 WebP 压缩；2.5.2 修复认证结果误判、并发存储覆盖和前端错误反馈；2.5.3 修复设置图标越界、弹窗被压成窄长条、伪品牌标记和个性化背景不落盘等界面回归。欢迎页、弹窗、设置页与认证页均适配窄屏、横屏、触控操作和带安全区的移动设备，并共享跟随系统、浅色、深色和自定义背景外观。
 
-当前仓库只维护 `CRX` 中的 Apple 风格稳定版 2.5.3。完整架构、数据结构、消息接口和调试方式见 [`docs/development-guide.md`](docs/development-guide.md)，审阅结论与修改建议见 [`docs/review-and-recommendations.md`](docs/review-and-recommendations.md)。
+当前仓库只维护 `CRX` 中的 Apple 风格稳定版 2.5.3。完整架构、数据结构、消息接口和调试方式见 [`docs/development-guide.md`](docs/development-guide.md)，审阅结论与修改建议见 [`docs/review-and-recommendations.md`](docs/review-and-recommendations.md)。贡献前请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，版本变化见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 安装与使用
 
@@ -60,3 +60,7 @@ npm run verify
 ## 发布
 
 发布包只应包含 `CRX` 目录内的发布文件，并保持压缩包根目录直接出现 `manifest.json`。扩展版本与根 `package.json` 同步；更新发布包前执行 `npm run verify`。
+
+## 许可证
+
+项目按 [GNU General Public License v3.0 only](LICENSE) 发布。

@@ -8,6 +8,7 @@ const FIXED_DOS_TIME = 0;
 const FIXED_DOS_DATE = 0x0021;
 const RELEASE_FILES = [
   ["CRX/manifest.json", "manifest.json"],
+  ["LICENSE", "LICENSE"],
   ["CRX/account-utils.js", "account-utils.js"],
   ["CRX/appearance.js", "appearance.js"],
   ["CRX/confirm-dialog.js", "confirm-dialog.js"],
