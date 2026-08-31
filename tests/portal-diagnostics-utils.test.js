@@ -10,7 +10,7 @@ const utils = require(utilsPath);
 test("诊断 URL 只保留来源和路径", () => {
   assert.equal(
     utils.sanitizeUrl("http://10.10.10.2/drcom/chkstatus?uid=202600000001&token=fake#result"),
-    "http://10.10.10.2/drcom/chkstatus"
+    "http://10.10.10.2/drcom/chkstatus?uid=%5Bredacted%5D&token=%5Bredacted%5D"
   );
 });
 
@@ -73,7 +73,7 @@ test("诊断记录只保留允许类型和已知字段", () => {
     type: "navigation",
     at: 0,
     pageKind: "unknown",
-    url: "https://example.test/path",
+    url: "https://example.test/path?token=%5Bredacted%5D",
     method: "POST",
     status: 204,
     summary: "done",
@@ -100,4 +100,44 @@ test("大于默认字节上限的文本会被 UTF-8 安全截断", () => {
   assert.ok(utils.utf8Bytes(result) <= 4096);
   assert.ok(result.length < 3000);
   assert.equal(result, "你".repeat(1365));
+});
+test("诊断 URL 仅接受 HTTP(S)，隐藏非固定 IP 主机并清理路径", () => {
+  assert.equal(utils.sanitizeUrl("data:text/html,secret"), "");
+  assert.equal(utils.sanitizeUrl("ftp://example.test/file"), "");
+  assert.equal(utils.sanitizeUrl("http://192.0.2.15/private/202600000001"), "http://[redacted-ip]/private/[redacted-id]");
+  assert.equal(utils.sanitizeUrl("https://[2001:db8::1]/private"), "https://[redacted-ip]/private");
+  assert.equal(utils.sanitizeUrl("http://portal.example.test/private"), "http://portal.example.test/private");
+});
+
+test("诊断 URL 只保留白名单协议 action 值并为其他参数保留键名", () => {
+  assert.equal(
+    utils.sanitizeUrl("http://10.10.10.2/eportal/?a=login&action=logout&user_account=student&token=secret&c=Portal"),
+    "http://10.10.10.2/eportal/?a=login&action=logout&user_account=%5Bredacted%5D&token=%5Bredacted%5D&c=%5Bredacted%5D"
+  );
+  assert.equal(utils.sanitizeUrl("http://10.10.10.2/?a=student&action=not-safe"), "http://10.10.10.2/?a=%5Bredacted%5D&action=%5Bredacted%5D");
+});
+
+test("诊断文本完整删除带空格的凭据、授权头和多段 Cookie", () => {
+  const result = utils.sanitizeText("Authorization: Bearer secret-value Cookie: sid=one; token=two password = \"fake secret value\"");
+  assert.doesNotMatch(result, /Bearer|secret-value|sid=one|token=two|fake secret value/);
+  assert.match(result, /Authorization=\[redacted\]/i);
+});
+
+test("诊断文本删除手机号、邮件、账号后缀和高熵字符串", () => {
+  const result = utils.sanitizeText("phone=13812345678 email=student@example.com account=202513010318@telecom key=Ab9xY7zQ2mN8pL4rT6vK");
+  assert.doesNotMatch(result, /13812345678|student@example.com|@telecom|Ab9xY7zQ2mN8pL4rT6vK/);
+});
+
+test("畸形诊断输入会归一化为空对象而不抛异常", () => {
+  assert.doesNotThrow(() => utils.sanitizeTarget(null));
+  assert.doesNotThrow(() => utils.sanitizeRecord(null));
+  assert.deepEqual(utils.sanitizeTarget(null), { tag: "", id: "", name: "", type: "", role: "", ariaLabel: "" });
+  assert.equal(utils.sanitizeRecord(null).pageKind, "unknown");
+});
+
+test("诊断摘要在 64 KiB 边界下分别保留和截断", () => {
+  const below = "x".repeat(64 * 1024 - 1);
+  const above = "x".repeat(64 * 1024 + 1);
+  assert.equal(utils.sanitizeRecord({ summary: below }).summary.length, 64 * 1024 - 1);
+  assert.equal(utils.sanitizeRecord({ summary: above }).summary.length, 64 * 1024);
 });
