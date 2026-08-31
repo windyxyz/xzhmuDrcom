@@ -1,222 +1,258 @@
-# 徐医校园网助手开发文档
+# DrCom徐医开发指南
 
-## 1. 项目定位与当前状态
+## 1. 项目定位
 
-本项目是面向徐州医科大学 DrCOM 校园网网关的 Chrome Manifest V3 扩展。它把账号管理、登录、下线、连接检测、启动自动登录、定时保活、短时防跳转、原认证页请求捕获和现代认证页整合到浏览器扩展中。
+DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩展。当前稳定版本为 2.5.3，源码位于 CRX/，使用原生 HTML、CSS 和 JavaScript，不依赖第三方 npm 包。
 
-当前仓库只维护 `CRX/` 中的稳定版，版本为 `2.5.3`，采用原生 HTML、CSS 和 JavaScript，不依赖第三方 npm 包。开发时以本文件、`README.md` 和 `CRX/manifest.json` 为准。
+项目解决以下问题：
 
-## 2. 技术栈与运行环境
+- 首次安装后引导用户进入 10.10.10.2；
+- 管理校园网、电信、联通、移动等多个账号；
+- 统一完成登录、下线、状态检测、启动自动登录和定时保活；
+- 网络临时失败时有限重试，凭据或设备错误时停止自动重试；
+- 在学校门户上提供可以随时撤回的现代登录界面；
+- 捕获原门户表单或脚本中的真实账号与网络参数；
+- 在欢迎页、弹窗、设置页和门户之间共享主题与自定义背景；
+- 对请求记录、界面文本和诊断信息进行凭据脱敏；
+- 通过无外部依赖的测试、确定性 ZIP 和 SHA-256 完成可复现发布。
 
-| 项目 | 说明 |
-| --- | --- |
-| 扩展平台 | Chrome Extension Manifest V3 |
-| 运行时 | Chrome/Chromium；后台使用 Service Worker |
-| 前端 | 原生 HTML、CSS、JavaScript |
-| 本地数据 | `chrome.storage.local` 与 `chrome.storage.session` |
-| 定时任务 | `chrome.alarms` |
-| 自定义门户 | `chrome.scripting` 动态注册内容脚本 |
-| 测试 | Node.js 内置 `node:test`；部分布局测试启动本机 Chrome/Edge |
-| Node.js | `>= 20` |
-| 第三方 npm 依赖 | 无 |
+运行行为以 CRX/manifest.json 和 CRX/ 源码为准；工程命令以 package.json 为准；版本变化以 CHANGELOG.md 为准；安全报告流程以 SECURITY.md 为准。
 
-## 3. 目录与文件职责
+## 2. 功能总览
 
-```text
+| 功能 | 用户可见行为 | 主要实现 |
+| --- | --- | --- |
+| 首次安装 | 只在首次安装打开欢迎页，更新不重复打扰 | welcome.*、background.js |
+| 多账号 | 保存、选择、编辑、删除、运营商后缀、抓包网络参数 | account-utils.js、account-service.js |
+| 登录 | 保存账号登录或临时账号登录；所有入口共享一个在途任务 | connection-service.js、drcom-client.js |
+| 下线 | 始终针对最近实际认证身份；成功后立即同步离线 | connection-service.js |
+| 状态恢复 | 检查门户、连接阶段、退避重试、浏览器启动登录 | connection-service.js、storage.session |
+| 保活 | Chrome Alarm 周期检查，离线后按策略恢复 | connection-service.js |
+| 防跳转 | 登录后短时间最多拦截一次自动离开门户 | portal-service.js |
+| 现代门户 | 覆盖层不删除原 DOM，可以立即恢复学校原页面 | portal-ui.js、portal-modernizer.js |
+| 原请求捕获 | 读取原表单和动态脚本中的账号、密码与网络参数 | portal-modernizer.js |
+| 外观 | 系统/浅色/深色、强调色、自定义背景、压缩和可读性参数 | appearance.js、design-tokens.css |
+| 私有门户背景 | 图片只进入 closed Shadow DOM，轻 DOM 不出现 Data URL | portal-modernizer.js |
+| 危险操作确认 | 删除、覆盖导入、恢复设置、清空记录、清除背景均可取消 | confirm-dialog.js |
+| 诊断 | 最近 10 次登录、下线和状态记录，默认脱敏 | state-store.js、drcom-client.js |
+| 发布 | 固定白名单、顺序、时间戳和 SHA-256 | scripts/package-extension.js |
+
+## 3. 目录与职责
+
+~~~text
 CRX/
-├─ manifest.json             扩展入口、权限、版本和默认内容脚本
-├─ background.js             状态、账号、DrCOM 请求、重试、保活和跳转保护
-├─ appearance.js             外观配置校验和 CSS 变量应用
-├─ design-tokens.css         颜色、材质、圆角、焦点、动效和无障碍令牌
-├─ welcome.html/css/js       首次安装引导
-├─ popup.html/css/js         工具栏快捷面板
-├─ options.html/css/js       完整设置、账号、外观、导入和请求日志
-├─ portal-ui.js              可测试的账号解析与门户 HTML 模型
-├─ portal-modernizer.js      原门户识别、覆盖层、请求捕获和恢复原页
-├─ portal.css                现代认证页样式
-└─ portal-preview.html/js    仅供开发和真实浏览器布局测试使用的预览页
+├─ manifest.json
+├─ account-utils.js
+├─ appearance.js
+├─ confirm-dialog.js
+├─ design-tokens.css
+├─ background.js
+├─ background/
+│  ├─ state-store.js
+│  ├─ drcom-client.js
+│  ├─ account-service.js
+│  ├─ connection-service.js
+│  ├─ portal-service.js
+│  └─ message-router.js
+├─ welcome.html / welcome.css / welcome.js
+├─ popup.html / popup.css / popup.js
+├─ options.html / options.css / options.js
+├─ portal-ui.js / portal-modernizer.js / portal.css
+└─ portal-preview.html / portal-preview.js
 
-tests/                       逻辑、权限边界、UI 合约和真实浏览器布局测试
-docs/                        产品设计、开发文档和审阅结论
-artifacts/ui-review/         当前稳定版的人工 UI 审阅截图
-```
+scripts/
+├─ browser-test-process.js
+├─ package-extension.js
+├─ run-tests.js
+└─ verify-release.js
 
-`artifacts/` 不应进入扩展发布包。发布包根目录应直接出现 `manifest.json`。
+tests/                         单元、合约、安全、浏览器和打包测试
+docs/development-guide.md      本开发指南
+docs/product-design.md         产品与界面设计约束
+.github/workflows/             CI 和标签发布工作流
+~~~
+
+各后台模块职责：
+
+- **background.js**：按固定顺序调用 importScripts，只注册安装、启动、Alarm、消息和标签更新事件。
+- **background/state-store.js**：schema 12、默认值、迁移、串行写入、容量预算、Session 状态和请求记录。
+- **background/drcom-client.js**：请求构造、超时、响应解析、错误分类与敏感信息清理。
+- **background/account-service.js**：账号规范化、自然键去重、保存、选择、删除和网络参数更新。
+- **background/connection-service.js**：登录单通道、连接状态、重试、活动身份、下线、状态检查和保活。
+- **background/portal-service.js**：自定义内容脚本注册、标签页短时保护、外观输出和网页 sender 校验。
+- **background/message-router.js**：可信上下文限制、动作白名单和返回数据裁剪。
+
+portal-preview.* 不是扩展运行入口，也不进入发布 ZIP，但真实浏览器测试直接依赖它来渲染生产门户表单，因此必须保留。
 
 ## 4. 运行时架构
 
-```text
-欢迎页 / 弹窗 / 设置页 ───────────────┐
-                                      │ chrome.runtime.sendMessage
-认证页内容脚本                        ▼
-portal-ui + portal-modernizer ──> background.js ──> DrCOM eportal / 门户页
-       │                              │
-       │ 仅白名单消息                 ├─ storage.local：账号、配置、最近请求
-       └─ 原页面保留与请求捕获         ├─ storage.session：连接状态、标签页保护
-                                      └─ alarms：保活与一次性重试
-```
+后台保持 Manifest V3 经典 Service Worker，不切换 ES Module。background.js 通过 importScripts 载入共享账号工具和六个后台模块，测试 VM 使用同一加载顺序。
 
-核心边界是：后台脚本是状态和认证的唯一所有者；扩展页可以读取完整状态；运行在 HTTP/HTTPS 门户中的内容脚本只能调用白名单操作，不能读取完整账号列表、删除账号、重置设置或清空日志。
+~~~mermaid
+flowchart LR
+  W[欢迎页] --> R[消息路由]
+  P[弹窗] --> R
+  O[设置页] --> R
+  M[门户内容脚本] -->|严格来源校验与动作白名单| R
+  R --> S[状态与 Session]
+  R --> A[账号服务]
+  R --> C[连接服务]
+  C --> D[DrCOM 客户端]
+  R --> G[门户服务]
+  S --> L[storage.local]
+  S --> SS[storage.session]
+  C --> AL[chrome.alarms]
+  D --> E[10.10.10.2 eportal]
+~~~
 
-## 5. 生命周期与入口
+核心边界如下：
 
-### 5.1 安装
+1. 后台是账号、配置、活动认证身份和连接状态的唯一所有者。
+2. 扩展自身页面可以读取完整状态。
+3. HTTP 门户中的内容脚本只能调用经过白名单和 sender 校验的动作。
+4. 门户页面轻 DOM、宿主属性和 CSS 变量不能获得自定义背景 Data URL。
+5. 密码只在登录所需的可信路径中使用，不进入界面状态、日志或导出。
 
-`chrome.runtime.onInstalled` 会完成三件事：
+## 5. 扩展生命周期
 
-1. 读取并迁移状态；
-2. 配置保活任务并同步自定义门户内容脚本；
-3. 仅在 `reason === "install"` 时打开 `welcome.html`，更新不会重复弹出。
+### 5.1 安装与更新
+
+chrome.runtime.onInstalled 会读取并规范化状态、同步保活和内容脚本。只有 details.reason 为 install 时才打开 welcome.html；update 不重复打开欢迎页。
 
 ### 5.2 浏览器启动
 
-`chrome.runtime.onStartup` 会重新核对保活任务和自定义门户注册。若启用“浏览器启动自动登录”，后台会使用自动模式登录当前选中账号，并遵守已有退避和人工阻断状态。
+chrome.runtime.onStartup 会重新核对保活 Alarm 和自定义门户脚本。启用启动登录时，后台使用自动模式登录当前选中账号，并遵守 storage.session 中的阻断和下次重试时间。
 
-### 5.3 定时任务
+### 5.3 Alarm
 
-- `drcomAssistant.keepAlive`：周期性检查门户状态；离线时尝试恢复连接。
-- `drcomAssistant.retry`：临时网络失败后执行一次登录重试。
+- drcomAssistant.keepAlive：周期检查门户，确认离线后尝试恢复。
+- drcomAssistant.retry：临时网络失败后的单次登录重试。
 
-### 5.4 标签页更新
+配置未变化时不会重复清除并创建相同保活任务。
 
-`chrome.tabs.onUpdated` 检查带短时保护的门户标签页。若登录后页面立即跳离网关，扩展最多拦截一次并返回配置的门户地址，随后立刻解除保护，不会长期阻止外站访问。
+### 5.4 标签更新
 
-## 6. 功能说明
+登录动作可以给当前门户标签加短时保护。若页面在保护期内自动离开门户，扩展最多重定向一次到门户并立刻清除保护；它不是长期站点拦截器。
 
-### 6.1 首次安装引导
+## 6. 账号生命周期
 
-欢迎页解释“打开认证页 → 输入账号 → 完成首次登录”三个步骤。主按钮在当前标签页打开配置的门户地址，次按钮打开设置页。页面会读取完整扩展状态，以便显示自定义网关和共享外观。
+### 6.1 统一解析
 
-### 6.2 快捷面板
+DrcomAccountUtils 同时供浏览器页面、后台和 CommonJS 测试使用，提供：
 
-工具栏弹窗用于高频操作：
+- 最多两轮 URL 解码；
+- 去除 DrCOM 常见的 ,0, 前缀；
+- 识别 @telecom、@unicom、@cmcc 及中英文别名；
+- 标签、脱敏显示和 MAC 规范化；
+- 自然键生成。
 
-- 显示“检查中、登录中、已在线、需要登录、等待重试、需要处理、未连接”等状态；
-- 选择、编辑、保存和删除账号；
-- 支持校园网、电信、联通、移动后缀；
-- 登录时可选择是否保存账号；
-- 登录、下线和主动刷新状态；
-- 打开认证页或完整设置页；
-- 查看本次请求的脱敏 URL。
+自然键为“去除首尾空白的用户名 + NUL 分隔符 + 小写后缀”。用户名大小写保持不变，因此 Student 与 student 是不同账号；运营商后缀统一为小写。
 
-### 6.3 设置页
+### 6.2 保存与历史去重
 
-设置页按五类导航组织：
+没有显式 ID 的保存按自然键更新原记录，不新增重复项。历史迁移发现同一自然键多条记录时：
 
-1. **网络**：显示网关和连接状态，打开门户，测试连接，设置启动登录和保活。
-2. **账号**：管理多账号、密码和每个账号独立的 IP/MAC/AC 参数。
-3. **外观**：跟随系统、浅色、深色主题；强调色；自定义背景；模糊、遮罩和缩放。
-4. **高级**：保活间隔、门户接管、短时防跳转、门户/API 地址、协议参数、抓包 URL 导入、最近请求和恢复默认配置。
-5. **关于**：版本、用途和本地存储说明。
+1. 优先保留当前 selectedAccountId；
+2. 否则保留 updatedAt 最近的记录 ID；
+3. 名称、密码和网络字段采用时间顺序中最近的非空值；
+4. selectedAccountId 重映射到保留 ID。
 
-自定义网关保存前会按门户地址和 API 地址申请可选来源权限；现代门户开启时还会申请 `scripting` 权限。
+抓包网络更新优先匹配抓包账号，不会把陌生账号参数写进当前选中账号。
 
-### 6.4 多账号与运营商后缀
+### 6.3 临时账号与活动身份
 
-账号结构把学号与运营商后缀分开保存。支持的内置后缀为：
+用户取消“保存账号”时，登录使用临时账号。成功后只把下线所需的最小 activeIdentity 写入 chrome.storage.session：
 
-| 显示值 | 实际后缀 |
-| --- | --- |
-| 校园网 | 空字符串 |
-| 电信 | `@telecom` |
-| 联通 | `@unicom` |
-| 移动 | `@cmcc` |
+- 保存账号 ID（临时账号为空）；
+- 用户名和后缀；
+- IP、IPv6、MAC、AC IP、AC 名称；
+- saved 或 transient 来源；
+- 认证时间。
 
-解析器会移除 DrCOM 常见的 `,0,` 前缀，最多执行两轮 URL 解码，并兼容中文运营商名称和部分英文别名。
+activeIdentity 不保存密码，能在 Service Worker 被回收后继续用于本次浏览器 Session 的下线。
 
-### 6.5 DrCOM 登录
+### 6.4 下线与删除
 
-登录请求发送到 `config.apiUrl`，默认是 `http://10.10.10.2:801/eportal/`。请求使用 GET，并生成以下主要参数：
+下线优先使用 activeIdentity，不回退到界面当前选择的其他账号。缺少有效 MAC 时会尝试 find_mac；仍无法获得时返回可理解提示。
 
-| 参数 | 来源 |
-| --- | --- |
-| `c=Portal`、`a=login` | 固定协议字段 |
-| `callback` | 回调前缀 + 当前时间戳 |
-| `login_method` | 高级设置，默认 `1` |
-| `user_account` | 账号前缀 + 学号 + 运营商后缀 |
-| `user_password` | 当前账号密码 |
-| `wlan_user_ip`、`wlan_user_ipv6` | 账号参数覆盖全局默认值 |
-| `wlan_user_mac` | 账号参数覆盖默认值，空值回退为 12 个零 |
-| `wlan_ac_ip`、`wlan_ac_name` | 账号参数覆盖全局默认值 |
-| `jsVersion` | 高级设置，默认 `3.3.2` |
-| `v` | 随机数 |
+下线成功会清除重试 Alarm、清空 activeIdentity，并把连接状态原子设置为 offline。下线失败不会伪造离线，也不会清除实际身份。
 
-后台在启用 `findMacBeforeLogin` 时先发送一次 `a=find_mac`。真正登录由全局单通道保护：多个入口同时登录时只允许一个真实 DrCOM 请求在途。
+删除账号前显示具体名称和脱敏账号，默认焦点在取消按钮，Escape 可以取消。删除只影响选定账号；设置重置明确保留账号。
 
-### 6.6 登录结果和智能重试
+## 7. 连接状态与 DrCOM 协议
 
-后台兼容 JSON、JSONP 和宽松键值返回，并把常见错误转换为中文说明。
+### 7.1 连接阶段
 
-- 成功或已在线：清除重试，连接状态变为 `online`。
-- 密码/账号错误：进入 `action_required`，停止自动重试。
-- 设备数量或 MAC 冲突：进入 `action_required`。
-- 流量、余额或欠费：进入 `action_required`。
-- 其他错误：视为临时网络错误，从 30 秒开始指数退避，加入 0%–20% 抖动，最长 5 分钟。
+连接状态 phase 包括 idle、checking、captive、authenticating、waiting、action_required、online 和 offline。状态还保存 attempt、nextRetryAt、blocked、message 和 updatedAt。
 
-连接状态保存在 `storage.session`，Service Worker 被回收后仍可恢复。
+### 7.2 登录单通道与退避
 
-### 6.7 状态检测与保活
+所有入口共享 drcom-login 单通道，同一时刻只发送一个真实登录任务。手工登录会清除旧重试；自动登录在 blocked 为 true 或尚未到 nextRetryAt 时跳过。
 
-状态检测对门户页发起 8 秒超时的 GET 请求，通过登录/下线表单和页面文本判断“在线、需要登录或不明确”。DrCOM 接口请求超时为 9 秒。状态、登录和下线结果都会形成脱敏请求记录；后台只保留最近 10 条。
+临时网络错误从 30 秒开始指数退避，增加最多 20% 抖动，最长 5 分钟。密码/账号、设备/MAC、流量/余额错误进入 action_required 并停止自动重试。
 
-保活开启后使用 Chrome Alarm 周期检查。若当前不在线且不在退避或人工阻断状态，后台会用选中账号恢复连接。间隔限制为 0.5–30 分钟，设置界面以 15 秒粒度展示。
+### 7.3 请求构造
 
-### 6.8 下线
+默认 API 为 http://10.10.10.2:801/eportal/。登录使用 GET，并写入 Portal/login、callback、login_method、user_account、user_password、网络参数、jsVersion 和随机值。启用 findMacBeforeLogin 时先调用 find_mac。下线有认证身份时优先使用 unbind_mac；没有任何身份时才使用传统 logout。
 
-有账号时优先调用 `a=unbind_mac`，使用账号和当前网络参数；没有账号时回退到传统 `a=logout`。若账号没有有效 MAC，后台会尝试 `find_mac`，失败后给出补录真实 MAC 的提示。
+### 7.4 响应解析优先级
 
-### 6.9 原认证页请求捕获
+DrCOM 响应固定按以下优先级处理：
 
-内容脚本保留学校原页面，并观察两类行为：
+1. 网络或 HTTP 错误；
+2. 明确协议字段和协议码；
+3. 可识别的状态响应；
+4. 安全兜底。
 
-- 原表单提交：读取账号、密码和常见网络字段，延迟 900 毫秒作为兜底捕获；
-- 动态加入的登录/下线脚本：从脚本 URL 读取实际 DrCOM 参数，覆盖兜底数据并补充网络信息。
+未知结果按失败处理，不因文本中偶然出现 success、logout 或类似关键词而误报成功。诊断记录保留 HTTP 状态码和必要协议信息，但清除密码、完整账号、敏感查询参数和返回体中的凭据。
 
-捕获的密码不会写入请求日志，但在自动保存账号时会进入扩展本地状态。
+## 8. 门户接管与隐私隔离
 
-### 6.10 现代认证页
+### 8.1 现代界面
 
-门户内容脚本在 DOM 就绪后读取公开门户配置。仅当功能开启，并且页面具有密码框或已识别为在线页时，才挂载 `#drcom-modern-root`。
+内容脚本在页面可识别为登录页或在线页时挂载现代界面。学校原 DOM 始终保留，只通过 CSS 切换可见性；“使用原始登录页”会立即撤下覆盖层。初始化或后台通信失败时也恢复原页面。
 
-- 原页面 DOM 不删除，只通过 CSS 切换可见性；
-- “使用原始登录页”立即撤下覆盖层；
-- 登录页可读取原表单中的账号、密码和网络参数作预填；
-- 登录成功后切换到在线视图；
-- 下线失败时保留在线视图并显示错误；
-- 初始化或通信失败时自动恢复原页面。
+登录表单支持账号、运营商、密码和是否保存；成功后切换在线视图；下线失败时保持在线视图并显示错误。
 
-### 6.11 自定义网关
+### 8.2 背景与个性化
 
-默认清单只直接授权 `10.10.10.2`。用户保存其他门户或 API 地址时，设置页通过 `chrome.permissions.request` 申请对应 HTTP/HTTPS 主机权限。若现代门户开启，后台使用 `chrome.scripting.registerContentScripts` 为自定义门户注册与默认门户相同的 CSS 和脚本，并在设置变化时取消旧注册。
+portal:config:get 只返回启用状态、标题、门户地址、主题和强调色，不返回 backgroundImage。完整外观通过 portal:appearance:get 单独获取。
 
-### 6.12 外观与自定义背景
+自定义图片只写入内容脚本创建的 closed Shadow DOM 私有层。门户轻 DOM、宿主元素属性和 CSS 变量中不出现 Data URL。门户右上角提供 44px 个性化按钮，包含提示和无障碍名称，点击后发送 options:open 打开设置。
 
-`appearance.js` 统一规范外观数据并写入 CSS 变量。所有正式界面共享颜色、材质、焦点、深浅色、减少动态、减少透明度、增强对比度、强制色和粗指针触控规则。
+### 8.3 网页消息来源
 
-背景图片支持 PNG、JPEG、WebP 和 AVIF：
+网页消息必须同时满足：
 
-- 原图最大 48 MB；
-- 保存目标约 3 MB；
-- 超限时依次缩放到 2560、2240、1920、1600、1280、960 像素档位；
-- 每档尝试 WebP 质量 0.92、0.88、0.84，最小档继续尝试 0.80、0.76、0.72；
-- 完整状态写入前还有 8 MB 总预算保护。
+- sender.id 等于当前扩展 ID；
+- frameId 为 0；
+- origin 和 sender.url 的 origin 精确为 http://10.10.10.2；
+- sender.tab.id 有效；
+- chrome.tabs.get 返回的当前标签仍在同一 origin；
+- action 位于网页白名单。
 
-## 7. 数据模型
+iframe、伪造来源、过期标签和非白名单动作都会被拒绝。当前 2.5.3 的敏感网页消息边界固定在默认 HTTP 门户；自定义网关仍可从扩展页配置和访问，但不会自动获得任意网页消息权限。
 
-### 7.1 `storage.local`
+### 8.4 原门户捕获
 
-键名为 `drcomAssistantState`，当前 `schemaVersion` 为 `12`。
+portal-modernizer 会观察原表单提交和动态登录/下线脚本，读取 user_account、user_password 和网络字段。脚本捕获优先于 900ms 表单兜底。密码可以进入用户明确选择保存的账号，但不会进入请求记录。
 
-```js
+## 9. 数据模型与迁移
+
+### 9.1 storage.local
+
+主键为 drcomAssistantState，当前 schemaVersion: 12。
+
+~~~js
 {
   schemaVersion: 12,
-  selectedAccountId: "...",
+  selectedAccountId: "account-id",
   accounts: [{
-    id: "...",
+    id: "account-id",
     label: "主账号",
     username: "2026...",
     suffix: "@telecom",
-    password: "明文密码",
+    password: "本机明文密码",
     network: {
       wlanUserIp: "",
       wlanUserIpv6: "",
@@ -228,28 +264,50 @@ portal-ui + portal-modernizer ──> background.js ──> DrCOM eportal / 门�
   }],
   recentRequests: [],
   config: {
-    portalUrl: "...",
-    apiUrl: "...",
-    login: {},
-    network: {},
-    ui: {},
-    redirect: {},
-    automation: {}
+    portalUrl: "http://10.10.10.2/",
+    apiUrl: "http://10.10.10.2:801/eportal/",
+    login: {
+      accountPrefix: ",0,",
+      callbackPrefix: "dr",
+      loginMethod: "1",
+      jsVersion: "3.3.2",
+      findMacBeforeLogin: true
+    },
+    network: {
+      wlanUserIp: "",
+      wlanUserIpv6: "",
+      wlanUserMac: "000000000000",
+      wlanAcIp: "",
+      wlanAcName: ""
+    },
+    ui: {
+      modernizePortal: true,
+      title: "徐医校园网",
+      accent: "#007aff",
+      theme: "system",
+      background: "fresh",
+      backgroundImage: "",
+      backgroundBlur: 14,
+      backgroundDim: 0.42,
+      backgroundScale: 1.04
+    },
+    redirect: { returnToPortal: true, guardSeconds: 4 },
+    automation: { loginOnStartup: true, keepAlive: true, intervalMinutes: 3 }
   }
 }
-```
+~~~
 
-旧版顶层 `username`、`password` 可以迁移成第一个账号。状态写入通过串行队列完成，避免账号保存、日志追加等并发操作互相覆盖。
+账号、配置和请求记录通过串行写入队列更新，避免并发覆盖。完整状态写入前执行 8 MB 预算检查；背景图片保存目标约 3 MB。
 
-### 7.2 `storage.session`
+schema 12 会合并历史重复自然键账号；成功写回后删除旧顶层 username/password；删除历史账号 note 以及 ui.subtitle、ui.density、ui.hideOriginalPortal。规范化前后状态会比较，即使存储已经标记为 schema 12，也会把残留字段幂等写回清理。写回失败时不会提前删除旧凭据源字段。
 
-键名为 `drcomAssistantSession`。
+### 9.2 storage.session
 
-```js
+主键为 drcomAssistantSession。
+
+~~~js
 {
-  guards: {
-    "<tabId>": { until: 0 }
-  },
+  guards: { "tabId": { until: 0 } },
   connection: {
     phase: "idle",
     attempt: 0,
@@ -257,119 +315,160 @@ portal-ui + portal-modernizer ──> background.js ──> DrCOM eportal / 门�
     blocked: false,
     message: "",
     updatedAt: 0
+  },
+  activeIdentity: {
+    accountId: "",
+    username: "2026...",
+    suffix: "@telecom",
+    network: {},
+    source: "saved | transient",
+    authenticatedAt: 0
   }
 }
-```
+~~~
 
-Session 写入也通过独立串行队列完成。
+Session 状态只在当前扩展/浏览器 Session 内使用；activeIdentity 不含密码。
 
-## 8. 内部消息接口
+## 10. 内部消息接口
 
-| `action` | 作用 | 门户内容脚本可用 |
-| --- | --- | --- |
-| `state:get` | 返回完整账号与配置 | 否 |
-| `connection:get` | 返回连接状态机 | 否 |
-| `portal:config:get` | 返回门户开关、标题、地址和公开外观 | 是 |
-| `account:save` | 新增或更新账号 | 是；网页只收到账号 ID |
-| `account:delete` | 删除账号 | 否 |
-| `account:select` | 切换默认账号 | 否 |
-| `account:network:update` | 补充匹配账号的网络参数 | 是；网页只收到结果摘要 |
-| `requestLog:clear` | 清空请求记录 | 否 |
-| `config:save` | 合并并保存配置 | 否 |
-| `config:reset` | 恢复默认配置 | 否 |
-| `drcom:login` | 登录保存账号或临时账号 | 是 |
-| `drcom:logout` | 解绑 MAC 或传统下线 | 是 |
-| `drcom:status` | 主动检测门户状态 | 否 |
-| `redirect:markPortalTab` | 开启短时标签页保护 | 是 |
-| `redirect:clearPortalTab` | 清除标签页保护 | 否 |
-| `options:open` | 打开设置页 | 否 |
+| action | 作用 | 扩展页 | 受验证门户 |
+| --- | --- | --- | --- |
+| state:get | 完整账号与配置 | 是 | 否 |
+| connection:get | 当前连接状态 | 是 | 否 |
+| portal:config:get | 安全门户配置，不含图片 | 是 | 是 |
+| portal:appearance:get | 完整外观，供私有背景层使用 | 是 | 是 |
+| account:save | 保存或更新账号 | 是，返回完整结果 | 是，只返回 accountId |
+| account:delete | 删除账号 | 是 | 否 |
+| account:select | 切换默认账号 | 是 | 否 |
+| account:network:update | 更新匹配账号网络参数 | 是 | 是，只返回摘要 |
+| requestLog:clear | 清空请求记录 | 是 | 否 |
+| config:save | 合并配置 | 是 | 否 |
+| config:reset | 恢复默认配置 | 是 | 否 |
+| drcom:login | 保存账号或临时账号登录 | 是 | 是 |
+| drcom:logout | 针对活动身份下线 | 是 | 是 |
+| drcom:status | 主动状态检查 | 是 | 否 |
+| redirect:markPortalTab | 开启短时保护 | 是 | 是 |
+| redirect:clearPortalTab | 清除保护 | 是 | 否 |
+| options:open | 打开扩展设置 | 是 | 是 |
 
-## 9. 权限与安全边界
+message-router.js 先判定发送方，再执行白名单，最后裁剪门户可见返回值。门户不能通过包装未知 action 绕过校验。
 
-清单固定权限：
+## 11. 页面与交互
 
-- `alarms`：保活和一次性重试；
-- `storage`：账号、配置、日志和 Session 状态；
-- `tabs`：欢迎页、门户跳转、设置页和短时防跳转；
-- 默认主机权限：`http(s)://10.10.10.2/*`。
+### 11.1 欢迎页
 
-可选权限：
+展示三步安装引导、当前门户地址、主按钮和设置入口。主按钮在当前标签打开门户，次按钮打开设置。
 
-- `http://*/*`、`https://*/*`：只在用户配置自定义网关时按主机申请；
-- `scripting`：只在自定义网关也启用现代门户时申请。
+### 11.2 弹窗
 
-后台启动时调用 `chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" })`，减少内容脚本直接读取账号密码的机会。请求日志会对密码字段和账号做脱敏，并截断过长返回文本。
+显示连接阶段、脱敏请求 URL、账号表单、登录/保存/下线、账号选择和删除。忙碌状态结束后不会错误启用空账号选择框。
 
-### 9.1 凭据威胁模型
+### 11.3 设置页
 
-- **存储资产**：为保留“保存账号”和自动登录能力，密码以明文保存在当前 Chrome 配置文件的扩展 `storage.local` 中。它不会上传到项目仓库，但也不是独立加密保险库。
-- **传输边界**：默认 DrCOM 地址是 HTTP，登录协议又把密码放在 GET 查询参数中；这是当前学校网关协议的限制，不等同于端到端安全。校园网链路、代理、调试器或抓包工具可能看到请求。
-- **受信边界**：`TRUSTED_CONTEXTS`、严格的消息来源校验和门户白名单会降低普通网页读取凭据的机会，但无法抵御设备失陷、操作系统账号被控制、浏览器调试接口被滥用或具有高权限的恶意扩展。
-- **输出边界**：界面、日志和导出默认隐藏密码；请求日志与诊断信息还会脱敏账号、密码字段和敏感查询参数。任何测试数据、缺陷报告和发布产物都不得包含真实凭据。
+分为网络、账号、外观、高级和关于。网络提供连接概览、门户、状态测试、启动登录和保活；账号管理密码和每账号网络参数；外观处理主题、强调色、背景与本机压缩；高级包含门户/API、协议、抓包 URL、短时保护、请求记录和恢复默认。抓包导入若命中已有自然键，会在覆盖名称、密码和网络参数前确认。
 
-保存密码是一项由用户主动选择的便利功能。若设备不受信任，应取消保存账号，并在使用后从扩展中删除账号。完整报告流程见根目录 `SECURITY.md`。
+### 11.4 确认对话框
 
-## 10. 本地开发
+confirm-dialog.js 动态创建原生 dialog，标题和正文使用 textContent，避免把账号标签当成 HTML。对话框支持 Escape、取消、确认和点击遮罩取消；默认焦点明确落在取消按钮。
 
-### 10.1 加载稳定版
+## 12. 权限与安全边界
 
-1. 打开 `chrome://extensions/`；
-2. 开启开发者模式；
-3. 选择“加载已解压的扩展程序”；
-4. 选择工作区的 `CRX/`；
-5. 修改代码后在扩展管理页刷新扩展，并重新打开相关扩展页或门户页。
+固定权限为 alarms、storage、tabs 和默认主机 http(s)://10.10.10.2/*。可选的 http://*/*、https://*/* 只在用户保存自定义门户/API 时按具体 origin 请求；scripting 用于自定义门户内容脚本注册。
 
-### 10.2 完整校验
+后台启动时调用 chrome.storage.local.setAccessLevel(TRUSTED_CONTEXTS)。这能减少普通内容脚本读取 storage.local 的机会，但不是加密。
 
-```powershell
-npm run verify
-```
+必须明确：
 
-该命令先检查全部运行时 JavaScript 语法，再运行逻辑、UI 合约和真实浏览器布局测试。在 2026-08-31 的审阅环境中，结果为 `81 passed, 0 failed`。
+- 密码为支持自动登录而保存在本机 storage.local；
+- 默认门户和 API 使用 HTTP，学校协议把密码放入 GET 参数；
+- 设备失陷、操作系统账号被控制、调试权限被滥用或恶意扩展仍可能读取敏感信息；
+- 界面、请求日志和导出默认隐藏密码；
+- 项目、测试、截图和缺陷报告不得包含真实账号或完整认证 URL。
 
-### 10.3 分项检查
+详见根目录 SECURITY.md。
 
-只做语法检查：
+## 13. 本地开发与验证
 
-```powershell
+加载扩展：打开 chrome://extensions/，开启开发者模式，选择“加载已解压的扩展程序”和 CRX/；修改后刷新扩展并重新打开相关页面。
+
+~~~powershell
 npm run check
-```
+npm run test:unit
+npm run test:browser
+npm run verify:package
+npm run verify
+~~~
 
-只运行测试：
+- npm run check：运行时和构建脚本语法检查。
+- npm run test:unit：账号、迁移、协议、权限、UI 逻辑、文档与开源合约。
+- npm run test:browser：启动本机 Chrome/Edge，验证欢迎页、设置页、弹窗和门户预览的真实布局。
+- npm run verify:package：验证 ZIP 白名单、固定时间戳、排除规则和重复构建一致性。
+- npm run verify：汇总静态、单元、浏览器和打包测试。
 
-```powershell
-npm test
-```
+浏览器清理会在 kill 前注册 exit 监听；正常退出有有限等待，超时后使用 SIGKILL，再删除独立临时 profile，任何路径都不会无限等待。
 
-### 10.4 手工回归清单
+手工回归至少覆盖安装/更新、四种后缀、保存/临时登录、活动身份下线、结构化协议结果、失败重试、保活、防跳转、门户切换、私有背景、危险操作取消/确认、窄屏/触控/高对比，以及所有输出无真实凭据。
 
-- 新安装打开欢迎页，更新不重复打开；
-- 默认门户与自定义门户分别能打开；
-- 校园网、电信、联通、移动账号可保存和切换；
-- 记住账号和不保存账号两种登录路径；
-- 登录成功、密码错误、设备冲突、网络超时和已在线返回；
-- 下线成功、下线缺少 MAC 和传统下线路径；
-- 状态刷新、启动登录、保活和退避重试；
-- 登录后短时跳转只拦截一次；
-- 现代门户可无刷新恢复学校原页面；
-- 抓包脚本、原表单提交和 URL 导入；
-- 请求日志不出现完整账号和密码；
-- 浅色、深色、系统主题、自定义背景和 390px 窄屏布局。
+## 14. 打包与发布
 
-## 11. 发布
+### 14.1 构建
 
-当前源码版本为 `2.5.3`。生成新发布包前执行：
+~~~powershell
+npm run package
+~~~
 
-1. 稳定版语法检查；
-2. 稳定版逻辑与真实浏览器测试；
-3. 手工回归；
-4. 确认 `package.json` 与 `CRX/manifest.json` 版本一致；
-5. 只打包 `CRX/` 内需要发布的文件，压缩包根目录直接包含 `manifest.json`；
-6. 记录 SHA-256；
-7. 在干净目录解压并再次加载测试。
+输出：
 
-建议实现可重复的打包脚本，而不是手工维护压缩包。
+- dist/drcom-xuzhou-medical-2.5.3.zip
+- dist/drcom-xuzhou-medical-2.5.3.sha256
 
-## 12. 已知问题与后续工作
+ZIP 根目录直接包含 manifest.json 和 LICENSE。打包器使用显式白名单、固定顺序、1980-01-01 DOS 时间和 STORE 方法。tests/、docs/、portal-preview.*、截图和本地状态不会进入发布包。dist/ 已加入 .gitignore。
 
-详细证据、优先级和建议测试见 [项目审阅与修改建议](review-and-recommendations.md)。当前最先应处理的是：账号去重、临时账号下线目标、下线后的连接状态同步，以及门户背景图片和明文凭据的隐私边界。
+### 14.2 标签校验
+
+~~~powershell
+npm run verify:release -- v2.5.3
+~~~
+
+脚本要求标签精确等于 v + Manifest 版本，同时检查 package.json 版本，并从 CHANGELOG.md 提取当前版本到 dist/release-notes.md。
+
+### 14.3 工作流
+
+.github/workflows/ci.yml 在 push 和 pull request 上执行静态、单元、浏览器、打包验证并上传构建产物。.github/workflows/release.yml 只在 v* 标签上运行，完整验证后构建 ZIP、SHA-256、提取变更说明并调用 gh release create。
+
+这些文件不会自行登录或发布；只有将源码放入 GitHub 仓库并推送相应事件后才会运行。
+
+## 15. 文件精简规则
+
+删除文件前必须同时确认：
+
+1. 不是 Manifest、HTML、package.json、脚本或测试入口；
+2. rg 搜索没有有效引用；
+3. 哈希与内容比较表明没有需要迁移的独有信息；
+4. 不是构建、测试、发布或人工验收的必要依赖；
+5. 独有结论已经进入 README、开发指南、产品设计、SECURITY 或 CHANGELOG；
+6. 删除后定向测试和 npm run verify 全部通过。
+
+当前保留 portal-preview.*，因为真实浏览器测试直接使用。完成整改后，旧审阅建议已迁入 CHANGELOG 和本指南；无版本、已过时的 UI 截图由自动化真实浏览器测试替代。Git 历史保留删除前基线和逐项整改提交。
+
+## 16. 常见问题
+
+### 状态一直显示等待重试
+
+检查 connection.nextRetryAt。手工登录会清除旧重试；凭据错误需要先修正账号，不能依靠自动重试。
+
+### 临时账号无法下线
+
+检查 activeIdentity 是否存在有效网络参数，尤其是 wlan_user_mac。可先在原门户完成一次操作，让捕获逻辑补充参数。
+
+### 自定义背景无法保存
+
+原图上限为 48 MB，保存目标约 3 MB，完整状态预算为 8 MB。浏览器不支持图片压缩时需要换用更小图片。
+
+### 自定义门户现代界面无法调用后台
+
+2.5.3 的网页消息安全边界精确限制为 http://10.10.10.2。自定义地址可由扩展页访问，但不会获得默认门户的敏感消息能力。
+
+### 打包哈希变化
+
+先确认源码内容、Manifest 版本和 LICENSE 没有变化，再运行 npm run verify:package。dist/ 中的旧文件不参与输入。

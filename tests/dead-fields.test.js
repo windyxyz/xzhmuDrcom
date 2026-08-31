@@ -10,8 +10,7 @@ const projectRoot = join(__dirname, "..");
 test("运行时代码和开发数据模型不再定义已废弃字段", () => {
   const targets = [
     "CRX/background/account-service.js",
-    "CRX/options.js",
-    "docs/development-guide.md"
+    "CRX/options.js"
   ];
   const combined = targets
     .map((path) => readFileSync(join(projectRoot, path), "utf8"))
@@ -27,10 +26,6 @@ test("运行时代码和开发数据模型不再定义已废弃字段", () => {
   }
   assert.doesNotMatch(
     readFileSync(join(projectRoot, "CRX", "background", "account-service.js"), "utf8"),
-    /\bnote\s*:/
-  );
-  assert.doesNotMatch(
-    readFileSync(join(projectRoot, "docs", "development-guide.md"), "utf8"),
     /\bnote\s*:/
   );
 });

@@ -2,7 +2,7 @@
 
 这是一个 Chrome Manifest V3 扩展，用于徐州医科大学 DrCOM 校园网网关。扩展默认仅访问 `10.10.10.2`，提供首次安装引导、可恢复的现代认证页、多账号管理、登录/下线、原认证请求捕获、浏览器启动自动登录、定时保活、短时防跳转和脱敏请求日志。2.5 版新增连接状态机、全局单通道登录、智能退避重试、后台重启恢复和存储容量保护；2.5.1 为超限背景加入多轮高质量 WebP 压缩；2.5.2 修复认证结果误判、并发存储覆盖和前端错误反馈；2.5.3 修复设置图标越界、弹窗被压成窄长条、伪品牌标记和个性化背景不落盘等界面回归。欢迎页、弹窗、设置页与认证页均适配窄屏、横屏、触控操作和带安全区的移动设备，并共享跟随系统、浅色、深色和自定义背景外观。
 
-当前仓库只维护 `CRX` 中的 Apple 风格稳定版 2.5.3。完整架构、数据结构、消息接口和调试方式见 [`docs/development-guide.md`](docs/development-guide.md)，审阅结论与修改建议见 [`docs/review-and-recommendations.md`](docs/review-and-recommendations.md)。贡献前请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，版本变化见 [`CHANGELOG.md`](CHANGELOG.md)。
+当前仓库只维护 `CRX` 中的稳定版 2.5.3。完整功能、架构、数据结构、消息流、测试和发布方式见 [`docs/development-guide.md`](docs/development-guide.md)，产品体验约束见 [`docs/product-design.md`](docs/product-design.md)。贡献前请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，整改与版本变化见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 安装与使用
 
@@ -40,12 +40,19 @@
 npm run verify
 ```
 
-该命令会检查所有 JavaScript 文件语法并运行后台、欢迎页、设置页和门户接管测试。修改后在 `chrome://extensions/` 刷新扩展，再分别验证：首次安装欢迎页、现代/原始认证页切换、校园网/运营商后缀、多账号切换、登录、下线、状态检测、保活和防跳转。
+该命令会执行静态检查、单元测试、真实浏览器布局测试和确定性打包验证。修改后在 `chrome://extensions/` 刷新扩展，再分别验证：首次安装欢迎页、现代/原始认证页切换、校园网/运营商后缀、多账号切换、登录、下线、状态检测、保活、防跳转和危险操作取消。
 
 ## 目录
 
 - `CRX/manifest.json`：扩展权限、入口和版本。
-- `CRX/background.js`：状态迁移、DrCOM 请求、连接状态、单通道登录、退避恢复、保活、日志和防跳转。
+- `CRX/background.js`：经典 Service Worker 的依赖加载与 Chrome 事件注册。
+- `CRX/background/state-store.js`：schema 12、存储迁移、连接 Session 和串行写入。
+- `CRX/background/drcom-client.js`：DrCOM 请求构造、结构化响应解析和日志脱敏。
+- `CRX/background/account-service.js`：自然键去重、账号生命周期和网络参数更新。
+- `CRX/background/connection-service.js`：登录单通道、活动身份、退出、退避与保活。
+- `CRX/background/portal-service.js`、`message-router.js`：门户注入、网页来源校验和消息权限。
+- `CRX/account-utils.js`：跨后台、页面和测试共享的账号解析工具。
+- `CRX/confirm-dialog.js`：统一危险操作确认。
 - `CRX/design-tokens.css`：基于 Apple 设计语言的共享语义令牌、材质和深浅色规则。
 - `CRX/appearance.js`：外观配置规范化、背景安全校验与跨页面主题应用。
 - `CRX/welcome.*`：首次安装欢迎与网关引导。
@@ -54,12 +61,18 @@ npm run verify
 - `CRX/popup.*`：扩展弹窗。
 - `CRX/options.*`：账号、常用自动化设置、外观定制和折叠高级设置。
 - `docs/development-guide.md`：功能、架构、数据、接口、开发、测试和发布说明。
-- `docs/review-and-recommendations.md`：代码审阅结论、风险分级和修改建议。
+- `scripts/*.js`：浏览器进程清理、分组测试、确定性打包和发布标签校验。
 - `tests/*.test.js`：无需安装第三方测试库即可运行的后台、连接状态和界面逻辑回归测试。
 
 ## 发布
 
-发布包只应包含 `CRX` 目录内的发布文件，并保持压缩包根目录直接出现 `manifest.json`。扩展版本与根 `package.json` 同步；更新发布包前执行 `npm run verify`。
+先执行 `npm run verify`，再运行 `npm run package`。产物为 `dist/drcom-xuzhou-medical-2.5.3.zip` 和对应 SHA-256 文件；ZIP 根目录直接包含 `manifest.json` 与 `LICENSE`。
+
+创建本地标签或未来接入标签工作流前运行：
+
+```powershell
+npm run verify:release -- v2.5.3
+```
 
 ## 许可证
 
