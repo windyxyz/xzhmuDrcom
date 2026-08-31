@@ -691,6 +691,77 @@ test("不同入口同时触发登录时也只发送一个 DrCOM 请求", async (
   assert.equal(requests, 1);
 });
 
+test("临时登录身份跨后台重启保留且退出不会误用当前选中账号", async () => {
+  const sessionStore = {};
+  const requests = [];
+  const fetchStub = async (input) => {
+    const url = new URL(String(input));
+    requests.push(url);
+    const action = url.searchParams.get("a");
+    return {
+      ok: true,
+      status: 200,
+      async text() {
+        return action === "unbind_mac"
+          ? '{"result":"1","msg":"logout success"}'
+          : '{"result":"1","msg":"success"}';
+      }
+    };
+  };
+  const state = {
+    selectedAccountId: "account-1",
+    accounts: [account({ username: "selected-user", suffix: "@telecom" })],
+    recentRequests: [],
+    config: {
+      apiUrl: "http://10.10.10.2:801/eportal/",
+      login: {
+        accountPrefix: ",0,",
+        callbackPrefix: "dr",
+        loginMethod: "1",
+        jsVersion: "3.3.2",
+        findMacBeforeLogin: false
+      },
+      network: {
+        wlanUserIp: "",
+        wlanUserIpv6: "",
+        wlanUserMac: "000000000000",
+        wlanAcIp: "",
+        wlanAcName: ""
+      }
+    }
+  };
+  const transient = account({
+    id: "",
+    username: "temporary-user",
+    suffix: "@unicom",
+    password: "temporary-secret",
+    network: { wlanUserIp: "10.0.0.99", wlanUserMac: "AABBCCDDEEFF" }
+  });
+  const firstWorker = loadBackground({ sessionStore, fetch: fetchStub });
+  firstWorker.getState = async () => structuredClone(state);
+  firstWorker.addRequestRecord = async () => undefined;
+
+  const login = await firstWorker.loginAccount("", transient);
+
+  assert.equal(login.success, true);
+  const savedIdentity = sessionStore.drcomAssistantSession.activeIdentity;
+  assert.equal(savedIdentity.username, "temporary-user");
+  assert.equal(savedIdentity.suffix, "@unicom");
+  assert.equal(savedIdentity.source, "transient");
+  assert.doesNotMatch(JSON.stringify(savedIdentity), /temporary-secret|password/i);
+
+  const restartedWorker = loadBackground({ sessionStore, fetch: fetchStub });
+  restartedWorker.getState = firstWorker.getState;
+  restartedWorker.addRequestRecord = async () => undefined;
+  const logout = await restartedWorker.logout();
+  const logoutRequest = requests.find((url) => url.searchParams.get("a") === "unbind_mac");
+
+  assert.equal(logout.success, true);
+  assert.equal(logoutRequest.searchParams.get("user_account"), "temporary-user@unicom");
+  assert.equal(logoutRequest.searchParams.get("wlan_user_ip"), "10.0.0.99");
+  assert.equal(sessionStore.drcomAssistantSession.activeIdentity, null);
+});
+
 test("明确失败的登录与下线响应不会因为出现 success 或 logout 字样被误判", () => {
   const background = loadBackground();
   const login = background.normalizeDrcomResult(

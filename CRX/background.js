@@ -648,6 +648,7 @@ async function loginAccount(accountId, transientAccount, options = {}) {
 
 async function performLoginAccount(accountId, transientAccount) {
   const state = await getState();
+  const isTransient = Boolean(transientAccount);
   const account = transientAccount
     ? sanitizeAccount(transientAccount)
     : state.accounts.find((item) => item.id === (accountId || state.selectedAccountId));
@@ -663,7 +664,18 @@ async function performLoginAccount(accountId, transientAccount) {
   }
 
   const request = buildLoginRequest(account, state.config);
-  return fetchDrcom(request, "login");
+  const result = await fetchDrcom(request, "login");
+  return {
+    ...result,
+    authenticatedIdentity: sanitizeActiveIdentity({
+      accountId: isTransient ? "" : account.id,
+      username: account.username,
+      suffix: account.suffix,
+      network: account.network,
+      source: isTransient ? "transient" : "saved",
+      authenticatedAt: Date.now()
+    })
+  };
 }
 
 function runLoginSingleFlight(key, task) {
@@ -728,9 +740,13 @@ function canAttemptAutomaticLogin(runtime, now = Date.now()) {
 async function recordLoginOutcome(result, options = {}) {
   const now = Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
   const runtime = await getConnectionState();
+  const authenticatedIdentity = sanitizeActiveIdentity(result && result.authenticatedIdentity);
+  const publicResult = { ...(result || {}) };
+  delete publicResult.authenticatedIdentity;
 
   if (result && result.success) {
     await chrome.alarms.clear(RETRY_ALARM);
+    if (authenticatedIdentity) await setActiveIdentity(authenticatedIdentity);
     await setConnectionState({
       phase: "online",
       attempt: 0,
@@ -739,7 +755,7 @@ async function recordLoginOutcome(result, options = {}) {
       message: result.message || "登录成功。",
       updatedAt: now
     });
-    return { ...result, phase: "online", retryable: false, retryAt: 0 };
+    return { ...publicResult, phase: "online", retryable: false, retryAt: 0 };
   }
 
   const failure = classifyLoginFailure(result);
@@ -764,7 +780,7 @@ async function recordLoginOutcome(result, options = {}) {
     updatedAt: now
   });
   return {
-    ...result,
+    ...publicResult,
     phase,
     retryable: failure.retryable,
     retryAt,
@@ -774,13 +790,18 @@ async function recordLoginOutcome(result, options = {}) {
 
 async function logout(accountId = "", transientAccount = null) {
   const state = await getState();
-  const account = transientAccount
+  const session = await getSessionState();
+  const activeIdentity = session.activeIdentity;
+  const requestedAccount = transientAccount
     ? sanitizeAccount(transientAccount)
-    : state.accounts.find((item) => item.id === (accountId || state.selectedAccountId));
+    : state.accounts.find((item) => item.id === accountId);
+  const account = activeIdentity || requestedAccount;
 
   if (!account) {
     const legacyRequest = buildLegacyLogoutRequest(state.config);
-    return fetchDrcom(legacyRequest, "logout");
+    const legacyResult = await fetchDrcom(legacyRequest, "logout");
+    if (legacyResult.success) await setActiveIdentity(null);
+    return legacyResult;
   }
 
   const network = await resolveLogoutNetwork(account, state.config);
@@ -794,6 +815,7 @@ async function logout(accountId = "", transientAccount = null) {
     };
   }
 
+  if (result.success) await setActiveIdentity(null);
   return result;
 }
 
@@ -1269,8 +1291,37 @@ async function getSessionState() {
     connection: {
       ...DEFAULT_CONNECTION_STATE,
       ...(value && value.connection && typeof value.connection === "object" ? value.connection : {})
-    }
+    },
+    activeIdentity: sanitizeActiveIdentity(value && value.activeIdentity)
   };
+}
+
+function sanitizeActiveIdentity(input) {
+  if (!input || typeof input !== "object") return null;
+  const parsed = splitAccountValue(input.username, input.suffix);
+  if (!parsed.username) return null;
+  return {
+    accountId: stringValue(input.accountId),
+    username: parsed.username,
+    suffix: parsed.suffix,
+    network: {
+      wlanUserIp: stringValue(input.network && input.network.wlanUserIp).trim(),
+      wlanUserIpv6: stringValue(input.network && input.network.wlanUserIpv6).trim(),
+      wlanUserMac: normalizeMac(input.network && input.network.wlanUserMac),
+      wlanAcIp: stringValue(input.network && input.network.wlanAcIp).trim(),
+      wlanAcName: stringValue(input.network && input.network.wlanAcName).trim()
+    },
+    source: input.source === "transient" ? "transient" : "saved",
+    authenticatedAt: Math.max(0, Number(input.authenticatedAt) || Date.now())
+  };
+}
+
+async function setActiveIdentity(identity) {
+  const normalized = sanitizeActiveIdentity(identity);
+  const { session } = await mutateSession((draft) => {
+    draft.activeIdentity = normalized;
+  });
+  return session.activeIdentity;
 }
 
 async function setTabGuard(tabId, guard) {
