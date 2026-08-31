@@ -1,0 +1,83 @@
+* { box-sizing: border-box; }
+html { color-scheme: light dark; min-width: 0; background: var(--color-canvas); -webkit-text-size-adjust: 100%; }
+body {
+  min-width: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  display: grid;
+  place-items: center;
+  color: var(--color-text);
+  background: var(--color-canvas);
+  font-family: var(--font-ui);
+}
+button { font: inherit; }
+h1, h2, p { margin: 0; }
+
+.welcome-shell {
+  width: min(1040px, 100%);
+  min-width: 0;
+  min-height: 610px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(310px, 0.82fr);
+  gap: 16px;
+}
+
+.welcome-copy, .portal-panel { padding: clamp(30px, 5vw, 62px); border-radius: var(--radius-window); }
+.welcome-copy { min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--color-separator); background: var(--color-surface); }
+.product-lockup { color: var(--color-text); font-size: 15px; }
+/* deslop-ignore-next-line 19 -- compact product marker, without halo or pulse */
+.product-lockup::before { content: ""; width: 10px; height: 10px; margin-right: 9px; display: inline-block; border-radius: 50%; background: var(--color-accent); }
+.intro { margin-top: clamp(54px, 9vh, 96px); }
+.intro p, .setup-steps span:not(.step-number), .privacy-note, .portal-panel p { color: var(--color-text-secondary); }
+h1 { max-width: 100%; overflow-wrap: anywhere; font-size: clamp(38px, 6vw, 62px); line-height: 1.01; letter-spacing: -0.045em; }
+.intro p { max-width: 34rem; margin-top: 18px; font-size: 17px; line-height: 1.62; }
+
+.setup-steps { display: grid; gap: 0; padding: 0; margin: 42px 0 0; list-style: none; }
+.setup-steps li { min-width: 0; padding: 16px 0; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 4px 12px; border-top: 1px solid var(--color-separator); }
+/* deslop-ignore-next-line 19 -- circle identifies a genuinely ordered setup step */
+.step-number { grid-column: 1; grid-row: 1 / span 2; align-self: start; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; color: var(--color-on-accent); background: var(--color-accent); font-size: 12px; font-weight: 720; }
+.setup-steps strong { min-width: 0; overflow-wrap: anywhere; font-size: 15px; }
+.setup-steps span:not(.step-number) { grid-column: 2; min-width: 0; overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }
+.privacy-note { margin-top: auto; padding-top: 30px; font-size: 13px; }
+
+.portal-panel { min-width: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 40px; background: var(--glass-fill-strong); }
+.panel-label { margin-bottom: 10px; font-size: 13px; }
+.portal-panel h2 { max-width: 100%; overflow-wrap: anywhere; font-size: clamp(32px, 5vw, 47px); line-height: 1.05; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.portal-panel h2 + p { margin-top: 18px; line-height: 1.58; }
+.welcome-actions { display: grid; gap: 10px; }
+.welcome-actions button { min-height: 48px; border-radius: 14px; padding: 0 18px; cursor: pointer; font-weight: 660; }
+.primary-action { border: 1px solid var(--color-accent); color: var(--color-on-accent); background: var(--color-accent); }
+.primary-action:hover { filter: brightness(1.04); }
+.secondary-action { border: 1px solid var(--color-separator-strong); color: var(--color-text); background: var(--color-surface-raised); }
+.secondary-action:hover { background: var(--color-surface-hover); }
+.welcome-actions button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+:root[data-appearance-background="custom"] body { background: transparent; }
+:root[data-appearance-background="custom"] .welcome-copy { background: color-mix(in oklch, var(--color-surface-raised) 92%, transparent); }
+
+@media (max-width: 760px) {
+  body { padding: 10px; place-items: stretch; }
+  .welcome-shell { min-height: calc(100dvh - 20px); grid-template-columns: minmax(0, 1fr); }
+  .welcome-copy, .portal-panel { padding-right: max(24px, env(safe-area-inset-right)); padding-left: max(24px, env(safe-area-inset-left)); border-radius: 22px; }
+  .welcome-copy { padding-top: max(28px, env(safe-area-inset-top)); padding-bottom: 28px; }
+  .portal-panel { padding-top: 28px; padding-bottom: max(28px, env(safe-area-inset-bottom)); }
+  .intro { margin-top: 48px; }
+  .privacy-note { margin-top: 20px; }
+}
+
+@media (max-width: 420px) {
+  body { padding: 0; }
+  .welcome-shell { min-height: 100dvh; gap: 8px; }
+  .welcome-copy, .portal-panel { padding-right: max(18px, env(safe-area-inset-right)); padding-left: max(18px, env(safe-area-inset-left)); border-radius: 0; }
+  .intro { margin-top: 38px; }
+  h1 { font-size: clamp(36px, 11vw, 46px); }
+  .intro p { font-size: 16px; }
+  .setup-steps { margin-top: 32px; }
+}
+
+@media (max-width: 270px) { .setup-steps li { grid-template-columns: 24px minmax(0, 1fr); gap: 4px 8px; } .step-number { width: 22px; height: 22px; } }
+@media (max-height: 600px) and (orientation: landscape) { .welcome-shell { min-height: auto; } .intro { margin-top: 32px; } }
+@media (pointer: coarse) { .welcome-actions button { min-height: 48px; touch-action: manipulation; } }
+@media (prefers-reduced-transparency: reduce) { .portal-panel { background: var(--color-surface-raised); } }

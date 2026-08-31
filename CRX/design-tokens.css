@@ -1,0 +1,254 @@
+:root {
+  --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  /* deslop-ignore-next-line 34 -- monospace is reserved for diagnostic request payloads */
+  --font-mono: "SFMono-Regular", "SF Mono", ui-monospace, monospace;
+
+  --appearance-accent: #007aff;
+  --appearance-image: none;
+  --appearance-blur: 14px;
+  --appearance-dim: 0.42;
+  --appearance-scale: 1.04;
+
+  --color-canvas: oklch(0.958 0.009 250);
+  --color-surface: oklch(0.987 0.004 250 / 0.97);
+  --color-surface-raised: oklch(0.995 0.002 250 / 0.985);
+  --color-surface-secondary: oklch(0.935 0.009 250 / 0.94);
+  --color-surface-hover: oklch(0.91 0.028 250 / 0.92);
+  --color-text: oklch(0.22 0.012 255);
+  --color-text-secondary: oklch(0.48 0.018 255);
+  --color-separator: oklch(0.36 0.014 255 / 0.16);
+  --color-separator-strong: oklch(0.36 0.014 255 / 0.28);
+  --color-accent: var(--appearance-accent);
+  --color-accent-hover: color-mix(in oklch, var(--color-accent) 84%, var(--color-text));
+  --color-accent-soft: color-mix(in oklch, var(--color-accent) 12%, var(--color-surface));
+  --color-success: oklch(0.56 0.16 145);
+  --color-warning: oklch(0.68 0.16 78);
+  --color-danger: oklch(0.55 0.2 27);
+  --color-on-accent: oklch(0.985 0.003 250);
+
+  --glass-fill: oklch(0.99 0.004 250 / 0.72);
+  --glass-fill-strong: oklch(0.99 0.004 250 / 0.84);
+  --glass-border: oklch(1 0 0 / 0.68);
+  --glass-rim: linear-gradient(135deg, oklch(1 0 0 / 0.76), oklch(1 0 0 / 0.12) 44%, oklch(0.69 0.12 245 / 0.18));
+  --glass-shadow: 0 18px 44px -28px oklch(0.21 0.035 255 / 0.42), inset 0 1px 0 oklch(1 0 0 / 0.52), inset 0 -1px 0 oklch(0.4 0.02 255 / 0.08);
+  --glass-blur: 18px;
+
+  --radius-control: 12px;
+  --radius-surface: 20px;
+  --radius-window: 28px;
+  --shadow-raised: 0 1px 2px oklch(0.15 0.01 255 / 0.05), 0 16px 44px -32px oklch(0.15 0.025 255 / 0.34);
+  --shadow-overlay: 0 24px 64px -30px oklch(0.1 0.02 255 / 0.48);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--color-accent) 28%, transparent);
+  --motion-fast: 160ms;
+  --motion-enter: 240ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-spring: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --accent: var(--color-accent);
+  --ink: var(--color-text);
+  --muted: var(--color-text-secondary);
+  --line: var(--color-separator);
+  --paper: var(--color-surface);
+  --canvas: var(--color-canvas);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]),
+  #drcom-modern-root:not([data-theme="light"]) {
+    --color-canvas: oklch(0.165 0.012 255);
+    --color-surface: oklch(0.215 0.012 255 / 0.97);
+    --color-surface-raised: oklch(0.245 0.012 255 / 0.98);
+    --color-surface-secondary: oklch(0.28 0.014 255 / 0.94);
+    --color-surface-hover: oklch(0.33 0.035 250 / 0.94);
+    --color-text: oklch(0.965 0.005 250);
+    --color-text-secondary: oklch(0.75 0.012 250);
+    --color-separator: oklch(0.91 0.008 250 / 0.15);
+    --color-separator-strong: oklch(0.91 0.008 250 / 0.27);
+    --color-accent-soft: color-mix(in oklch, var(--color-accent) 25%, transparent);
+    --color-success: oklch(0.72 0.16 145);
+    --color-warning: oklch(0.78 0.14 80);
+    --color-danger: oklch(0.72 0.18 25);
+    --glass-fill: oklch(0.25 0.014 255 / 0.68);
+    --glass-fill-strong: oklch(0.25 0.014 255 / 0.82);
+    --glass-border: oklch(0.96 0.006 250 / 0.18);
+    --glass-rim: linear-gradient(135deg, oklch(1 0 0 / 0.25), oklch(1 0 0 / 0.035) 45%, oklch(0.69 0.12 245 / 0.18));
+    --glass-shadow: 0 24px 60px -32px oklch(0.04 0.01 255 / 0.78), inset 0 1px 0 oklch(1 0 0 / 0.16), inset 0 -1px 0 oklch(0 0 0 / 0.2);
+    --shadow-raised: 0 18px 46px -34px oklch(0.03 0.008 255 / 0.78);
+  }
+}
+
+:root[data-theme="dark"],
+#drcom-modern-root[data-theme="dark"] {
+  --color-canvas: oklch(0.165 0.012 255);
+  --color-surface: oklch(0.215 0.012 255 / 0.97);
+  --color-surface-raised: oklch(0.245 0.012 255 / 0.98);
+  --color-surface-secondary: oklch(0.28 0.014 255 / 0.94);
+  --color-surface-hover: oklch(0.33 0.035 250 / 0.94);
+  --color-text: oklch(0.965 0.005 250);
+  --color-text-secondary: oklch(0.75 0.012 250);
+  --color-separator: oklch(0.91 0.008 250 / 0.15);
+  --color-separator-strong: oklch(0.91 0.008 250 / 0.27);
+  --color-accent-soft: color-mix(in oklch, var(--color-accent) 25%, transparent);
+  --color-success: oklch(0.72 0.16 145);
+  --color-warning: oklch(0.78 0.14 80);
+  --color-danger: oklch(0.72 0.18 25);
+  --glass-fill: oklch(0.25 0.014 255 / 0.68);
+  --glass-fill-strong: oklch(0.25 0.014 255 / 0.82);
+  --glass-border: oklch(0.96 0.006 250 / 0.18);
+  --glass-rim: linear-gradient(135deg, oklch(1 0 0 / 0.25), oklch(1 0 0 / 0.035) 45%, oklch(0.69 0.12 245 / 0.18));
+  --glass-shadow: 0 24px 60px -32px oklch(0.04 0.01 255 / 0.78), inset 0 1px 0 oklch(1 0 0 / 0.16), inset 0 -1px 0 oklch(0 0 0 / 0.2);
+}
+
+body.app-themed-page {
+  position: relative;
+  isolation: isolate;
+}
+
+:root[data-appearance-background="custom"] body.app-themed-page::before,
+:root[data-appearance-background="custom"] body.app-themed-page::after {
+  content: "";
+  position: fixed;
+  z-index: 0;
+  inset: -48px;
+  pointer-events: none;
+}
+
+:root[data-appearance-background="custom"] body.app-themed-page::before {
+  background-image: var(--appearance-image);
+  background-position: center;
+  background-size: cover;
+  filter: blur(var(--appearance-blur));
+  transform: scale(var(--appearance-scale));
+}
+
+:root[data-appearance-background="custom"] body.app-themed-page::after {
+  background: oklch(0.94 0.006 250 / calc(var(--appearance-dim) * 0.7));
+}
+
+:root[data-theme="dark"][data-appearance-background="custom"] body.app-themed-page::after {
+  background: oklch(0.07 0.01 255 / var(--appearance-dim));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-appearance-background="custom"] body.app-themed-page::after {
+    background: oklch(0.07 0.01 255 / var(--appearance-dim));
+  }
+}
+
+body.app-themed-page > :not(.skip-link) {
+  position: relative;
+  z-index: 1;
+}
+
+.glass-chrome {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: saturate(135%) blur(var(--glass-blur));
+  backdrop-filter: saturate(135%) blur(var(--glass-blur));
+}
+
+.glass-chrome::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--glass-rim);
+  opacity: 0.68;
+  pointer-events: none;
+  -webkit-mask: linear-gradient(oklch(0 0 0) 0 0) content-box, linear-gradient(oklch(0 0 0) 0 0);
+  mask: linear-gradient(oklch(0 0 0) 0 0) content-box, linear-gradient(oklch(0 0 0) 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  padding: 1px;
+}
+
+.glass-chrome > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* deslop-ignore-next-line 19 -- solid fallback for the user-selected navigation material */
+/* deslop-ignore-next-line 19 -- solid fallback for the user-selected navigation material */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-chrome {
+    background: var(--color-surface-raised);
+  }
+}
+
+@keyframes drcom-content-enter {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.app-themed-page .welcome-shell,
+.app-themed-page .settings-shell,
+.app-themed-page .shell,
+#drcom-modern-root .drcom-surface {
+  animation: drcom-content-enter var(--motion-enter) var(--motion-ease) both;
+}
+
+.app-themed-page button,
+#drcom-modern-root button {
+  transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), transform 120ms var(--motion-spring);
+}
+
+.app-themed-page input,
+.app-themed-page select,
+.app-themed-page textarea,
+#drcom-modern-root input,
+#drcom-modern-root select {
+  transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+.app-themed-page button:active,
+#drcom-modern-root button:active {
+  transform: scale(0.975);
+}
+
+:where(.app-themed-page, #drcom-modern-root) :focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+@media (max-width: 640px), (pointer: coarse) {
+  :root { --glass-blur: 8px; }
+  .app-themed-page button,
+  .app-themed-page input,
+  .app-themed-page select,
+  #drcom-modern-root button,
+  #drcom-modern-root input,
+  #drcom-modern-root select { min-height: 44px; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root { --glass-fill: var(--color-surface-raised); --glass-fill-strong: var(--color-surface-raised); }
+  .glass-chrome { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --glass-fill: var(--color-surface-raised);
+    --glass-fill-strong: var(--color-surface-raised);
+    --glass-border: var(--color-separator-strong);
+  }
+  .glass-chrome { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  :root { --color-separator: CanvasText; --color-separator-strong: CanvasText; --focus-ring: 0 0 0 3px Highlight; }
+  .glass-chrome { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
+  .glass-chrome::before { display: none; }
+}

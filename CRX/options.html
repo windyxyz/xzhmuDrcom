@@ -1,0 +1,400 @@
+<!doctype html>
+<!-- deslop-ignore-file 24 -- semantic line icons follow one consistent system set -->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>校园网助手设置</title>
+  <link rel="stylesheet" href="design-tokens.css">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body class="app-themed-page">
+  <a class="skip-link" href="#main-content">跳到设置内容</a>
+  <div class="settings-window">
+    <aside class="settings-sidebar glass-chrome" aria-label="设置导航">
+      <div class="sidebar-brand">
+        <span><strong>校园网助手</strong><small id="sidebar-account-summary">默认账号</small></span>
+      </div>
+      <nav class="sidebar-nav">
+        <button type="button" data-settings-target="connection-overview" data-settings-title="网络" data-settings-description="让校园网连接更安静、更可靠。" aria-controls="connection-overview automation-section" aria-current="page"><span class="nav-icon tone-blue"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 9.5a11 11 0 0 1 14 0M8 13a6 6 0 0 1 8 0M11 16.5a2 2 0 0 1 2 0"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg></span><span>网络</span></button>
+        <button type="button" data-settings-target="accounts-section" data-settings-title="账号" data-settings-description="管理登录账号与认证信息。" aria-controls="accounts-section"><span class="nav-icon tone-green"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c.7-4 3-6 6.5-6s5.8 2 6.5 6"/></svg></span><span>账号</span></button>
+        <button type="button" data-settings-target="appearance-section" data-settings-title="外观" data-settings-description="选择显示模式、强调色和自定义背景。" aria-controls="appearance-section"><span class="nav-icon tone-purple"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 0-4H12a1.5 1.5 0 0 1 0-3h3a6 6 0 0 0 0-12z"/><circle cx="7.5" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="10" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></span><span>外观</span></button>
+        <button type="button" data-settings-target="advanced-settings" data-settings-title="高级" data-settings-description="调整网关、协议参数、导入与诊断记录。" aria-controls="advanced-settings"><span class="nav-icon tone-gray"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M10 14v6"/></svg></span><span>高级</span></button>
+        <button type="button" data-settings-target="about-section" data-settings-title="关于" data-settings-description="查看版本、数据存储与隐私说明。" aria-controls="about-section"><span class="nav-icon tone-blue"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg></span><span>关于</span></button>
+      </nav>
+      <p class="sidebar-note">配置仅保存在当前设备。</p>
+    </aside>
+    <div class="settings-workspace">
+  <main id="main-content" class="settings-shell">
+    <section class="page-intro" aria-labelledby="settings-title">
+      <div class="page-title-group">
+        <span id="settings-title-icon" class="page-title-icon tone-blue" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 9.5a11 11 0 0 1 14 0M8 13a6 6 0 0 1 8 0M11 16.5a2 2 0 0 1 2 0"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg></span>
+        <div><h1 id="settings-title">网络</h1><p id="settings-description">让校园网连接更安静、更可靠。</p></div>
+      </div>
+      <div id="page-connection-status" class="page-connection-status" data-tone="neutral"><span aria-hidden="true"></span><strong id="page-status-label">等待检查</strong><small>·</small><small id="page-status-host">10.10.10.2</small></div>
+    </section>
+
+    <section id="connection-overview" class="settings-section overview-section" data-settings-panel aria-labelledby="overview-title">
+      <header class="section-heading with-icon">
+          <span class="section-icon tone-green"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 9.5a11 11 0 0 1 14 0M8 13a6 6 0 0 1 8 0M11 16.5a2 2 0 0 1 2 0"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg></span>
+          <div><h2 id="overview-title">校园网入口</h2><p>当前网关与认证状态。</p></div>
+      </header>
+      <div class="settings-list overview-list">
+        <div class="settings-row overview-row">
+          <span class="settings-row-copy">
+            <span class="setting-icon tone-blue"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span>
+            <span class="settings-row-text"><strong>网关地址</strong><small id="overview-gateway-host">10.10.10.2</small></span>
+          </span>
+          <button id="overview-open-portal" class="secondary compact-button" type="button">打开认证页</button>
+        </div>
+        <div class="settings-row overview-row">
+          <span class="settings-row-copy">
+            <span class="setting-icon tone-green"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 9.5a11 11 0 0 1 14 0M8 13a6 6 0 0 1 8 0M11 16.5a2 2 0 0 1 2 0"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg></span>
+            <span class="settings-row-text"><strong>连接状态</strong><small id="settings-connection-status" aria-live="polite">等待检查</small></span>
+          </span>
+          <button id="test-connection" class="primary compact-button" type="button">测试连接</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="accounts-section" class="settings-section" data-settings-panel hidden aria-labelledby="accounts-title">
+      <header class="section-heading with-icon">
+        <span class="section-icon tone-blue"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c.7-4 3-6 6.5-6s5.8 2 6.5 6"/></svg></span>
+        <div>
+          <h2 id="accounts-title">账号</h2>
+          <p>选择账号后可以编辑、登录或下线。</p>
+        </div>
+      </header>
+
+      <div id="account-list" class="simple-account-list"></div>
+
+      <form id="account-form" class="account-editor">
+        <input id="account-id" type="hidden">
+        <div class="subsection-heading">
+          <h3>账号信息</h3>
+          <p>密码仅保存在本机浏览器中。</p>
+        </div>
+        <div class="field-grid">
+          <label>
+            <span>名称</span>
+            <input id="account-label" autocomplete="off" placeholder="例如：校园网主账号">
+          </label>
+          <label>
+            <span>运营商</span>
+            <select id="account-suffix">
+              <option value="">校园网</option>
+              <option value="@telecom">电信 @telecom</option>
+              <option value="@unicom">联通 @unicom</option>
+              <option value="@cmcc">移动 @cmcc</option>
+            </select>
+          </label>
+          <label>
+            <span>学号或 DrCOM 账号</span>
+            <input id="account-username" autocomplete="username" placeholder="请输入学号">
+          </label>
+          <label>
+            <span>密码</span>
+            <input id="account-password" type="password" autocomplete="current-password">
+          </label>
+        </div>
+
+        <details class="inline-disclosure">
+          <summary>账号网络参数</summary>
+          <div class="field-grid compact-grid">
+            <label><span>wlan_user_ip</span><input id="account-ip"></label>
+            <label><span>wlan_user_mac</span><input id="account-mac" placeholder="000000000000"></label>
+            <label><span>wlan_user_ipv6</span><input id="account-ipv6"></label>
+            <label><span>wlan_ac_ip</span><input id="account-ac-ip"></label>
+            <label><span>wlan_ac_name</span><input id="account-ac-name"></label>
+          </div>
+        </details>
+
+        <div class="editor-actions">
+          <label class="check inline-check">
+            <input id="account-reveal" type="checkbox">
+            <span>显示密码</span>
+          </label>
+          <div class="button-group">
+            <button id="account-login" class="primary" type="button">登录</button>
+            <button id="account-save" class="secondary" type="submit">保存账号</button>
+            <button id="account-logout" class="secondary" type="button">下线</button>
+            <button id="account-delete" class="danger" type="button">删除</button>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <form id="settings-form" class="settings-form">
+      <section id="automation-section" class="settings-section" data-settings-panel data-settings-group="connection-overview" aria-labelledby="automation-title">
+        <header class="section-heading with-icon">
+          <span class="section-icon tone-orange"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m13 2-7 11h6l-1 9 7-12h-6z"/></svg></span>
+          <div>
+            <h2 id="automation-title">登录与连接</h2>
+            <p>自动登录和防掉线行为。</p>
+          </div>
+        </header>
+
+        <div class="settings-list">
+          <label class="settings-row check-row">
+            <span class="settings-row-copy">
+              <span class="setting-icon tone-orange"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m13 2-7 11h6l-1 9 7-12h-6z"/></svg></span>
+              <span class="settings-row-text"><strong>浏览器启动后自动登录</strong><small>使用当前选中的账号发起连接。</small></span>
+            </span>
+            <input id="login-on-startup" type="checkbox">
+          </label>
+          <label class="settings-row check-row">
+            <span class="settings-row-copy">
+              <span class="setting-icon tone-green"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+              <span class="settings-row-text"><strong>防掉线保活</strong><small>定期检查状态，离线时尝试重新登录。</small></span>
+            </span>
+            <input id="keep-alive" type="checkbox">
+          </label>
+        </div>
+      </section>
+
+      <section id="appearance-section" class="settings-section appearance-section" data-settings-panel hidden aria-labelledby="appearance-title">
+        <header class="section-heading with-icon">
+          <span class="section-icon tone-purple"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 0-4H12a1.5 1.5 0 0 1 0-3h3a6 6 0 0 0 0-12z"/><circle cx="7.5" cy="10" r="1" fill="currentColor" stroke="none"/></svg></span>
+          <div>
+            <h2 id="appearance-title">外观与个性化</h2>
+            <p>主题和背景会同步应用到欢迎页、快捷面板与校园网登录页。</p>
+          </div>
+        </header>
+
+        <div class="appearance-layout">
+          <div class="appearance-controls">
+            <div class="field-grid">
+              <label>
+                <span>显示模式</span>
+                <select id="appearance-theme">
+                  <option value="system">跟随系统</option>
+                  <option value="light">浅色</option>
+                  <option value="dark">深色</option>
+                </select>
+              </label>
+              <label>
+                <span>强调色</span>
+                <input id="appearance-accent" type="color" value="#007aff">
+              </label>
+              <label class="wide">
+                <span>背景</span>
+                <select id="appearance-background">
+                  <option value="fresh">简洁底色</option>
+                  <option value="custom">自定义图片</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="background-actions">
+              <label class="file-picker secondary" for="background-file">
+                <span>选择图片</span>
+                <input id="background-file" class="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/avif">
+              </label>
+              <button id="clear-background" class="secondary" type="button">清除图片</button>
+            </div>
+              <p id="background-storage-note" class="appearance-note">选择后立即保存并应用；超过 3 MB 时自动高质量压缩</p>
+          </div>
+
+          <div id="background-preview" class="background-preview" role="img" aria-label="当前背景预览">
+            <div>
+              <span>背景预览</span>
+              <strong>徐医校园网</strong>
+              <small>10.10.10.2</small>
+            </div>
+          </div>
+        </div>
+
+        <div id="background-controls" class="background-tuning" hidden>
+          <label>
+            <span>模糊 <output id="background-blur-value">14 px</output></span>
+            <input id="background-blur" type="range" min="0" max="32" step="1" value="14">
+          </label>
+          <label>
+            <span>遮罩 <output id="background-dim-value">42%</output></span>
+            <input id="background-dim" type="range" min="0.2" max="0.72" step="0.01" value="0.42">
+          </label>
+          <label>
+            <span>缩放 <output id="background-scale-value">104%</output></span>
+            <input id="background-scale" type="range" min="1" max="1.15" step="0.01" value="1.04">
+          </label>
+        </div>
+        <input id="background-image-data" type="hidden" value="">
+      </section>
+
+      <details id="advanced-settings" class="advanced-settings" data-settings-panel hidden open>
+        <summary>
+          <span class="section-icon tone-gray"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M10 14v6"/></svg></span>
+          <span class="advanced-summary-copy">
+            <strong>高级设置</strong>
+            <small>网关、认证参数、抓包导入和诊断记录</small>
+          </span>
+        </summary>
+
+        <div class="advanced-content">
+          <section class="advanced-group" aria-labelledby="keep-alive-details-title">
+            <div class="subsection-heading">
+              <h3 id="keep-alive-details-title">连接守护细节</h3>
+              <p>精确设置在线检查频率。最短支持 30 秒，日常建议 3 分钟。</p>
+            </div>
+            <div class="settings-list compact-list">
+              <div class="settings-row interval-row">
+                <span class="settings-row-copy">
+                  <span class="setting-icon tone-green"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+                  <span class="settings-row-text"><strong>检查间隔</strong><small id="interval-summary">每 3 分钟检查一次</small></span>
+                </span>
+                <span class="duration-control" aria-label="保活检查间隔">
+                  <label><span>分钟</span><select id="interval-minutes">
+                    <option value="0">0</option><option value="1">1</option><option value="2">2</option>
+                    <option value="3">3</option><option value="5">5</option><option value="10">10</option>
+                    <option value="15">15</option><option value="20">20</option><option value="30">30</option>
+                  </select></label>
+                  <label><span>秒</span><select id="interval-seconds">
+                    <option value="0">0</option><option value="15">15</option>
+                    <option value="30">30</option><option value="45">45</option>
+                  </select></label>
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section class="advanced-group" aria-labelledby="portal-settings-title">
+            <div class="subsection-heading">
+              <h3 id="portal-settings-title">登录页体验</h3>
+              <p>现代登录界面会保留原始页面，并提供随时恢复入口。</p>
+            </div>
+            <div class="settings-list compact-list">
+              <label class="settings-row check-row">
+                <span class="settings-row-copy">
+                  <span class="setting-icon tone-purple"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 0-4H12a1.5 1.5 0 0 1 0-3h3a6 6 0 0 0 0-12z"/><circle cx="7.5" cy="10" r="1" fill="currentColor" stroke="none"/></svg></span>
+                  <span class="settings-row-text"><strong>接管并美化认证页</strong><small>访问当前校园网认证页时显示新的登录界面。</small></span>
+                </span>
+                <input id="modernize-portal" type="checkbox">
+              </label>
+              <label class="settings-row check-row">
+                <span class="settings-row-copy">
+                  <span class="setting-icon tone-blue"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+                  <span class="settings-row-text"><strong>登录后短时间留在网关页</strong><small>避免认证成功后立即跳转到其他网站。</small></span>
+                </span>
+                <input id="return-to-portal" type="checkbox">
+              </label>
+              <label class="settings-row">
+                <span class="settings-row-copy">
+                  <span class="setting-icon tone-orange"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+                  <span class="settings-row-text"><strong>防跳转保护时间</strong><small>只在登录后的短时间内生效。</small></span>
+                </span>
+                <span class="number-control">
+                  <input id="guard-seconds" type="number" min="1" max="120">
+                  <span>秒</span>
+                </span>
+              </label>
+            </div>
+          </section>
+
+          <section class="advanced-group" aria-labelledby="gateway-settings-title">
+            <div class="subsection-heading">
+              <h3 id="gateway-settings-title">网关与接口</h3>
+              <p>学校认证地址发生变化时再修改。</p>
+            </div>
+            <div class="field-grid">
+              <label class="wide"><span>认证页地址</span><input id="portal-url" placeholder="http://10.10.10.2/"></label>
+              <label class="wide"><span>eportal 接口</span><input id="api-url" placeholder="http://10.10.10.2:801/eportal/"></label>
+              <label><span>默认 wlan_user_ip</span><input id="default-ip"></label>
+              <label><span>默认 wlan_user_mac</span><input id="default-mac" placeholder="000000000000"></label>
+              <label><span>wlan_user_ipv6</span><input id="default-ipv6"></label>
+              <label><span>wlan_ac_ip</span><input id="default-ac-ip"></label>
+              <label><span>wlan_ac_name</span><input id="default-ac-name"></label>
+            </div>
+          </section>
+
+          <section class="advanced-group" aria-labelledby="protocol-settings-title">
+            <div class="subsection-heading">
+              <h3 id="protocol-settings-title">认证协议参数</h3>
+              <p>除非学校网关升级，否则无需修改。</p>
+            </div>
+            <div class="field-grid">
+              <label><span>账号前缀</span><input id="account-prefix" placeholder=",0,"></label>
+              <label><span>login_method</span><input id="login-method" placeholder="1"></label>
+              <label><span>callback 前缀</span><input id="callback-prefix" placeholder="dr"></label>
+              <label><span>jsVersion</span><input id="js-version" placeholder="3.3.2"></label>
+            </div>
+          </section>
+
+          <section class="advanced-group" aria-labelledby="capture-title">
+            <div class="subsection-heading">
+              <h3 id="capture-title">从登录请求导入账号</h3>
+              <p>适合自动捕获失败时手动粘贴 eportal 登录请求。</p>
+            </div>
+            <label class="wide">
+              <span>eportal 登录请求 URL</span>
+              <textarea id="raw-url" rows="3" placeholder="粘贴包含 c=Portal&a=login&user_account=... 的完整链接"></textarea>
+            </label>
+            <div class="field-grid">
+              <label><span>账号名称</span><input id="parsed-label" placeholder="例如：电信账号"></label>
+              <label>
+                <span>账号后缀</span>
+                <select id="parsed-suffix">
+                  <option value="">校园网</option>
+                  <option value="@telecom">电信 @telecom</option>
+                  <option value="@unicom">联通 @unicom</option>
+                  <option value="@cmcc">移动 @cmcc</option>
+                </select>
+              </label>
+              <label><span>学号或 user_account</span><input id="parsed-username" placeholder=",0,学号@telecom"></label>
+              <label><span>密码</span><input id="parsed-password" type="password" placeholder="user_password"></label>
+              <label><span>wlan_user_ip</span><input id="parsed-ip" placeholder="可留空"></label>
+              <label><span>wlan_user_mac</span><input id="parsed-mac" placeholder="000000000000"></label>
+            </div>
+            <div class="inline-actions">
+              <button id="parse-url" class="secondary" type="button">解析 URL</button>
+              <button id="save-parsed-account" class="primary" type="button">保存为账号</button>
+            </div>
+          </section>
+
+          <section class="advanced-group" aria-labelledby="request-log-title">
+            <div class="section-head">
+              <div class="subsection-heading">
+                <h3 id="request-log-title">最近请求记录</h3>
+                <p>显示最近 10 次登录、下线和状态检测，敏感内容已经隐藏。</p>
+              </div>
+              <button id="clear-request-log" class="secondary compact-button" type="button">清空记录</button>
+            </div>
+            <div id="request-log" class="request-log"></div>
+          </section>
+
+          <section class="advanced-group reset-group" aria-labelledby="reset-title">
+            <div>
+              <h3 id="reset-title">恢复默认配置</h3>
+              <p>不会删除已经保存的账号。</p>
+            </div>
+            <button id="reset-config" class="danger" type="button">恢复默认</button>
+          </section>
+        </div>
+
+      </details>
+
+      <section id="about-section" class="settings-section about-section" data-settings-panel hidden aria-labelledby="about-title">
+        <header class="section-heading with-icon">
+          <span class="section-icon tone-blue"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg></span>
+          <div><h2 id="about-title">校园网助手</h2><p>用于管理 DrCOM 认证与连接状态。</p></div>
+        </header>
+        <div class="settings-list">
+          <div class="settings-row"><span class="settings-row-text"><strong>版本</strong><small>当前安装版本</small></span><strong>2.5.3</strong></div>
+          <div class="settings-row"><span class="settings-row-text"><strong>数据存储</strong><small>账号与外观配置仅保存在当前设备</small></span><span>本地</span></div>
+          <div class="settings-row"><span class="settings-row-text"><strong>网络请求</strong><small>登录信息只发送到你设置的校园网网关</small></span><span>校园网</span></div>
+        </div>
+      </section>
+
+      <footer id="settings-actions" class="settings-actions" hidden>
+        <p>修改后需要保存才会生效。</p>
+        <button class="primary" type="submit">保存配置</button>
+      </footer>
+    </form>
+  </main>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script src="appearance.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+/.worktrees/
+/dist/
+/node_modules/
+
+# Local browser and test state
+/.cache/
+/.tmp/
+*.log
+
+# Editor and operating-system metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

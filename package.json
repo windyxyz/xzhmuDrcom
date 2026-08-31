@@ -1,0 +1,15 @@
+{
+  "name": "drcom-campus-assistant",
+  "version": "2.5.3",
+  "private": true,
+  "description": "徐医 DrCOM 校园网连接助手",
+  "scripts": {
+    "check:stable": "node --check CRX/appearance.js && node --check CRX/background.js && node --check CRX/options.js && node --check CRX/popup.js && node --check CRX/portal-ui.js && node --check CRX/portal-modernizer.js && node --check CRX/portal-preview.js && node --check CRX/welcome.js",
+    "check": "npm run check:stable",
+    "test": "node --test",
+    "verify": "npm run check && npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
