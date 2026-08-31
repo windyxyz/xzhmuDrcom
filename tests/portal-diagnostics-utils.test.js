@@ -154,3 +154,14 @@ test("诊断摘要在 64 KiB 边界下分别保留和截断", () => {
   assert.equal(utils.sanitizeRecord({ summary: below }).summary.length, 64 * 1024 - 1);
   assert.equal(utils.sanitizeRecord({ summary: above }).summary.length, 64 * 1024);
 });
+
+test("资源字段仅保留白名单 initiator 和有限非负数", () => {
+  const record = utils.sanitizeRecord({ type: "resource", initiatorType: "SCRIPT", status: 0, duration: 2.5 });
+  assert.equal(record.initiatorType, "script");
+  assert.equal(record.status, 0);
+  assert.equal(record.duration, 2.5);
+  const rejected = utils.sanitizeRecord({ type: "resource", initiatorType: "custom", status: Infinity, duration: -1 });
+  assert.equal("initiatorType" in rejected, false);
+  assert.equal("status" in rejected, false);
+  assert.equal("duration" in rejected, false);
+});

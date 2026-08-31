@@ -12,19 +12,22 @@
 
   const utils = globalThis.DrcomPortalDiagnosticsUtils;
   const pending = [];
-  let flushing = false;
+  let activeFlush = null;
   let mutationTimer = 0;
   let mutationObserver = null;
   let performanceObserver = null;
   let sessionId = "";
+  let shutdownPromise = null;
   let stopped = false;
+  let ended = false;
 
+  bindLifecycle();
   void initialize();
 
   async function initialize() {
     try {
       const status = await send({ action: "diagnostics:status" });
-      if (!status || status.enabled !== true || !utils) return;
+      if (stopped || !status || status.enabled !== true || !utils) return;
       const started = await send({
         action: "diagnostics:start",
         page: {
@@ -35,9 +38,14 @@
       });
       if (!started || !started.sessionId) return;
       sessionId = String(started.sessionId);
+      if (stopped) {
+        await endSession();
+        return;
+      }
       bindSafeEvents();
       bindObservers();
-      queueRecord({ type: "dom", pageKind: detectPageKind(), summary: buildDomSummary() });
+      if (stopped) return;
+      void queueRecord({ type: "dom", pageKind: detectPageKind(), summary: buildDomSummary() });
       recordResourceEntries(performance.getEntriesByType("resource"));
     } catch (error) {
       // Diagnostics are strictly best-effort and must not disturb the portal.
@@ -94,37 +102,39 @@
     return utils.truncateUtf8(summary, 64 * 1024);
   }
 
-  function sanitizeLocalRecord(record) {
-    const clean = utils.sanitizeRecord(record);
-    if (record && Number.isFinite(Number(record.duration)) && Number(record.duration) >= 0) clean.duration = Number(record.duration);
-    return clean;
-  }
-
   function queueRecord(record) {
     if (!sessionId) return Promise.resolve();
-    pending.push(sanitizeLocalRecord(record));
+    pending.push(utils.sanitizeRecord(record));
     if (pending.length > MAX_PENDING_RECORDS) pending.shift();
     return flushPending();
   }
 
-  async function flushPending() {
-    if (flushing) return;
-    flushing = true;
-    try {
+  function flushPending() {
+    if (activeFlush) return activeFlush;
+    activeFlush = (async () => {
       while (pending.length) {
-        await send({ action: "diagnostics:append", sessionId, record: pending[0] });
-        pending.shift();
+        try {
+          await send({ action: "diagnostics:append", sessionId, record: pending[0] });
+          pending.shift();
+        } catch (error) {
+          return;
+        }
       }
-    } catch (error) {
-      // Leave the head record in the bounded queue for the next event.
-    } finally {
-      flushing = false;
-    }
+    })();
+    const currentFlush = activeFlush;
+    currentFlush.then(() => {
+      if (activeFlush === currentFlush) activeFlush = null;
+    });
+    return currentFlush;
   }
 
   function recordEvent(type, event) {
     if (stopped) return;
     void queueRecord({ type, pageKind: detectPageKind(), target: describeTarget(event && event.target) });
+  }
+
+  function bindLifecycle() {
+    document.addEventListener("pagehide", () => { void stop(); }, true);
   }
 
   function bindSafeEvents() {
@@ -134,7 +144,6 @@
       if (!target || !SAFE_RESOURCE_TAGS.has(String(target.tagName || "").toUpperCase())) return;
       recordEvent("resource-error", event);
     }, true);
-    document.addEventListener("pagehide", () => { void stop(); }, true);
   }
 
   function bindObservers() {
@@ -157,11 +166,11 @@
   function recordResourceEntries(entries) {
     if (stopped || !entries) return;
     for (const entry of entries) {
-      const initiator = String(entry && entry.initiatorType || "other").toLowerCase();
+      const initiatorType = String(entry && entry.initiatorType || "other").toLowerCase();
       void queueRecord({
         type: "resource",
         url: String(entry && entry.name || ""),
-        method: SAFE_INITIATORS.has(initiator) ? initiator : "other",
+        initiatorType: SAFE_INITIATORS.has(initiatorType) ? initiatorType : "other",
         status: nonNegativeNumber(entry && entry.responseStatus),
         duration: nonNegativeNumber(entry && entry.duration)
       });
@@ -173,14 +182,24 @@
     return Number.isFinite(number) && number >= 0 ? number : 0;
   }
 
-  async function stop() {
-    if (stopped) return;
+  function stop() {
+    if (shutdownPromise) return shutdownPromise;
     stopped = true;
     if (mutationTimer) clearTimeout(mutationTimer);
     mutationTimer = 0;
     if (mutationObserver) mutationObserver.disconnect();
     if (performanceObserver) performanceObserver.disconnect();
-    await queueRecord({ type: "pagehide", pageKind: detectPageKind() });
+    shutdownPromise = (async () => {
+      if (!sessionId) return;
+      await queueRecord({ type: "pagehide", pageKind: detectPageKind() });
+      await endSession();
+    })();
+    return shutdownPromise;
+  }
+
+  async function endSession() {
+    if (!sessionId || ended) return;
+    ended = true;
     try {
       await send({ action: "diagnostics:end", sessionId });
     } catch (error) {

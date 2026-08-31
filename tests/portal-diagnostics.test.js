@@ -35,9 +35,11 @@ function createHarness(options = {}) {
     new FakeElement("button", { id: "login-button", type: "submit", "aria-label": "登录" })
   ];
   const passwordInput = controls.find((element) => element.getAttribute("type") === "password");
-  Object.defineProperty(passwordInput, "value", {
-    get() { throw new Error("诊断脚本不得读取 input.value"); }
-  });
+  for (const control of controls) {
+    Object.defineProperty(control, "value", {
+      get() { throw new Error("诊断脚本不得读取任何 control.value"); }
+    });
+  }
   let now = 0;
   let timerId = 0;
   const resourceEntries = options.resourceEntries || [];
@@ -214,11 +216,11 @@ test("资源记录保留经过净化的 URL 与数值元数据", async () => {
   assert.equal(resource.length, 2);
   assert.equal(resource[0].type, "resource");
   assert.equal(resource[0].url, "http://[redacted-ip]/private/[redacted-id]?token=%5Bredacted%5D");
-  assert.equal(resource[0].method, "SCRIPT");
+  assert.equal(resource[0].initiatorType, "script");
   assert.equal(resource[0].status, 204);
   assert.equal(resource[0].duration, 12.5);
   assert.equal(resource[1].url, "http://10.10.10.2/assets/app.js?token=%5Bredacted%5D");
-  assert.equal(resource[1].method, "LINK");
+  assert.equal(resource[1].initiatorType, "link");
   assert.equal(resource[1].status, 200);
   assert.equal(resource[1].duration, 3);
 });
@@ -243,6 +245,7 @@ test("pagehide 会记录结束事件且只结束一次", async () => {
   assert.equal(records(harness, "pagehide").length, 1);
   assert.equal(harness.sent.filter((message) => message.action === "diagnostics:end").length, 1);
   assert.equal(harness.mutationObservers[0].disconnected, true);
+  assert.equal(harness.performanceObservers[0].disconnected, true);
 });
 
 test("离线消息失败时保留至多 20 条记录并按队列顺序恢复", async () => {

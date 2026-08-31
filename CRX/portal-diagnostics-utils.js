@@ -7,6 +7,7 @@
     "focus", "resource", "resource-error", "navigation", "pagehide"
   ]);
   const safeProtocolActions = new Set(["login", "logout", "unbind_mac"]);
+  const safeResourceInitiatorTypes = new Set(["beacon", "css", "fetch", "iframe", "img", "link", "other", "script", "video", "xmlhttprequest"]);
   const fixedPortalHost = "10.10.10.2";
 
   function utf8Bytes(value) {
@@ -116,7 +117,9 @@
     if (input.url) record.url = sanitizeUrl(input.url);
     if (input.target) record.target = sanitizeTarget(input.target);
     if (input.method) record.method = cleanDescriptor(input.method, 16).toUpperCase();
-    if (input.status) record.status = Math.max(0, Number(input.status) || 0);
+    if (type === "resource" && safeResourceInitiatorTypes.has(String(input.initiatorType || "").toLowerCase())) record.initiatorType = String(input.initiatorType).toLowerCase();
+    if (input.status !== undefined && input.status !== null && Number.isFinite(Number(input.status)) && Number(input.status) >= 0) record.status = Number(input.status);
+    if (type === "resource" && input.duration !== undefined && input.duration !== null && Number.isFinite(Number(input.duration)) && Number(input.duration) >= 0) record.duration = Number(input.duration);
     if (input.summary) record.summary = sanitizeText(input.summary, 64 * 1024);
     if (input.message) record.message = sanitizeText(input.message, 1024);
     return record;

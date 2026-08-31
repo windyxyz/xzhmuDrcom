@@ -1380,3 +1380,18 @@ test("网页内容脚本不能管理或导出门户诊断", async () => {
     await assert.rejects(background.handleMessage({ action, enabled: true }, portalSender()), /无权执行此操作/);
   }
 });
+
+test("门户诊断第二次净化和导出后保留安全资源字段", async () => {
+  const background = loadBackground();
+  await background.setPortalDiagnosticsEnabled(true);
+  const start = await background.startPortalDiagnosticsSession({ pageKind: "login" }, portalSender());
+  await background.appendPortalDiagnosticRecord(start.sessionId, {
+    type: "resource", initiatorType: "script", status: 0, duration: 2.5
+  });
+  const exported = await background.exportPortalDiagnostics();
+  const record = exported.export.diagnostics.sessions[0].records[0];
+  assert.equal(record.initiatorType, "script");
+  assert.equal(record.status, 0);
+  assert.equal(record.duration, 2.5);
+  assert.equal("method" in record, false);
+});
