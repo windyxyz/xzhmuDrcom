@@ -59,7 +59,18 @@
       .replace(/\b(password|passwd|pwd|token|secret|authorization|cookie)\s*[:=]\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^&\r\n]*)/gi, "$1=[redacted]")
       .replace(/\b(uid|user(?:name|_account)?|account)\s*[:=]\s*[^\s&]+/gi, "$1=[redacted]")
       .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted-ip]")
-      .replace(/\b[0-9a-f]{2}(?::[0-9a-f]{2}){5}\b/gi, "[redacted-mac]")
+      .replace(/\b[0-9a-f]{2}(?:[:-][0-9a-f]{2}){5}\b/gi, "[redacted-mac]")
+      .replace(/(?<![0-9a-f-])[0-9a-f]{12}(?![0-9a-f-])/gi, (candidate) => /^\d{12}$/.test(candidate) ? "[redacted-id]" : "[redacted-mac]")
+      .replace(/\[?[0-9A-Fa-f:]{2,}\]?/g, (candidate) => {
+        const literal = candidate.replace(/^\[|\]$/g, "");
+        if (!literal.includes(":")) return candidate;
+        try {
+          const parsed = new URL(`http://[${literal}]/`);
+          return parsed.hostname.includes(":") ? "[redacted-ip]" : candidate;
+        } catch (error) {
+          return candidate;
+        }
+      })
       .replace(/\b(?:\+?86[ -]?)?1[3-9]\d{9}\b/g, "[redacted-phone]")
       .replace(/[\w.%+-]{1,64}@[\w.-]{1,255}\.[A-Za-z]{2,}/g, "[redacted-email]")
       .replace(/\b\d{8,18}\b/g, "[redacted-id]")

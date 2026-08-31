@@ -1300,6 +1300,54 @@ test("门户诊断在浏览器存储保留空间时暂停写入但仍可清除",
   assert.equal(cleared.sessionCount, 0);
 });
 
+test("门户诊断接近总配额时拒绝会越过阈值的新负载", async () => {
+  const softLimit = (10 * 1024 * 1024) - (512 * 1024);
+  const localStore = {};
+  const background = loadBackground({
+    localStore,
+    bytesInUse: (keys) => {
+      const diagnosticsBytes = new TextEncoder().encode(
+        JSON.stringify(localStore.drcomPortalDiagnostics || {})
+      ).byteLength;
+      return keys ? diagnosticsBytes : softLimit - 1000 + diagnosticsBytes;
+    }
+  });
+  await background.setPortalDiagnosticsEnabled(true);
+  const start = await background.startPortalDiagnosticsSession({ pageKind: "login" }, portalSender());
+  const result = await background.appendPortalDiagnosticRecord(start.sessionId, {
+    type: "dom",
+    summary: "x".repeat(800)
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+    ok: false,
+    error: "本地存储接近上限，诊断记录已暂停"
+  });
+});
+
+test("门户诊断并发写入按队列中的最新占用量拒绝第二个会话", async () => {
+  const softLimit = (10 * 1024 * 1024) - (512 * 1024);
+  const localStore = {};
+  const background = loadBackground({
+    localStore,
+    bytesInUse: (keys) => {
+      const diagnosticsBytes = new TextEncoder().encode(
+        JSON.stringify(localStore.drcomPortalDiagnostics || {})
+      ).byteLength;
+      return keys ? diagnosticsBytes : softLimit - 500 + diagnosticsBytes;
+    }
+  });
+  await background.setPortalDiagnosticsEnabled(true);
+  const starts = await Promise.all([
+    background.startPortalDiagnosticsSession({ pageKind: "login", title: "first" }, portalSender()),
+    background.startPortalDiagnosticsSession({ pageKind: "login", title: "second" }, portalSender())
+  ]);
+  assert.equal(starts.filter((result) => result.ok).length, 1);
+  assert.equal(starts.filter((result) => result.error === "本地存储接近上限，诊断记录已暂停").length, 1);
+  assert.equal((await background.readPortalDiagnostics()).sessionCount, 1);
+  const cleared = await background.clearPortalDiagnostics();
+  assert.equal(cleared.ok, true);
+});
+
 test("门户诊断会规范化并脱敏损坏的持久化会话后再读取或导出", async () => {
   const localStore = { drcomPortalDiagnostics: { enabled: true, sessions: [{
     id: "legacy", startedAt: "bad", endedAt: -1, origin: "http://192.168.8.1", pageKind: "unsafe",

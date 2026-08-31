@@ -128,6 +128,19 @@ test("诊断文本删除手机号、邮件、账号后缀和高熵字符串", ()
   assert.doesNotMatch(result, /13812345678|student@example.com|@telecom|Ab9xY7zQ2mN8pL4rT6vK/);
 });
 
+test("诊断文本删除各种 IPv6 和 MAC 表示", () => {
+  const result = utils.sanitizeText([
+    "IPv6=2001:db8::1",
+    "full=2001:0db8:0000:0000:0000:ff00:0042:8329",
+    "bracket=[2001:db8::2]",
+    "mac-colon=00:11:22:33:44:55",
+    "mac-hyphen=00-11-22-33-44-66",
+    "mac-plain=001122334477"
+  ].join(" "));
+  assert.doesNotMatch(result, /2001:db8::1|2001:0db8:0000:0000:0000:ff00:0042:8329|2001:db8::2|00:11:22:33:44:55|00-11-22-33-44-66|001122334477/);
+  assert.match(result, /redacted/);
+});
+
 test("畸形诊断输入会归一化为空对象而不抛异常", () => {
   assert.doesNotThrow(() => utils.sanitizeTarget(null));
   assert.doesNotThrow(() => utils.sanitizeRecord(null));

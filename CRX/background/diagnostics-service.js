@@ -71,25 +71,71 @@ function normalizePortalDiagnosticsStore(input) {
 function prunePortalDiagnosticsStore(input) {
   const store = normalizePortalDiagnosticsStore(input);
   store.sessions.sort((left, right) => left.startedAt - right.startedAt);
-  while (store.sessions.length > PORTAL_DIAGNOSTICS_MAX_SESSIONS) store.sessions.shift();
+  if (store.sessions.length > PORTAL_DIAGNOSTICS_MAX_SESSIONS) {
+    store.sessions.splice(0, store.sessions.length - PORTAL_DIAGNOSTICS_MAX_SESSIONS);
+  }
   while (portalDiagnosticsSerializedBytes(store) > PORTAL_DIAGNOSTICS_LIMIT_BYTES && store.sessions.length > 1) {
-    store.sessions.shift();
+    const sessions = store.sessions;
+    let low = 1;
+    let high = sessions.length - 1;
+    let firstKeptIndex = high;
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      store.sessions = sessions.slice(middle);
+      if (portalDiagnosticsSerializedBytes(store) <= PORTAL_DIAGNOSTICS_LIMIT_BYTES) {
+        firstKeptIndex = middle;
+        high = middle - 1;
+      } else {
+        low = middle + 1;
+      }
+    }
+    store.sessions = sessions.slice(firstKeptIndex);
   }
   const current = store.sessions[0];
-  while (current && portalDiagnosticsSerializedBytes(store) > PORTAL_DIAGNOSTICS_LIMIT_BYTES && current.records.length) {
-    current.records.shift();
+  if (current && portalDiagnosticsSerializedBytes(store) > PORTAL_DIAGNOSTICS_LIMIT_BYTES && current.records.length) {
+    const records = current.records;
+    let low = 1;
+    let high = records.length;
+    let firstKeptIndex = records.length;
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      current.records = records.slice(middle);
+      if (portalDiagnosticsSerializedBytes(store) <= PORTAL_DIAGNOSTICS_LIMIT_BYTES) {
+        firstKeptIndex = middle;
+        high = middle - 1;
+      } else {
+        low = middle + 1;
+      }
+    }
+    current.records = records.slice(firstKeptIndex);
     current.truncated = true;
   }
   return store;
 }
 
-function mutatePortalDiagnostics(mutator) {
+function portalDiagnosticsKeyBytes(value) {
+  return portalDiagnosticsSerializedBytes({ [PORTAL_DIAGNOSTICS_KEY]: value });
+}
+
+async function portalDiagnosticsWithinQuota(nextValue) {
+  if (!chrome.storage.local || typeof chrome.storage.local.getBytesInUse !== "function") return true;
+  const totalBytes = await chrome.storage.local.getBytesInUse(null);
+  if (totalBytes >= PORTAL_DIAGNOSTICS_STORAGE_SOFT_LIMIT) return false;
+  const previousKeyBytes = await chrome.storage.local.getBytesInUse([PORTAL_DIAGNOSTICS_KEY]);
+  const projectedTotal = Math.max(0, totalBytes - previousKeyBytes) + portalDiagnosticsKeyBytes(nextValue);
+  return projectedTotal < PORTAL_DIAGNOSTICS_STORAGE_SOFT_LIMIT;
+}
+
+function mutatePortalDiagnostics(mutator, options = {}) {
   const operation = portalDiagnosticsMutationQueue.then(async () => {
     const stored = await chrome.storage.local.get([PORTAL_DIAGNOSTICS_KEY]);
     const draft = normalizePortalDiagnosticsStore(stored[PORTAL_DIAGNOSTICS_KEY]);
     const value = await mutator(draft);
     draft.updatedAt = Date.now();
     const store = prunePortalDiagnosticsStore(draft);
+    if (options.enforceQuota && !await portalDiagnosticsWithinQuota(store)) {
+      return { store, value, quotaExceeded: true };
+    }
     await chrome.storage.local.set({ [PORTAL_DIAGNOSTICS_KEY]: store });
     return { store, value };
   });
@@ -124,18 +170,12 @@ async function setPortalDiagnosticsEnabled(enabled) {
   return portalDiagnosticsPublicStatus(store);
 }
 
-async function portalDiagnosticsHasQuota() {
-  if (!chrome.storage.local || typeof chrome.storage.local.getBytesInUse !== "function") return true;
-  return await chrome.storage.local.getBytesInUse(null) < PORTAL_DIAGNOSTICS_STORAGE_SOFT_LIMIT;
-}
-
 async function startPortalDiagnosticsSession(page, sender) {
-  if (!await portalDiagnosticsHasQuota()) return { ok: false, error: "本地存储接近上限，诊断记录已暂停" };
   page = page && typeof page === "object" && !Array.isArray(page) ? page : {};
   const senderUrl = new URL(sender.url);
   const sessionId = portalDiagnosticsId();
   const startedAt = Date.now();
-  const { store } = await mutatePortalDiagnostics((draft) => {
+  const result = await mutatePortalDiagnostics((draft) => {
     if (!draft.enabled) return;
     draft.sessions.push({
       id: sessionId,
@@ -148,12 +188,13 @@ async function startPortalDiagnosticsSession(page, sender) {
       records: [],
       truncated: false
     });
-  });
+  }, { enforceQuota: true });
+  if (result.quotaExceeded) return { ok: false, error: "本地存储接近上限，诊断记录已暂停" };
+  const { store } = result;
   return store.enabled ? { ok: true, enabled: true, sessionId } : { ok: true, enabled: false, sessionId: "" };
 }
 
 async function appendPortalDiagnosticRecord(sessionId, record) {
-  if (!await portalDiagnosticsHasQuota()) return { ok: false, error: "本地存储接近上限，诊断记录已暂停" };
   const cleanId = String(sessionId || "");
   if (!cleanId) return { ok: false, error: "诊断会话无效" };
   const cleanRecord = sanitizePortalDiagnosticRecord(record);
@@ -164,7 +205,8 @@ async function appendPortalDiagnosticRecord(sessionId, record) {
     if (!session || session.endedAt) return;
     session.records.push(cleanRecord);
     stored = true;
-  });
+  }, { enforceQuota: true });
+  if (result.quotaExceeded) return { ok: false, error: "本地存储接近上限，诊断记录已暂停" };
   return { ok: true, enabled: result.store.enabled, stored, bytes: portalDiagnosticsSerializedBytes(result.store) };
 }
 
