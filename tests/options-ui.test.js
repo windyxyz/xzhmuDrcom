@@ -148,16 +148,44 @@ test("清空诊断记录需要统一确认且取消时不发送删除消息", as
 
 test("确认清空诊断记录后刷新诊断状态", async () => {
   let gets = 0;
+  let cleared = false;
+  let resolveClear;
   const harness = createOptionsHarness({ sendMessage(message) {
     if (message.action === "diagnostics:get") {
       gets += 1;
-      return { ok: true, enabled: true, bytes: gets === 1 ? 42 : 0, sessionCount: gets === 1 ? 1 : 0, limits: { bytes: 1024 * 1024, sessions: 10 } };
+      return {
+        ok: true,
+        enabled: true,
+        bytes: cleared ? 0 : 4096,
+        sessionCount: cleared ? 0 : 2,
+        limits: { bytes: 1024 * 1024, sessions: 10 }
+      };
+    }
+    if (message.action === "diagnostics:clear") {
+      return new Promise((resolve) => {
+        resolveClear = () => {
+          cleared = true;
+          resolve({ ok: true });
+        };
+      });
     }
     return { ok: true };
   } });
-  await harness.context.clearPortalDiagnostics();
+  await harness.context.loadPortalDiagnostics();
+  assert.equal(harness.elements.get("portal-diagnostics-storage").textContent, "4 KB / 1 MiB");
+  assert.equal(harness.elements.get("portal-diagnostics-sessions").textContent, "2 / 10");
+  assert.equal(harness.elements.get("portal-diagnostics-status").textContent, "诊断模式已开启");
+  const clearing = harness.context.clearPortalDiagnostics();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(harness.elements.get("clear-portal-diagnostics").disabled, true);
+  resolveClear();
+  await clearing;
   assert.equal(harness.messages.filter((item) => item.action === "diagnostics:clear").length, 1);
-  assert.equal(gets, 1);
+  assert.equal(gets, 2);
+  assert.equal(harness.elements.get("portal-diagnostics-storage").textContent, "0 B / 1 MiB");
+  assert.equal(harness.elements.get("portal-diagnostics-sessions").textContent, "0 / 10");
+  assert.equal(harness.elements.get("portal-diagnostics-status").textContent, "诊断模式已开启");
+  assert.equal(harness.elements.get("clear-portal-diagnostics").disabled, false);
 });
 
 test("保活关闭时禁用间隔输入，开启后恢复", () => {

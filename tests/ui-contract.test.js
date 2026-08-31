@@ -157,9 +157,13 @@ test("portal diagnostics card exposes live status, privacy warning, and keyboard
   assert.match(source, /id="portal-diagnostics-status"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(source, /<button[^>]*id="export-portal-diagnostics"[^>]*type="button"/);
   assert.match(source, /<button[^>]*id="clear-portal-diagnostics"[^>]*type="button"/);
-  assert.match(readExtensionFile("options.css"), /diagnostics-card/);
-  assert.match(readExtensionFile("options.css"), /diagnostics-actions button[^}]*min-height: 44px/);
-  assert.match(readExtensionFile("options.css"), /prefers-reduced-motion/);
+  const styles = readExtensionFile("options.css");
+  assert.match(styles, /diagnostics-card/);
+  assert.match(styles, /diagnostics-actions button[^}]*min-height: 44px/);
+  assert.match(styles, /\.switch\s*\{[^}]*min-height:\s*44px/);
+  assert.match(styles, /\.switch input\s*\{[^}]*min-height:\s*44px/);
+  assert.match(styles, /\.switch > span:not\(\.sr-only\)\s*\{[^}]*height:\s*28px[^}]*top:\s*8px/);
+  assert.match(styles, /prefers-reduced-motion/);
 });
 
 test("正式界面使用功能性玻璃层并提供降级与减弱透明度支持", () => {
