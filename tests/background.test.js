@@ -125,7 +125,16 @@ function loadBackground(options = {}) {
           setAccessLevel: async (options) => {
             storageAccessLevels.push(structuredClone(options));
           },
-          getBytesInUse: async () => 0
+          getBytesInUse: async (keys) => {
+            if (typeof options.bytesInUse === "function") return options.bytesInUse(keys, localStore);
+            if (Number.isFinite(options.bytesInUse)) return options.bytesInUse;
+            const selected = keys
+              ? Object.fromEntries((Array.isArray(keys) ? keys : [keys])
+                .filter((key) => key in localStore)
+                .map((key) => [key, localStore[key]]))
+              : localStore;
+            return new TextEncoder().encode(JSON.stringify(selected)).byteLength;
+          }
         },
         session: {
           get: async (keys) => {
@@ -197,7 +206,9 @@ function portalSender(overrides = {}) {
 test("后台入口只负责依赖加载和事件注册", () => {
   const source = readFileSync(join(__dirname, "..", "CRX", "background.js"), "utf8");
   const modulePaths = [
+    "portal-diagnostics-utils.js",
     "background/state-store.js",
+    "background/diagnostics-service.js",
     "background/drcom-client.js",
     "background/account-service.js",
     "background/connection-service.js",
@@ -1185,4 +1196,139 @@ test("流量或余额异常会暂停自动重试并提示人工处理", () => {
 
   assert.equal(failure.retryable, false);
   assert.equal(failure.category, "account");
+});
+
+test("门户诊断默认关闭且网页只能读取安全状态", async () => {
+  const background = loadBackground();
+  const result = await background.handleMessage({ action: "diagnostics:status" }, portalSender());
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+    ok: true,
+    enabled: false,
+    limits: { maxBytes: 1048576, maxSessions: 10, maxDomBytes: 65536 }
+  });
+  assert.doesNotMatch(JSON.stringify(result), /sessions|records/);
+});
+
+test("门户诊断会在写入和读取时再次清除敏感数据", async () => {
+  const background = loadBackground();
+  await background.handleMessage({ action: "diagnostics:set", enabled: true }, { id: "test-extension-id" });
+  const start = await background.handleMessage({
+    action: "diagnostics:start",
+    page: { pageKind: "login", title: "password=title-secret 202513010318", url: "http://10.10.10.2/login?user_account=202513010318&password=start-secret" }
+  }, portalSender());
+  await background.handleMessage({
+    action: "diagnostics:append", sessionId: start.sessionId,
+    record: { type: "dom", pageKind: "login", url: "http://192.168.8.1/private/202513010318?token=append-secret", summary: "user_account=202513010318 password=record-secret" }
+  }, portalSender());
+  await background.handleMessage({ action: "diagnostics:end", sessionId: start.sessionId }, portalSender());
+  const result = await background.handleMessage({ action: "diagnostics:get" }, { id: "test-extension-id" });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.sessionCount, 1);
+  assert.equal(result.sessions[0].endedAt > 0, true);
+  assert.doesNotMatch(serialized, /title-secret|start-secret|record-secret|append-secret|202513010318/);
+  assert.match(serialized, /redacted/);
+});
+
+test("门户诊断保留最新十个会话并串行化并发写入", async () => {
+  const background = loadBackground();
+  await background.setPortalDiagnosticsEnabled(true);
+  const starts = await Promise.all(Array.from({ length: 12 }, (_, index) =>
+    background.startPortalDiagnosticsSession({ pageKind: "login", title: `session ${index}` }, portalSender())
+  ));
+  const result = await background.readPortalDiagnostics();
+  assert.equal(result.sessionCount, 10);
+  assert.equal(new Set(result.sessions.map((session) => session.id)).size, 10);
+  assert.equal(result.sessions.some((session) => session.id === starts[0].sessionId), false);
+  assert.equal(result.sessions.some((session) => session.id === starts[1].sessionId), false);
+});
+
+test("门户诊断按时间淘汰乱序旧会话且限制损坏 URL 大小", async () => {
+  const localStore = {
+    drcomPortalDiagnostics: {
+      enabled: true,
+      sessions: Array.from({ length: 12 }, (_, index) => ({
+        id: `session-${index}`,
+        startedAt: index,
+        endedAt: index,
+        origin: "http://10.10.10.2",
+        pageKind: "login",
+        title: "title",
+        url: `http://10.10.10.2/?${"c=x&".repeat(100000)}`,
+        records: []
+      })).reverse()
+    }
+  };
+  const background = loadBackground({ localStore });
+  const result = await background.readPortalDiagnostics();
+  assert.deepEqual(result.sessions.map((session) => session.id), [
+    "session-2", "session-3", "session-4", "session-5", "session-6",
+    "session-7", "session-8", "session-9", "session-10", "session-11"
+  ]);
+  assert.ok(result.bytes <= 1048576);
+});
+
+test("门户诊断在一 MiB 上限内移除最早记录", async () => {
+  const background = loadBackground();
+  await background.setPortalDiagnosticsEnabled(true);
+  const start = await background.startPortalDiagnosticsSession({ pageKind: "login" }, portalSender());
+  const summary = "x".repeat(64 * 1024);
+  for (let index = 0; index < 20; index += 1) {
+    await background.appendPortalDiagnosticRecord(start.sessionId, { type: "dom", summary, at: index + 1 });
+  }
+  const result = await background.readPortalDiagnostics();
+  assert.ok(result.bytes <= 1048576);
+  assert.ok(result.sessions[0].records.length < 20);
+  assert.equal(result.sessions[0].truncated, true);
+});
+
+test("门户诊断将 DOM 摘要截断为 64 KiB UTF-8", async () => {
+  const background = loadBackground();
+  await background.setPortalDiagnosticsEnabled(true);
+  const start = await background.startPortalDiagnosticsSession({ pageKind: "login" }, portalSender());
+  await background.appendPortalDiagnosticRecord(start.sessionId, { type: "dom", summary: "界".repeat(30000) });
+  const result = await background.readPortalDiagnostics();
+  assert.ok(new TextEncoder().encode(result.sessions[0].records[0].summary).byteLength <= 65536);
+});
+
+test("门户诊断在浏览器存储保留空间时暂停写入但仍可清除", async () => {
+  const background = loadBackground({ bytesInUse: (10 * 1024 * 1024) - (512 * 1024) });
+  await background.setPortalDiagnosticsEnabled(true);
+  const blocked = await background.startPortalDiagnosticsSession({ pageKind: "login" }, portalSender());
+  const cleared = await background.clearPortalDiagnostics();
+  assert.deepEqual(JSON.parse(JSON.stringify(blocked)), { ok: false, error: "本地存储接近上限，诊断记录已暂停" });
+  assert.equal(cleared.ok, true);
+  assert.equal(cleared.sessionCount, 0);
+});
+
+test("门户诊断会规范化并脱敏损坏的持久化会话后再读取或导出", async () => {
+  const localStore = { drcomPortalDiagnostics: { enabled: true, sessions: [{
+    id: "legacy", startedAt: "bad", endedAt: -1, origin: "http://192.168.8.1", pageKind: "unsafe",
+    title: "password=stored-secret", url: "http://192.168.8.1/a/202513010318?token=stored-secret",
+    records: [{ type: "untrusted", summary: "token=record-secret 202513010318" }]
+  }] } };
+  const background = loadBackground({ localStore });
+  const read = await background.readPortalDiagnostics();
+  const exported = await background.exportPortalDiagnostics();
+  const serialized = JSON.stringify({ read, exported });
+  assert.equal(read.sessions[0].pageKind, "unknown");
+  assert.doesNotMatch(serialized, /stored-secret|record-secret|202513010318/);
+  assert.match(serialized, /redacted/);
+});
+
+test("自定义网关和 iframe 不能写门户诊断", async () => {
+  const background = loadBackground();
+  await assert.rejects(background.handleMessage(
+    { action: "diagnostics:start", page: { pageKind: "login" } },
+    portalSender({ origin: "http://gateway.example", url: "http://gateway.example/" })
+  ), /默认校园网认证页/);
+  await assert.rejects(background.handleMessage(
+    { action: "diagnostics:start", page: { pageKind: "login" } }, portalSender({ frameId: 1 })
+  ), /顶层页面/);
+});
+
+test("网页内容脚本不能管理或导出门户诊断", async () => {
+  const background = loadBackground();
+  for (const action of ["diagnostics:set", "diagnostics:get", "diagnostics:export", "diagnostics:clear"]) {
+    await assert.rejects(background.handleMessage({ action, enabled: true }, portalSender()), /无权执行此操作/);
+  }
 });

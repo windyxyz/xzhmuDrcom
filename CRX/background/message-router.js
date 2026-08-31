@@ -1,5 +1,19 @@
 "use strict";
 
+
+async function validateDefaultPortalDiagnosticsSender(sender) {
+  if (!sender || sender.frameId !== 0) throw new Error("门户诊断只接受顶层页面");
+  try {
+    const senderUrl = new URL(sender.url || "");
+    const tabUrl = new URL(sender.tab && sender.tab.url || "");
+    if (senderUrl.origin !== "http://10.10.10.2" || tabUrl.origin !== "http://10.10.10.2") {
+      throw new Error("门户诊断只允许默认校园网认证页");
+    }
+  } catch (error) {
+    if (error && error.message === "门户诊断只允许默认校园网认证页") throw error;
+    throw new Error("门户诊断只允许默认校园网认证页");
+  }
+}
 async function restrictLocalStorageAccess() {
   const storage = chrome.storage && chrome.storage.local;
   if (!storage || typeof storage.setAccessLevel !== "function") return false;
@@ -16,6 +30,7 @@ async function handleMessage(message, sender) {
   const fromWebPage = isWebPageSender(sender);
 
   if (fromWebPage) {
+    if (PORTAL_DIAGNOSTIC_WEB_ACTIONS.has(action)) await validateDefaultPortalDiagnosticsSender(sender);
     await validatePortalSender(sender);
     if (!WEB_PAGE_ACTIONS.has(action)) {
       if (action === "state:get") {
@@ -26,6 +41,22 @@ async function handleMessage(message, sender) {
   }
 
   switch (action) {
+    case "diagnostics:status":
+      return getPortalDiagnosticsStatus();
+    case "diagnostics:start":
+      return startPortalDiagnosticsSession(message.page || {}, sender);
+    case "diagnostics:append":
+      return appendPortalDiagnosticRecord(message.sessionId || "", message.record || {});
+    case "diagnostics:end":
+      return endPortalDiagnosticsSession(message.sessionId || "");
+    case "diagnostics:set":
+      return setPortalDiagnosticsEnabled(message.enabled === true);
+    case "diagnostics:get":
+      return readPortalDiagnostics();
+    case "diagnostics:export":
+      return exportPortalDiagnostics();
+    case "diagnostics:clear":
+      return clearPortalDiagnostics();
     case "state:get":
       return { ok: true, state: await getState() };
 

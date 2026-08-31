@@ -72,6 +72,14 @@ const WEB_PAGE_ACTIONS = new Set([
   "redirect:markPortalTab",
   "options:open"
 ]);
+const PORTAL_DIAGNOSTIC_WEB_ACTIONS = new Set([
+  "diagnostics:status",
+  "diagnostics:start",
+  "diagnostics:append",
+  "diagnostics:end"
+]);
+for (const action of PORTAL_DIAGNOSTIC_WEB_ACTIONS) WEB_PAGE_ACTIONS.add(action);
+
 let stateMutationQueue = Promise.resolve();
 let sessionMutationQueue = Promise.resolve();
 const DEFAULT_CONNECTION_STATE = {
