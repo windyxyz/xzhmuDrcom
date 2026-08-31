@@ -46,11 +46,25 @@ function bindEvents() {
       await loadState();
     }
     if (deleteButton) {
-      await sendMessage({ action: "account:delete", accountId: deleteButton.dataset.delete });
-      await loadState();
-      toast("账号已删除");
+      await deleteAccount(deleteButton.dataset.delete);
     }
   }));
+}
+
+async function deleteAccount(accountId) {
+  const account = state.accounts.find((item) => item.id === accountId);
+  if (!account) return;
+  const accountLabel = account.label || makeAccountLabel(account.username, account.suffix);
+  const confirmed = await globalThis.DrcomConfirmDialog.ask({
+    title: "删除账号？",
+    message: `将永久删除账号“${accountLabel}”（${maskAccount(account)}）。此操作无法撤销。`,
+    confirmLabel: "删除账号"
+  });
+  if (!confirmed) return;
+
+  await sendMessage({ action: "account:delete", accountId });
+  await loadState();
+  toast("账号已删除");
 }
 
 function openConfiguredPortal() {

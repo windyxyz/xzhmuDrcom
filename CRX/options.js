@@ -4,6 +4,7 @@ const accountUtils = globalThis.DrcomAccountUtils;
 const splitAccount = accountUtils.parse;
 const suffixLabel = accountUtils.suffixLabel;
 const makeAccountLabel = accountUtils.label;
+const naturalAccountKey = accountUtils.naturalKey;
 
 const BACKGROUND_IMAGE_BUDGET_BYTES = 3 * 1024 * 1024;
 const BACKGROUND_SOURCE_LIMIT_BYTES = 48 * 1024 * 1024;
@@ -452,6 +453,16 @@ async function deleteEditedAccount() {
 }
 
 async function deleteAccount(accountId) {
+  const account = state.accounts.find((item) => item.id === accountId);
+  if (!account) return;
+  const accountLabel = account.label || makeAccountLabel(account.username, account.suffix);
+  const confirmed = await globalThis.DrcomConfirmDialog.ask({
+    title: "删除账号？",
+    message: `将永久删除账号“${accountLabel}”（${maskAccount(account)}）。此操作无法撤销。`,
+    confirmLabel: "删除账号"
+  });
+  if (!confirmed) return;
+
   const response = await sendMessage({ action: "account:delete", accountId });
   state = response.state;
   renderAccounts();
@@ -500,6 +511,17 @@ async function saveParsedAccount() {
       wlanUserMac: $("parsed-mac").value.trim() || "000000000000"
     }
   };
+  const existing = state.accounts.find((item) => naturalAccountKey(item) === naturalAccountKey(account));
+  if (existing) {
+    const existingLabel = existing.label || makeAccountLabel(existing.username, existing.suffix);
+    const confirmed = await globalThis.DrcomConfirmDialog.ask({
+      title: "覆盖导入账号？",
+      message: `导入数据将覆盖账号“${existingLabel}”的名称、密码和网络参数。此操作无法撤销。`,
+      confirmLabel: "覆盖导入"
+    });
+    if (!confirmed) return;
+    account.id = existing.id;
+  }
   const response = await sendMessage({ action: "account:save", account });
   state = response.state;
   fillAccountEditor(response.account);
@@ -521,6 +543,14 @@ async function saveSettings(event) {
 }
 
 async function resetConfig() {
+  const accountCount = state.accounts.length;
+  const confirmed = await globalThis.DrcomConfirmDialog.ask({
+    title: "恢复默认设置？",
+    message: `将把网关、认证协议、自动化、门户和外观设置恢复为默认值。现有的 ${accountCount} 个已保存账号不会删除。`,
+    confirmLabel: "恢复默认"
+  });
+  if (!confirmed) return;
+
   const response = await sendMessage({ action: "config:reset" });
   state = response.state;
   hydrateForm();
@@ -530,6 +560,15 @@ async function resetConfig() {
 }
 
 async function clearRequestLog() {
+  const recordCount = state.recentRequests.length;
+  if (!recordCount) return toast("没有请求记录可清空");
+  const confirmed = await globalThis.DrcomConfirmDialog.ask({
+    title: "清空请求记录？",
+    message: `将永久清空当前保存的 ${recordCount} 条脱敏请求记录。此操作无法撤销。`,
+    confirmLabel: "清空记录"
+  });
+  if (!confirmed) return;
+
   const response = await sendMessage({ action: "requestLog:clear" });
   state = response.state;
   renderRequestLog();
@@ -650,6 +689,14 @@ async function handleBackgroundFile(event) {
 }
 
 async function clearBackgroundImage() {
+  if (!$("background-image-data").value) return;
+  const confirmed = await globalThis.DrcomConfirmDialog.ask({
+    title: "清除背景图片？",
+    message: "将删除当前保存的自定义背景图片并恢复简洁背景。重新使用时需要再次选择原图片。",
+    confirmLabel: "清除图片"
+  });
+  if (!confirmed) return;
+
   $("background-image-data").value = "";
   $("appearance-background").value = "fresh";
   syncAppearanceControls();
