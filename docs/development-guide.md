@@ -205,11 +205,11 @@ portal-ui + portal-modernizer ──> background.js ──> DrCOM eportal / 门�
 
 ### 7.1 `storage.local`
 
-键名为 `drcomAssistantState`，当前 `schemaVersion` 为 `11`。
+键名为 `drcomAssistantState`，当前 `schemaVersion` 为 `12`。
 
 ```js
 {
-  schemaVersion: 11,
+  schemaVersion: 12,
   selectedAccountId: "...",
   accounts: [{
     id: "...",
@@ -224,7 +224,6 @@ portal-ui + portal-modernizer ──> background.js ──> DrCOM eportal / 门�
       wlanAcIp: "",
       wlanAcName: ""
     },
-    note: "",
     updatedAt: "ISO-8601"
   }],
   recentRequests: [],

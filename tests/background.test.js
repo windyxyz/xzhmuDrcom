@@ -300,12 +300,46 @@ test("旧版本配置升级后默认启用可恢复的门户接管", () => {
 
   assert.equal(normalized.schemaVersion, 12);
   assert.equal(normalized.config.ui.modernizePortal, true);
-  assert.equal(normalized.config.ui.hideOriginalPortal, true);
+  assert.equal("hideOriginalPortal" in normalized.config.ui, false);
+  assert.equal("subtitle" in normalized.config.ui, false);
+  assert.equal("density" in normalized.config.ui, false);
   assert.equal(normalized.config.ui.accent, "#007aff");
   assert.equal(normalized.config.ui.theme, "system");
   assert.equal(normalized.config.ui.backgroundBlur, 14);
   assert.equal(normalized.config.ui.backgroundDim, 0.42);
   assert.equal(normalized.config.ui.backgroundScale, 1.04);
+});
+
+test("schema 12 会清理历史无效账号与 UI 字段并幂等写回", async () => {
+  const localStore = {
+    drcomAssistantState: {
+      schemaVersion: 12,
+      selectedAccountId: "account-1",
+      accounts: [account({ note: "旧备注" })],
+      config: {
+        ui: {
+          modernizePortal: true,
+          hideOriginalPortal: false,
+          subtitle: "旧副标题",
+          density: "compact"
+        }
+      }
+    }
+  };
+  const background = loadBackground({ localStore });
+
+  const first = await background.getState();
+  const persistedAfterFirstRead = JSON.stringify(localStore.drcomAssistantState);
+  const second = await background.getState();
+
+  assert.equal("note" in first.accounts[0], false);
+  assert.equal("hideOriginalPortal" in first.config.ui, false);
+  assert.equal("subtitle" in first.config.ui, false);
+  assert.equal("density" in first.config.ui, false);
+  assert.equal("note" in localStore.drcomAssistantState.accounts[0], false);
+  assert.equal("hideOriginalPortal" in localStore.drcomAssistantState.config.ui, false);
+  assert.equal(JSON.stringify(localStore.drcomAssistantState), persistedAfterFirstRead);
+  assert.deepEqual(JSON.parse(JSON.stringify(second)), JSON.parse(persistedAfterFirstRead));
 });
 
 test("schema 12 迁移成功写回后删除旧顶层凭据且重复执行保持幂等", async () => {
@@ -354,7 +388,6 @@ function account(overrides = {}) {
       wlanAcIp: "",
       wlanAcName: ""
     },
-    note: "",
     updatedAt: "2026-01-02T03:04:05.000Z",
     ...overrides
   };

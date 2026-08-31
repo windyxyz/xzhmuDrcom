@@ -12,6 +12,7 @@ const MAX_STATE_BYTES = 8 * 1024 * 1024;
 const RETRY_BASE_MS = 30 * 1000;
 const RETRY_MAX_MS = 5 * 60 * 1000;
 const CUSTOM_PORTAL_SCRIPT_ID = "drcom-custom-portal";
+const DEPRECATED_UI_FIELDS = ["hideOriginalPortal", "subtitle", "density"];
 
 const DEFAULT_STATE = {
   schemaVersion: SCHEMA_VERSION,
@@ -37,17 +38,14 @@ const DEFAULT_STATE = {
     },
     ui: {
       modernizePortal: true,
-      hideOriginalPortal: true,
       title: "徐医校园网",
-      subtitle: "多账号登录、状态守护和跳转拦截都在这里。",
       accent: "#007aff",
       theme: "system",
       background: "fresh",
       backgroundImage: "",
       backgroundBlur: 14,
       backgroundDim: 0.42,
-      backgroundScale: 1.04,
-      density: "comfortable"
+      backgroundScale: 1.04
     },
     redirect: {
       // 只保留登录后的短时间防重定向；不再做长期外站/主机名单拦截。
@@ -100,7 +98,6 @@ async function getState() {
       suffix: "",
       password: String(stored.password),
       network: clone(DEFAULT_STATE.config.network),
-      note: "从旧版配置迁移",
       updatedAt: new Date().toISOString()
     };
     state.accounts = [...(Array.isArray(state.accounts) ? state.accounts : []), legacyAccount];
@@ -110,7 +107,8 @@ async function getState() {
   const normalized = normalizeState(state || DEFAULT_STATE);
   const needsWrite = !storedState
     || storedState.schemaVersion !== SCHEMA_VERSION
-    || hasLegacyCredentials;
+    || hasLegacyCredentials
+    || JSON.stringify(storedState) !== JSON.stringify(normalized);
   if (needsWrite) {
     await setState(normalized);
   }
@@ -163,7 +161,7 @@ function normalizeState(input) {
   state.config.ui.backgroundBlur = clampNumber(state.config.ui.backgroundBlur, 0, 32, DEFAULT_STATE.config.ui.backgroundBlur);
   state.config.ui.backgroundDim = clampNumber(state.config.ui.backgroundDim, 0.2, 0.72, DEFAULT_STATE.config.ui.backgroundDim);
   state.config.ui.backgroundScale = clampNumber(state.config.ui.backgroundScale, 1, 1.15, DEFAULT_STATE.config.ui.backgroundScale);
-  state.config.ui.density = state.config.ui.density === "compact" ? "compact" : "comfortable";
+  for (const field of DEPRECATED_UI_FIELDS) delete state.config.ui[field];
   
   state.config.redirect.guardSeconds = clampNumber(state.config.redirect.guardSeconds, 1, 120, 4);
   
@@ -175,7 +173,6 @@ function normalizeState(input) {
   }
   if (previousSchemaVersion < 10) {
     state.config.ui.modernizePortal = true;
-    state.config.ui.hideOriginalPortal = true;
     if (String(state.config.ui.accent).toLowerCase() === "#14b8a6") {
       state.config.ui.accent = DEFAULT_STATE.config.ui.accent;
     }

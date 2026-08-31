@@ -19,7 +19,6 @@ function sanitizeAccount(input) {
       wlanAcIp: stringValue(input.network && input.network.wlanAcIp).trim(),
       wlanAcName: stringValue(input.network && input.network.wlanAcName).trim()
     },
-    note: stringValue(input.note).trim(),
     updatedAt
   };
 }
@@ -157,4 +156,3 @@ async function updateAccountNetwork(userAccount, patch) {
   const account = mutation.state.accounts.find((item) => item.id === mutation.value);
   return { ok: true, state: mutation.state, account };
 }
-

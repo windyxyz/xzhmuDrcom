@@ -595,11 +595,8 @@ function readConfig() {
     },
     ui: {
       modernizePortal: $("modernize-portal").checked,
-      hideOriginalPortal: true,
       title: "徐医校园网",
-      subtitle: "",
-      ...readAppearanceConfig(),
-      density: "comfortable"
+      ...readAppearanceConfig()
     },
     redirect: {
       returnToPortal: $("return-to-portal").checked,
