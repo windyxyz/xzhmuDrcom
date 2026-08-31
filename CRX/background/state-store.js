@@ -162,9 +162,9 @@ function normalizeState(input) {
   state.config.ui.backgroundDim = clampNumber(state.config.ui.backgroundDim, 0.2, 0.72, DEFAULT_STATE.config.ui.backgroundDim);
   state.config.ui.backgroundScale = clampNumber(state.config.ui.backgroundScale, 1, 1.15, DEFAULT_STATE.config.ui.backgroundScale);
   for (const field of DEPRECATED_UI_FIELDS) delete state.config.ui[field];
-  
+
   state.config.redirect.guardSeconds = clampNumber(state.config.redirect.guardSeconds, 1, 120, 4);
-  
+
   state.config.automation.intervalMinutes = clampNumber(state.config.automation.intervalMinutes, 0.5, 30, 3);
   if (previousSchemaVersion < 8) {
     state.config.automation.loginOnStartup = true;
