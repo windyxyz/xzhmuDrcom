@@ -987,6 +987,65 @@ test("明确失败的登录与下线响应不会因为出现 success 或 logout 
   assert.equal(logout.success, false);
 });
 
+test("DrCOM 响应按 HTTP、明确协议、状态提示和安全兜底的顺序解析", () => {
+  const background = loadBackground();
+  const httpFailure = background.normalizeDrcomResult(
+    "login",
+    503,
+    { result: "1", msg: "success" },
+    '{"result":"1","msg":"success"}'
+  );
+  const explicitSuccess = background.normalizeDrcomResult(
+    "login",
+    200,
+    { result: "1", msg: "ok" },
+    '{"result":"1","msg":"ok"}'
+  );
+  const onlineStatus = background.normalizeDrcomResult(
+    "login",
+    200,
+    { message: "already online" },
+    '{"message":"already online"}'
+  );
+  const unknown = background.normalizeDrcomResult(
+    "login",
+    200,
+    { message: "success" },
+    '{"message":"success"}'
+  );
+
+  assert.equal(httpFailure.success, false);
+  assert.equal(httpFailure.httpOk, false);
+  assert.equal(httpFailure.diagnostic.statusCode, 503);
+  assert.equal(explicitSuccess.success, true);
+  assert.equal(explicitSuccess.diagnostic.protocolCode, "1");
+  assert.equal(onlineStatus.success, true);
+  assert.equal(unknown.success, false);
+  assert.match(unknown.message, /未识别|没有返回明确/);
+});
+
+test("DrCOM 日志原文保留状态码但清除返回体中的凭据", async () => {
+  const background = loadBackground({
+    fetch: async () => ({
+      ok: true,
+      status: 200,
+      async text() {
+        return '{"result":"0","message":"user_password=secret user_account=202513010318"}';
+      }
+    })
+  });
+  background.addRequestRecord = async () => undefined;
+
+  const result = await background.fetchDrcom(
+    { url: "http://10.10.10.2:801/eportal/", redactedUrl: "http://10.10.10.2:801/eportal/" },
+    "login"
+  );
+
+  assert.equal(result.statusCode, 200);
+  assert.doesNotMatch(result.raw, /secret|202513010318/);
+  assert.match(result.raw, /\*\*\*\*/);
+});
+
 test("普通英文错误文本不会被误当作 Base64 解码", () => {
   const background = loadBackground();
   assert.equal(background.decodeMessage("fail"), "fail");

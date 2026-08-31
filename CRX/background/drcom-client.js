@@ -25,7 +25,7 @@ async function fetchDrcom(request, kind) {
       ok: response.ok || result.success,
       statusCode: response.status,
       url: request.redactedUrl,
-      raw: trimRaw(text),
+      raw: trimRaw(redactSensitiveText(text)),
       ...result
     };
 
@@ -160,32 +160,88 @@ function parseDrcomText(text) {
 
 function normalizeDrcomResult(kind, statusCode, data, rawText) {
   const raw = stringValue(rawText);
-  const msg = decodeMessage(data.msg || data.msga || data.message || data.error || data.result || raw);
-  const result = stringValue(data.result ?? data.ret_code ?? data.ret ?? data.success).toLowerCase();
+  const msg = decodeMessage(data.msg || data.msga || data.message || data.error || "");
+  const protocolValue = data.result ?? data.ret_code ?? data.ret ?? data.success;
+  const protocolCode = protocolValue === undefined || protocolValue === null
+    ? ""
+    : stringValue(protocolValue).trim().toLowerCase();
+  const httpOk = statusCode >= 200 && statusCode < 300;
+  const diagnostic = { statusCode, protocolCode };
+  const failureTokens = new Set(["0", "false", "fail", "failed", "error", "-1"]);
+  const successTokens = new Set(["1", "ok", "true", "success"]);
   const alreadyOnline = /已经在线|已在线|has been online|already online|E2620/i.test(`${msg} ${raw}`);
-  const explicitFailure = ["0", "false", "fail", "failed", "error", "-1"].includes(result);
-  const explicitSuccess = ["1", "ok", "true", "success"].includes(result);
-  const successMessage = /登录成功|认证成功|(?:^|\s)(?:success|ok)(?:$|[\s,.!])/i.test(msg);
-  const success = alreadyOnline || (!explicitFailure && (explicitSuccess || successMessage));
 
-  if (kind === "logout") {
-    const logoutFailure = explicitFailure || /logout\s*(?:fail|error)|unbind_mac\s*(?:fail|error)|注销失败|下线失败|解绑失败|拒绝/i.test(`${msg} ${raw}`);
-    const logoutMessage = /注销成功|下线成功|解绑成功|解除绑定成功|(?:logout|unbind_mac)\s*(?:success|ok)|\boffline\b/i.test(`${msg} ${raw}`);
-    const logoutOk = !logoutFailure && (success || logoutMessage);
+  if (!httpOk) {
     return {
-      success: logoutOk,
+      success: false,
       online: false,
-      message: logoutOk ? "下线成功。" : humanizeError(msg, data),
-      data
+      message: `DrCOM 接口返回 HTTP ${statusCode}，认证请求未成功。`,
+      data,
+      httpOk,
+      diagnostic
     };
   }
 
+  if (protocolCode) {
+    if (failureTokens.has(protocolCode)) {
+      return {
+        success: false,
+        online: false,
+        message: humanizeError(msg || protocolCode, data, kind),
+        data,
+        httpOk,
+        diagnostic
+      };
+    }
+    if (successTokens.has(protocolCode)) {
+      return {
+        success: true,
+        online: kind !== "logout",
+        message: kind === "logout" ? "下线成功。" : alreadyOnline ? "账号已经在线，无需重复登录。" : "登录成功。",
+        data,
+        httpOk,
+        diagnostic
+      };
+    }
+    return {
+      success: false,
+      online: false,
+      message: `${kind === "logout" ? "下线" : "登录"}失败：网关返回未识别协议代码 ${protocolCode}。`,
+      data,
+      httpOk,
+      diagnostic
+    };
+  }
+
+  if (kind === "logout") {
+    const logoutFailure = /logout\s*(?:fail|error)|unbind_mac\s*(?:fail|error)|注销失败|下线失败|解绑失败|拒绝/i.test(`${msg} ${raw}`);
+    const logoutMessage = /注销成功|下线成功|解绑成功|解除绑定成功|(?:logout|unbind_mac)\s*(?:success|ok)|\boffline\b/i.test(`${msg} ${raw}`);
+    const logoutOk = !logoutFailure && logoutMessage;
+    return {
+      success: logoutOk,
+      online: false,
+      message: logoutOk ? "下线成功。" : logoutFailure
+        ? humanizeError(msg, data, kind)
+        : "下线失败：网关返回未识别结果。",
+      data,
+      httpOk,
+      diagnostic
+    };
+  }
+
+  const explicitStatusSuccess = alreadyOnline || /登录成功|认证成功|(?:login|authentication)\s*(?:success|ok)/i.test(`${msg} ${raw}`);
+  const explicitStatusFailure = /登录失败|认证失败|password\s*(?:fail|error)|userid\s*error|拒绝/i.test(`${msg} ${raw}`);
   return {
-    success,
-    online: success,
-    message: success ? (alreadyOnline ? "账号已经在线，无需重复登录。" : "登录成功。") : humanizeError(msg, data),
+    success: explicitStatusSuccess && !explicitStatusFailure,
+    online: explicitStatusSuccess && !explicitStatusFailure,
+    message: explicitStatusSuccess && !explicitStatusFailure
+      ? alreadyOnline ? "账号已经在线，无需重复登录。" : "登录成功。"
+      : explicitStatusFailure
+        ? humanizeError(msg, data, kind)
+        : "登录失败：网关返回未识别结果。",
     data,
-    httpOk: statusCode >= 200 && statusCode < 400
+    httpOk,
+    diagnostic
   };
 }
 
@@ -205,7 +261,7 @@ function parsePortalStatus(statusCode, text, url) {
   };
 }
 
-function humanizeError(message, data) {
+function humanizeError(message, data, kind = "login") {
   const msg = decodeMessage(message);
   const retCode = stringValue(data.ret_code || data.ret);
 
@@ -224,7 +280,8 @@ function humanizeError(message, data) {
   if (/ip|mac|bind|绑定/i.test(msg)) {
     return `IP/MAC 参数可能不匹配，建议用设置页重新解析抓包 URL：${msg}`;
   }
-  return msg ? `登录失败：${msg}` : "登录失败：网关没有返回明确原因。";
+  const action = kind === "logout" ? "下线" : "登录";
+  return msg ? `${action}失败：${msg}` : `${action}失败：网关没有返回明确原因。`;
 }
 
 function decodeMessage(value) {
@@ -319,4 +376,3 @@ function extractMacFromResponse(data, raw) {
   }
   return "";
 }
-
