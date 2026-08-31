@@ -113,6 +113,15 @@ function createHarness(options = {}) {
       callback(response || responses[action] || { ok: true });
       await settle();
     },
+    async rejectNext(action) {
+      const index = callbacks.findIndex((item) => item.message.action === action);
+      assert.notEqual(index, -1, `missing deferred ${action}`);
+      const { callback } = callbacks.splice(index, 1)[0];
+      context.chrome.runtime.lastError = { message: "offline" };
+      callback(undefined);
+      context.chrome.runtime.lastError = null;
+      await settle();
+    },
     context
   };
 }
@@ -165,6 +174,18 @@ test("pagehide 等待活动 FIFO 刷新完成后才结束会话", async () => {
   assert.deepEqual(harness.sent.map((message) => message.action), ["diagnostics:status", "diagnostics:start", "diagnostics:append", "diagnostics:append", "diagnostics:end"]);
 });
 
+test("pagehide 在活动 append 首次失败后有界重试 FIFO 队列再结束", async () => {
+  const harness = createHarness({ deferredActions: ["diagnostics:append"] });
+  await loadDiagnostics(harness);
+  await harness.emit("pagehide");
+  await harness.rejectNext("diagnostics:append");
+  assert.equal(harness.sent.some((message) => message.action === "diagnostics:end"), false);
+
+  await harness.resolveNext("diagnostics:append");
+  await harness.resolveNext("diagnostics:append");
+  assert.deepEqual(harness.sent.map((message) => message.action), ["diagnostics:status", "diagnostics:start", "diagnostics:append", "diagnostics:append", "diagnostics:append", "diagnostics:end"]);
+  assert.deepEqual(harness.delivered.filter((message) => message.action === "diagnostics:append").map((message) => message.record.type), ["dom", "pagehide"]);
+});
 test("失败队列精确保留最近 20 条不同控件记录并按 FIFO 恢复", async () => {
   const controls = Array.from({ length: 23 }, (_, index) => new FakeElement("button", { id: `control-${String(index + 1).padStart(2, "0")}` }));
   const harness = createHarness({ controls, appendFailures: Array(22).fill(true) });

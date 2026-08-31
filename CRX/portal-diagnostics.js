@@ -192,6 +192,7 @@
     shutdownPromise = (async () => {
       if (!sessionId) return;
       await queueRecord({ type: "pagehide", pageKind: detectPageKind() });
+      if (pending.length) await flushPending();
       await endSession();
     })();
     return shutdownPromise;
