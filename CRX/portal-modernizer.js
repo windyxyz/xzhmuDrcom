@@ -5,6 +5,9 @@
   let pendingFallbackCapture = null;
   let lastSavedCaptureKey = "";
   let activePortalConfig = null;
+  let portalReadinessObserver = null;
+  let recognitionQueued = false;
+  let userRestoredOriginal = false;
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => void boot(), { once: true });
@@ -16,30 +19,59 @@
     try {
       if (!ui) throw new Error("门户界面模块未加载");
       installOriginalLoginCapture();
-      await mountModernPortalWhenEligible();
+      activePortalConfig = await loadPortalConfig();
+      startPortalReadinessObserver();
+      schedulePortalRecognition();
     } catch (error) {
-      restoreOriginalPortal();
+      removeModernPortal();
     }
   }
 
-  async function mountModernPortalWhenEligible() {
+  async function loadPortalConfig() {
     const response = await sendMessage({ action: "portal:config:get" });
     const config = response.portal || {};
     const appearanceResponse = await sendMessage({ action: "portal:appearance:get" });
     config.appearance = appearanceResponse.appearance || config.appearance || {};
+    return config;
+  }
+
+  function startPortalReadinessObserver() {
+    if (portalReadinessObserver || userRestoredOriginal) return;
+    portalReadinessObserver = new MutationObserver(() => schedulePortalRecognition());
+    portalReadinessObserver.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  function stopPortalReadinessObserver() {
+    portalReadinessObserver?.disconnect();
+    portalReadinessObserver = null;
+  }
+
+  function schedulePortalRecognition() {
+    if (recognitionQueued || userRestoredOriginal) return;
+    recognitionQueued = true;
+    queueMicrotask(() => {
+      recognitionQueued = false;
+      tryMountRecognizedPortal();
+    });
+  }
+
+  function tryMountRecognizedPortal() {
+    if (userRestoredOriginal || !activePortalConfig) return false;
     const online = isOnlinePage();
     const hasPasswordField = Boolean(document.querySelector('input[type="password"]'));
-    if (!ui.shouldTakeOver({ enabled: config.enabled === true, online, hasPasswordField })) {
-      restoreOriginalPortal();
-      return;
-    }
-
-    activePortalConfig = config;
-    mountPortal(config, online);
+    if (!ui.shouldTakeOver({
+      enabled: activePortalConfig.enabled === true,
+      online,
+      hasPasswordField
+    })) return false;
+    stopPortalReadinessObserver();
+    mountPortal(activePortalConfig, online);
+    return true;
   }
 
   function mountPortal(config, online) {
-    restoreOriginalPortal();
+    if (userRestoredOriginal) return;
+    removeModernPortal();
     const root = document.createElement("div");
     root.id = "drcom-modern-root";
     root.innerHTML = ui.renderPortalMarkup({
@@ -94,10 +126,16 @@
     catch (error) { return location.host || "认证网关"; }
   }
 
-  function restoreOriginalPortal() {
+  function removeModernPortal() {
     document.documentElement.classList.remove("drcom-modern-active");
     document.getElementById("drcom-modern-root")?.remove();
     document.getElementById("drcom-private-appearance")?.remove();
+  }
+
+  function restoreOriginalPortal() {
+    userRestoredOriginal = true;
+    stopPortalReadinessObserver();
+    removeModernPortal();
   }
 
   function bindPortalEvents(root, online) {

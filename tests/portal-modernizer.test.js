@@ -110,6 +110,11 @@ class FakeElement {
 function createHarness(options = {}) {
   const messages = [];
   const roots = new Map();
+  const observers = [];
+  const deferredActions = new Set(options.deferredActions || []);
+  const pendingCallbacks = new Map();
+  let pageState = options.pageState || (options.online ? "online" : "login");
+  let shouldTakeOverCalls = 0;
   const originalUsername = { value: "" };
   const originalPassword = { value: "" };
   const documentElement = {
@@ -122,7 +127,7 @@ function createHarness(options = {}) {
     closedShadowRoots: new Map(),
     documentElement,
     body: {
-      innerText: options.online ? "当前已连接，可以下线" : "",
+      innerText: "",
       append(element) {
         roots.set(element.id, element);
       }
@@ -139,8 +144,9 @@ function createHarness(options = {}) {
       return null;
     },
     querySelector(selector) {
-      if (selector === 'input[type="password"]') return options.online ? null : originalPassword;
-      if (options.online && /logout/i.test(selector)) return { value: "" };
+      if (selector === 'input[type="password"]') return pageState === "login" ? originalPassword : null;
+      if (pageState === "online" && /logout/i.test(selector)) return { value: "" };
+      if (pageState === "pending") return null;
       if (/DDDDD|user_account|username/i.test(selector)) return originalUsername;
       if (/upass|user_password|password|0MKKey/i.test(selector)) return originalPassword;
       return null;
@@ -149,6 +155,10 @@ function createHarness(options = {}) {
       roots.delete(root.id);
     }
   };
+  function updatePageText() {
+    document.body.innerText = pageState === "online" ? "当前已连接，可以下线" : "";
+  }
+  updatePageText();
   const responses = {
     "portal:config:get": {
       ok: true,
@@ -165,6 +175,25 @@ function createHarness(options = {}) {
     "options:open": { ok: true },
     ...(options.responses || {})
   };
+  class FakeMutationObserver {
+    constructor(callback) {
+      this.callback = callback;
+      this.connected = false;
+      observers.push(this);
+    }
+
+    observe() {
+      this.connected = true;
+    }
+
+    disconnect() {
+      this.connected = false;
+    }
+
+    trigger(records = [{ addedNodes: [] }]) {
+      if (this.connected) this.callback(records);
+    }
+  }
   const context = vm.createContext({
     AbortController,
     URL,
@@ -173,6 +202,12 @@ function createHarness(options = {}) {
         lastError: null,
         sendMessage(message, callback) {
           messages.push(message);
+          if (deferredActions.has(message.action)) {
+            const callbacks = pendingCallbacks.get(message.action) || [];
+            callbacks.push(callback);
+            pendingCallbacks.set(message.action, callbacks);
+            return;
+          }
           callback(responses[message.action] || { ok: true });
         }
       }
@@ -183,15 +218,49 @@ function createHarness(options = {}) {
     FormData,
     globalThis: null,
     location: { href: "http://10.10.10.2/" },
-    MutationObserver: class {
-      observe() {}
-    },
+    MutationObserver: FakeMutationObserver,
+    queueMicrotask,
     setTimeout
   });
   context.globalThis = context;
-  context.DrcomPortalUI = portalUi;
+  context.DrcomPortalUI = {
+    ...portalUi,
+    shouldTakeOver(input) {
+      shouldTakeOverCalls += 1;
+      return portalUi.shouldTakeOver(input);
+    }
+  };
   context.DrcomAppearance = appearance;
-  return { context, document, messages, responses };
+  return {
+    context,
+    document,
+    messages,
+    responses,
+    setPageState(nextState) {
+      pageState = nextState;
+      updatePageText();
+    },
+    triggerMutation(records) {
+      observers.forEach((observer) => observer.trigger(records));
+    },
+    resolveDeferred(action, response = responses[action] || { ok: true }) {
+      deferredActions.delete(action);
+      const callbacks = pendingCallbacks.get(action) || [];
+      pendingCallbacks.delete(action);
+      callbacks.forEach((callback) => callback(response));
+    },
+    connectedObserverCount() {
+      return observers.filter((observer) => observer.connected).length;
+    },
+    shouldTakeOverCalls() {
+      return shouldTakeOverCalls;
+    },
+    async flush() {
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  };
 }
 
 async function loadModernizer(harness) {
@@ -286,4 +355,93 @@ test("自定义背景只写入 closed Shadow DOM 且个性化按钮打开设置"
   assert.equal(personalize.getAttribute("title"), "个性化");
   await personalize.emit("click");
   assert.equal(harness.messages.at(-1).action, "options:open");
+});
+
+test("学校脚本异步渲染登录表单后会接管页面", async () => {
+  const harness = createHarness({ pageState: "pending" });
+  await loadModernizer(harness);
+
+  assert.equal(harness.document.getElementById("drcom-modern-root"), null);
+  harness.setPageState("login");
+  harness.triggerMutation();
+  await harness.flush();
+
+  assert.ok(harness.document.getElementById("drcom-modern-root"));
+});
+
+test("学校脚本异步渲染在线模板后会接管页面", async () => {
+  const harness = createHarness({ pageState: "pending" });
+  await loadModernizer(harness);
+
+  assert.equal(harness.document.getElementById("drcom-modern-root"), null);
+  harness.setPageState("online");
+  harness.triggerMutation();
+  await harness.flush();
+
+  assert.match(harness.document.getElementById("drcom-modern-root").innerHTML, /已经连接校园网/);
+});
+
+test("用户恢复原始页后延迟登录成功也不会再次接管", async () => {
+  const harness = createHarness({
+    pageState: "login",
+    deferredActions: ["drcom:login"]
+  });
+  await loadModernizer(harness);
+
+  harness.document.getElementById("drcom-username").value = "202513010318";
+  harness.document.getElementById("drcom-password").value = "masked";
+  await harness.document.getElementById("drcom-login-form").emit("submit", { preventDefault() {} });
+  await harness.flush();
+  await harness.document.getElementById("drcom-restore-original").emit("click");
+  harness.resolveDeferred("drcom:login");
+  await harness.flush();
+
+  assert.equal(harness.document.getElementById("drcom-modern-root"), null);
+});
+
+test("模板早于配置响应渲染时仍只读取一次配置并接管", async () => {
+  const harness = createHarness({
+    pageState: "pending",
+    deferredActions: ["portal:config:get"]
+  });
+  await loadModernizer(harness);
+
+  harness.setPageState("login");
+  harness.triggerMutation();
+  harness.resolveDeferred("portal:config:get");
+  await harness.flush();
+
+  assert.ok(harness.document.getElementById("drcom-modern-root"));
+  assert.equal(harness.messages.filter((message) => message.action === "portal:config:get").length, 1);
+  assert.equal(harness.messages.filter((message) => message.action === "portal:appearance:get").length, 1);
+});
+
+test("就绪观察器合并重复变更，并在接管后保留原始请求捕获", async () => {
+  const harness = createHarness({ pageState: "pending" });
+  await loadModernizer(harness);
+
+  const callsBeforeMutations = harness.shouldTakeOverCalls();
+  harness.triggerMutation();
+  harness.triggerMutation();
+  harness.triggerMutation();
+  await harness.flush();
+
+  assert.equal(harness.shouldTakeOverCalls(), callsBeforeMutations + 1);
+
+  harness.setPageState("login");
+  harness.triggerMutation();
+  await harness.flush();
+
+  assert.ok(harness.document.getElementById("drcom-modern-root"));
+  assert.equal(harness.connectedObserverCount(), 1);
+
+  harness.triggerMutation([{
+    addedNodes: [{
+      tagName: "SCRIPT",
+      src: "http://10.10.10.2/?a=login&user_account=sample%40telecom&user_password=masked"
+    }]
+  }]);
+  await harness.flush();
+
+  assert.ok(harness.messages.some((message) => message.action === "account:save"));
 });
