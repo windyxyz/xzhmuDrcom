@@ -30,6 +30,7 @@ DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩
 | 保活 | Chrome Alarm 周期检查，离线后按策略恢复 | connection-service.js |
 | 防跳转 | 登录后短时间最多拦截一次自动离开门户 | portal-service.js |
 | 现代门户 | 覆盖层不删除原 DOM，可以立即恢复学校原页面 | portal-ui.js、portal-modernizer.js |
+| 在线详情 | 读取状态、换算时间/流量/余额并只展示脱敏字段 | portal-session.js、drcom-client.js |
 | 原请求捕获 | 读取原表单和动态脚本中的账号、密码与网络参数 | portal-modernizer.js |
 | 外观 | 系统/浅色/深色、强调色、自定义背景、压缩和可读性参数 | appearance.js、design-tokens.css |
 | 私有门户背景 | 图片只进入 closed Shadow DOM，轻 DOM 不出现 Data URL | portal-modernizer.js |
@@ -44,6 +45,7 @@ DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩
 CRX/
 ├─ manifest.json
 ├─ account-utils.js
+├─ portal-session.js
 ├─ appearance.js
 ├─ confirm-dialog.js
 ├─ design-tokens.css
@@ -87,6 +89,7 @@ docs/product-design.md         产品与界面设计约束
 - **background/portal-service.js**：自定义内容脚本注册、标签页短时保护、外观输出和网页 sender 校验。
 - **background/message-router.js**：可信上下文限制、动作白名单和返回数据裁剪。
 - **background/diagnostics-service.js**：门户诊断的二次脱敏、串行写入、容量预留和会话裁剪。
+- **portal-session.js**：共享的在线会话字段白名单、单位换算、时间格式化和标识脱敏。
 - **portal-diagnostics-utils.js**：内容脚本和后台共用的 URL、文本、目标和记录脱敏工具。
 - **portal-diagnostics.js**：只在默认门户隔离世界运行的尽力而为诊断记录器。
 
@@ -372,11 +375,15 @@ DrCOM 响应固定按以下优先级处理：
 
 内容脚本在页面可识别为登录页或在线页时挂载现代界面。学校原 DOM 始终保留，只通过 CSS 切换可见性；“使用原始登录页”会立即撤下覆盖层。初始化或后台通信失败时也恢复原页面。
 
-登录表单支持账号、运营商、密码和是否保存；成功后切换在线视图；下线失败时保持在线视图并显示错误。
+登录表单支持账号、运营商、密码和是否保存，运营商顺序固定为校园网、联通、电信、移动；重置按钮清空账号和密码并恢复默认校园网与保存选项。自助服务、账号激活、找回密码和使用说明使用学校官方地址，以 `target="_blank"` 和 `rel="noopener noreferrer"` 打开；这些外部业务不嵌入扩展，也不由扩展代理提交。
+
+登录成功后切换在线视图。默认 `classic` 模式在主卡片显示已用时间和总流量，并提供自助服务、刷新和注销；折叠详情显示账号、上下行流量、余额、登录时间、外网映射地址及安全网络字段。`full` 默认展开详情，`minimal` 只保留刷新、自助服务和注销，`hidden` 只保留注销。缺失或异常字段直接隐藏，不推测值。下线按钮明确标注“注销并解绑 MAC”，先经统一确认对话框；取消不发送 `drcom:logout`，失败时保持在线视图并显示错误。
+
+检测到 `input[name="captcha"]` 时，现代界面不接管页面，学校原验证码和操作控件保持可见，并显示非阻断提示。二维码登录和移动端验证码不复刻；用户应切回或继续使用学校原页面。
 
 ### 8.2 背景与个性化
 
-portal:config:get 只返回启用状态、标题、门户地址、主题和强调色，不返回 backgroundImage。完整外观通过 portal:appearance:get 单独获取。
+portal:config:get 只返回启用状态、标题、门户地址、主题、强调色和 `onlineDetailMode`，不返回 backgroundImage。完整外观通过 portal:appearance:get 单独获取。
 
 自定义图片只写入内容脚本创建的 closed Shadow DOM 私有层。门户轻 DOM、宿主元素属性和 CSS 变量中不出现 Data URL。门户右上角提供 44px 个性化按钮，包含提示和无障碍名称，点击后发送 options:open 打开设置。
 
@@ -403,7 +410,25 @@ portal-modernizer 会观察原表单提交和动态登录/下线脚本，读取 
 
 挂载、配置读取或后台通信出错时会移除覆盖层，原页面继续可用。用户点击“使用原始登录页”会停止就绪观察器、移除覆盖层，并在本次内容脚本生命周期内保持为终止状态，不会再次自动接管。在线视图的下线只在用户点击下线控件后发送 `drcom:logout`；失败时仍停留在线视图并显示错误。
 
-### 8.6 门户诊断模式
+### 8.6 在线状态字段与脱敏链路
+
+在线界面不读取学校页面轻 DOM 中的账号或网络值。`portal-modernizer.js` 向后台发送 `portal:status:get`，`message-router.js` 先复用顶层门户 sender 校验，再由 `connection-service.js` 调用 `queryPortalSessionStatus()` 请求同源 `/drcom/chkstatus`。后台只返回 `state`、`phase`、`message`、`checkedAt` 和已经规范化的 `session`，不返回原始 JSONP、Cookie、门户正文或完整标识。
+
+`portal-session.js` 是后台、内容脚本和测试共用的纯函数模块。只有明确 `result=1` 的状态数据才生成会话摘要；来源及转换如下：
+
+| 页面字段 | 公共会话字段 | 转换与边界 |
+| --- | --- | --- |
+| `uid`、`user_name`、`account` | `account` | 去除协议前缀/运营商后缀后只保留首尾少量字符。 |
+| `time` | `usedMinutes` | 非负分钟整数，显示为“n 分钟”。 |
+| `flow`/`flux`、`flow_in`、`flow_out` | 总量、上行、下行 KB | 按学校原逻辑视为 KB，再格式化为 KB/MB/GB。 |
+| `fee` | `balanceYuan` | 按 `fee / 10000` 换算人民币并保留两位小数。 |
+| `login_time` 等 | `loginAt` | 合法秒/毫秒时间戳转换为本地时间；异常值隐藏。 |
+| `xip`、IPv4/IPv6、MAC、AC IP | 脱敏地址 | IPv4 隐藏中间段，IPv6 隐藏中间组，MAC 只保留前三组。 |
+| VLAN、AC 名称 | `network` 文本 | 只读取白名单字段；模板输出前仍执行 HTML 转义。 |
+
+手动刷新与首次在线挂载使用同一条消息链路。`offline` 会切回登录视图；`unknown` 保留在线视图并显示无法确认的状态，避免把临时网络故障当成已经离线。
+
+### 8.7 门户诊断模式
 
 门户诊断是独立于请求记录的可选本地功能，默认关闭。其完整数据流如下：
 
@@ -482,6 +507,7 @@ options.js
     },
     ui: {
       modernizePortal: true,
+      onlineDetailMode: "classic",
       title: "徐医校园网",
       accent: "#007aff",
       theme: "system",
@@ -537,6 +563,7 @@ Session 状态只在当前扩展/浏览器 Session 内使用；activeIdentity �
 | connection:get | 当前连接状态 | 是 | 否 |
 | portal:config:get | 安全门户配置，不含图片 | 是 | 是 |
 | portal:appearance:get | 完整外观，供私有背景层使用 | 是 | 是 |
+| portal:status:get | 裁剪后的状态、检查时间和脱敏在线摘要 | 否 | 是，仅可信顶层门户 |
 | account:save | 保存或更新账号 | 是，返回完整结果 | 是，只返回 accountId |
 | account:delete | 删除账号 | 是 | 否 |
 | account:select | 切换默认账号 | 是 | 否 |
@@ -567,7 +594,7 @@ message-router.js 先判定发送方，再执行白名单，最后裁剪门户�
 
 ### 11.3 设置页
 
-分为网络、账号、外观、高级和关于。网络提供连接概览、门户、状态测试、启动登录和保活；账号管理密码和每账号网络参数；外观处理主题、强调色、背景与本机压缩；高级包含门户/API、协议、抓包 URL、短时保护、请求记录、默认关闭的门户诊断卡和恢复默认。诊断卡展示开关、占用、会话数、JSON 导出与确认后的清空。抓包导入若命中已有自然键，会在覆盖名称、密码和网络参数前确认。
+分为网络、账号、外观、高级和关于。网络提供连接概览、门户、状态测试、启动登录和保活；账号管理密码和每账号网络参数；外观处理主题、强调色、背景、本机压缩及门户在线信息的 `classic/full/minimal/hidden` 显示模式；高级包含门户/API、协议、抓包 URL、短时保护、请求记录、默认关闭的门户诊断卡和恢复默认。诊断卡展示开关、占用、会话数、JSON 导出与确认后的清空。抓包导入若命中已有自然键，会在覆盖名称、密码和网络参数前确认。
 
 ### 11.4 确认对话框
 
@@ -609,10 +636,10 @@ npm run verify
 
 浏览器清理会在 kill 前注册 exit 监听；正常退出有有限等待，超时后使用 SIGKILL，再删除独立临时 profile，任何路径都不会无限等待。
 
-门户诊断与异步接管的定向回归位于 `tests/portal-diagnostics-utils.test.js`、`tests/portal-diagnostics.test.js`、`tests/portal-modernizer.test.js`、`tests/background.test.js`、`tests/options-ui.test.js` 和 `tests/ui-contract.test.js`。在接触真实门户前，先运行：
+门户状态能力、诊断与异步接管的定向回归位于 `tests/portal-session.test.js`、`tests/portal-ui.test.js`、`tests/portal-diagnostics-utils.test.js`、`tests/portal-diagnostics.test.js`、`tests/portal-modernizer.test.js`、`tests/background.test.js`、`tests/options-ui.test.js` 和 `tests/ui-contract.test.js`。在接触真实门户前，先运行：
 
 ~~~powershell
-node --test tests/portal-diagnostics-utils.test.js tests/portal-diagnostics.test.js tests/portal-modernizer.test.js tests/background.test.js tests/options-ui.test.js tests/ui-contract.test.js
+node --test tests/portal-session.test.js tests/portal-ui.test.js tests/portal-diagnostics-utils.test.js tests/portal-diagnostics.test.js tests/portal-modernizer.test.js tests/background.test.js tests/options-ui.test.js tests/ui-contract.test.js
 ~~~
 
 手工回归至少覆盖安装/更新、四种后缀、保存/临时登录、活动身份下线、结构化协议结果、失败重试、保活、防跳转、门户切换、私有背景、危险操作取消/确认、窄屏/触控/高对比，以及所有输出无真实凭据。
