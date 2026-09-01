@@ -155,6 +155,101 @@ function closePortalFixtureServer(server) {
   });
 }
 
+async function withBrowserProfileCleanup(run, cleanup) {
+  let result;
+  let runError;
+  try {
+    result = await run();
+  } catch (error) {
+    runError = error;
+  }
+
+  let cleanupError;
+  try {
+    await cleanup();
+  } catch (error) {
+    cleanupError = error;
+  }
+
+  if (runError && cleanupError) {
+    throw new AggregateError([runError, cleanupError], "浏览器测试和配置清理均失败");
+  }
+  if (runError) throw runError;
+  if (cleanupError) throw cleanupError;
+  return result;
+}
+
+async function withPortalFixtureServer(run) {
+  let fixtureServer;
+  let runError;
+  let result;
+  try {
+    fixtureServer = await startPortalFixtureServer();
+    result = await run(fixtureServer);
+  } catch (error) {
+    runError = error;
+  }
+
+  let cleanupError;
+  if (fixtureServer) {
+    try {
+      await closePortalFixtureServer(fixtureServer.server);
+    } catch (error) {
+      cleanupError = error;
+    }
+  }
+
+  if (runError && cleanupError) {
+    throw new AggregateError([runError, cleanupError], "门户 fixture 测试和服务器清理均失败");
+  }
+  if (runError) throw runError;
+  if (cleanupError) throw cleanupError;
+  return result;
+}
+
+test("门户 fixture 在后续设置失败或浏览器清理失败后仍恰好关闭一次", async () => {
+  const setupError = new Error("后续设置失败");
+  const browserCleanupError = new Error("浏览器配置清理失败");
+  const scenarios = [
+    {
+      name: "后续设置失败",
+      expectedError: setupError,
+      run: () => withBrowserProfileCleanup(
+        async () => { throw setupError; },
+        async () => {}
+      )
+    },
+    {
+      name: "浏览器配置清理失败",
+      expectedError: browserCleanupError,
+      run: () => withBrowserProfileCleanup(
+        async () => {},
+        async () => { throw browserCleanupError; }
+      )
+    }
+  ];
+
+  for (const scenario of scenarios) {
+    const events = [];
+    let closeAttempts = 0;
+    await assert.rejects(
+      () => withPortalFixtureServer(async (fixtureServer) => {
+        const close = fixtureServer.server.close.bind(fixtureServer.server);
+        fixtureServer.server.close = (callback) => {
+          closeAttempts += 1;
+          events.push("server-close");
+          return close(callback);
+        };
+        events.push(scenario.name);
+        return scenario.run();
+      }),
+      (error) => error === scenario.expectedError
+    );
+    assert.equal(closeAttempts, 1, `${scenario.name} 后必须尝试关闭一次 loopback fixture server`);
+    assert.deepEqual(events, [scenario.name, "server-close"]);
+  }
+});
+
 test("375px 视口下步骤编号留在第一列且标题保持横排", { timeout: 20_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
     t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
@@ -718,22 +813,24 @@ test("真实浏览器诊断支持采集导出、关闭停写且失败不阻断�
     return;
   }
 
-  const fixtureServer = await startPortalFixtureServer();
-  const profile = mkdtempSync(join(tmpdir(), "drcom-portal-diagnostics-"));
-  const fixtureUrl = "http://10.10.10.2/portal-async.html?diagnostics=enabled&modernize=off";
-  const child = spawn(browser, [
-    "--headless=new",
-    "--disable-gpu",
-    "--no-first-run",
-    "--remote-debugging-port=0",
-    `--proxy-server=http://127.0.0.1:${fixtureServer.port}`,
-    "--proxy-bypass-list=<-loopback>",
-    `--user-data-dir=${profile}`,
-    "--window-size=390,844",
-    fixtureUrl
-  ], { stdio: ["ignore", "ignore", "pipe"] });
+  await withPortalFixtureServer(async (fixtureServer) => {
+    let profile;
+    let child;
+    return withBrowserProfileCleanup(async () => {
+      profile = mkdtempSync(join(tmpdir(), "drcom-portal-diagnostics-"));
+      const fixtureUrl = "http://10.10.10.2/portal-async.html?diagnostics=enabled&modernize=off";
+      child = spawn(browser, [
+        "--headless=new",
+        "--disable-gpu",
+        "--no-first-run",
+        "--remote-debugging-port=0",
+        `--proxy-server=http://127.0.0.1:${fixtureServer.port}`,
+        "--proxy-bypass-list=<-loopback>",
+        `--user-data-dir=${profile}`,
+        "--window-size=390,844",
+        fixtureUrl
+      ], { stdio: ["ignore", "ignore", "pipe"] });
 
-  try {
     const debuggerUrl = await waitForDebugger(child);
     const port = new URL(debuggerUrl).port;
     let pageUrl = await waitForPage(port, "portal-async.html");
@@ -807,8 +904,6 @@ test("真实浏览器诊断支持采集导出、关闭停写且失败不阻断�
     assert.equal(failed.schoolActionCount, 1, `记录器失败不应阻断学校点击：${JSON.stringify(failed)}`);
     assert.equal(failed.schoolButtonEnabled, true);
     assert.equal(failed.originalPasswordPresent, true);
-  } finally {
-    await cleanupBrowserProfile(child, profile);
-    await closePortalFixtureServer(fixtureServer.server);
-  }
+    }, () => cleanupBrowserProfile(child, profile));
+  });
 });
