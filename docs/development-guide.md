@@ -50,6 +50,7 @@ CRX/
 ├─ background.js
 ├─ background/
 │  ├─ state-store.js
+│  ├─ diagnostics-service.js
 │  ├─ drcom-client.js
 │  ├─ account-service.js
 │  ├─ connection-service.js
@@ -91,7 +92,7 @@ portal-preview.* 不是扩展运行入口，也不进入发布 ZIP，但真实�
 
 ## 4. 运行时架构
 
-后台保持 Manifest V3 经典 Service Worker，不切换 ES Module。background.js 通过 importScripts 载入共享账号工具和六个后台模块，测试 VM 使用同一加载顺序。
+后台保持 Manifest V3 经典 Service Worker，不切换 ES Module。background.js 通过 importScripts 载入共享账号工具和七个后台模块，测试 VM 使用同一加载顺序。
 
 ~~~mermaid
 flowchart LR
