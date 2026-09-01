@@ -65,17 +65,24 @@
     if (userRestoredOriginal || !activePortalConfig) return false;
     const online = isOnlinePage();
     const hasPasswordField = Boolean(document.querySelector('input[type="password"]'));
+    const hasCaptcha = Boolean(document.querySelector('input[name="captcha"]'));
+    if (hasCaptcha) {
+      stopPortalReadinessObserver();
+      showCaptchaFallbackHint();
+      return false;
+    }
     if (!ui.shouldTakeOver({
       enabled: activePortalConfig.enabled === true,
       online,
-      hasPasswordField
+      hasPasswordField,
+      hasCaptcha
     })) return false;
     stopPortalReadinessObserver();
     mountPortal(activePortalConfig, online);
     return true;
   }
 
-  function mountPortal(config, online) {
+  function mountPortal(config, online, statusResult = null) {
     if (userRestoredOriginal) return;
     try {
       removeModernPortal();
@@ -84,7 +91,11 @@
       root.innerHTML = ui.renderPortalMarkup({
         title: config.title || "徐医校园网",
         online,
-        host: portalHost(config.portalUrl)
+        host: portalHost(config.portalUrl),
+        onlineDetailMode: config.onlineDetailMode || "classic",
+        session: statusResult && statusResult.session,
+        statusMessage: statusResult && statusResult.message,
+        checkedAt: statusResult && statusResult.checkedAt
       });
       if (globalThis.DrcomAppearance) {
         const normalized = globalThis.DrcomAppearance.normalizeAppearance(config.appearance || {});
@@ -100,6 +111,7 @@
       document.documentElement.classList.add("drcom-modern-active");
       bindPortalEvents(root, online);
       if (!online) prefillFromOriginalPage(root);
+      if (online && !statusResult) void refreshPortalStatus(root);
     } catch (error) {
       removeModernPortal();
       throw error;
@@ -141,6 +153,21 @@
     document.documentElement.classList.remove("drcom-modern-active");
     document.getElementById("drcom-modern-root")?.remove();
     document.getElementById("drcom-private-appearance")?.remove();
+    document.getElementById("drcom-captcha-hint")?.remove();
+  }
+
+  function showCaptchaFallbackHint() {
+    removeModernPortal();
+    const hint = document.createElement("aside");
+    hint.id = "drcom-captcha-hint";
+    hint.setAttribute("role", "status");
+    hint.innerHTML = `
+      <strong>请使用学校原始页面</strong>
+      <span>检测到验证码或扫码登录，本次不会接管或隐藏原始控件。</span>
+      <button id="drcom-captcha-dismiss" type="button" aria-label="关闭提示">关闭</button>
+    `;
+    hint.querySelector("#drcom-captcha-dismiss")?.addEventListener("click", () => hint.remove());
+    document.body.append(hint);
   }
 
   function restoreOriginalPortal() {
@@ -156,12 +183,41 @@
     });
     if (online) {
       root.querySelector("#drcom-logout")?.addEventListener("click", () => void logoutFromPortal(root));
+      root.querySelector("#drcom-refresh-status")?.addEventListener("click", () => void refreshPortalStatus(root));
       return;
     }
     root.querySelector("#drcom-login-form")?.addEventListener("submit", (event) => {
       event.preventDefault();
       void loginFromPortal(root);
     });
+    root.querySelector("#drcom-reset")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      const username = root.querySelector("#drcom-username");
+      const suffix = root.querySelector("#drcom-suffix");
+      const password = root.querySelector("#drcom-password");
+      const remember = root.querySelector("#drcom-remember");
+      if (username) username.value = "";
+      if (suffix) suffix.value = "";
+      if (password) password.value = "";
+      if (remember) remember.checked = true;
+      setPortalStatus(root, "", "");
+    });
+  }
+
+  async function refreshPortalStatus(root) {
+    setPortalBusy(root, true, "正在刷新在线状态…");
+    try {
+      const result = await sendMessage({ action: "portal:status:get" });
+      if (userRestoredOriginal) return;
+      if (result.state === "offline") {
+        mountPortal(activePortalConfig || {}, false);
+        return;
+      }
+      mountPortal(activePortalConfig || {}, true, result);
+    } catch (error) {
+      setPortalBusy(root, false);
+      setPortalStatus(root, error.message || String(error), "error");
+    }
   }
 
   function prefillFromOriginalPage(root) {
@@ -227,6 +283,17 @@
   }
 
   async function logoutFromPortal(root) {
+    const confirmDialog = globalThis.DrcomConfirmDialog;
+    if (!confirmDialog || typeof confirmDialog.ask !== "function") {
+      setPortalStatus(root, "无法打开注销确认，请使用学校原始页面。", "error");
+      return;
+    }
+    const confirmed = await confirmDialog.ask({
+      title: "注销当前校园网连接？",
+      message: "确认后将注销并解绑 MAC；取消不会发送任何下线请求。",
+      confirmLabel: "注销并解绑 MAC"
+    });
+    if (!confirmed) return;
     setPortalStatus(root, "正在下线…", "progress");
     try {
       const result = await sendMessage({ action: "drcom:logout" });

@@ -741,13 +741,22 @@ test("异步出现的门户登录控件会触发真实浏览器接管", { timeou
       return {
         hasLoginForm: Boolean(document.querySelector('#drcom-login-form')),
         hasOriginalPortal: Boolean(document.querySelector('#school-portal-fixture')),
-        hasModernRoot: Boolean(document.querySelector('#drcom-modern-root'))
+        hasModernRoot: Boolean(document.querySelector('#drcom-modern-root')),
+        hasReset: Boolean(document.querySelector('#drcom-reset')),
+        supportLinks: Array.from(document.querySelectorAll('.drcom-support-links a')).map((link) => ({
+          label: link.textContent.trim(),
+          rel: link.rel,
+          target: link.target
+        }))
       };
     })()`);
 
     assert.equal(view.hasLoginForm, true, `异步登录页应被接管：${JSON.stringify(view)}`);
     assert.equal(view.hasOriginalPortal, true, `异步门户原始结构应已出现：${JSON.stringify(view)}`);
     assert.equal(view.hasModernRoot, true, `异步门户应渲染现代根节点：${JSON.stringify(view)}`);
+    assert.equal(view.hasReset, true, `现代登录页应提供重置：${JSON.stringify(view)}`);
+    assert.equal(view.supportLinks.length, 4, `现代登录页应提供四个辅助入口：${JSON.stringify(view)}`);
+    assert.ok(view.supportLinks.every((link) => link.target === "_blank" && /noopener/.test(link.rel) && /noreferrer/.test(link.rel)));
   } finally {
     await cleanupBrowserProfile(child, profile);
   }
@@ -789,13 +798,75 @@ test("异步出现的在线标记会渲染真实浏览器连接状态", { timeou
       return {
         hasLogout: Boolean(document.querySelector('#drcom-logout')),
         status: document.querySelector('#drcom-state-title')?.textContent || '',
-        hasOriginalPortal: Boolean(document.querySelector('#school-portal-fixture'))
+        hasOriginalPortal: Boolean(document.querySelector('#school-portal-fixture')),
+        usedTime: document.querySelector('#drcom-used-time')?.textContent || '',
+        totalFlow: document.querySelector('#drcom-total-flow')?.textContent || '',
+        detailsOpen: document.querySelector('#drcom-session-details')?.open,
+        summaryDisplay: getComputedStyle(document.querySelector('.drcom-session-summary')).display,
+        fitsViewport: document.querySelector('.drcom-surface').scrollWidth <= innerWidth
       };
     })()`);
 
     assert.equal(view.hasLogout, true, `异步在线页应显示下线操作：${JSON.stringify(view)}`);
     assert.equal(view.status, "已经连接校园网", `异步在线页应显示连接状态：${JSON.stringify(view)}`);
     assert.equal(view.hasOriginalPortal, true, `异步在线标记应已出现：${JSON.stringify(view)}`);
+    assert.equal(view.usedTime, "125 分钟", `经典模式应显示已用时间：${JSON.stringify(view)}`);
+    assert.equal(view.totalFlow, "1.18 GB", `经典模式应显示总流量：${JSON.stringify(view)}`);
+    assert.equal(view.detailsOpen, false, `经典模式完整详情应默认折叠：${JSON.stringify(view)}`);
+    assert.equal(view.summaryDisplay, "grid", `在线摘要应使用自适应网格：${JSON.stringify(view)}`);
+    assert.equal(view.fitsViewport, true, `在线详情不应产生横向溢出：${JSON.stringify(view)}`);
+  } finally {
+    await cleanupBrowserProfile(child, profile);
+  }
+});
+
+test("验证码异步页面保持学校原始控件并显示非阻断提示", { timeout: 20_000 }, async (t) => {
+  if (typeof WebSocket !== "function") {
+    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器门户测试");
+    return;
+  }
+  const browser = findBrowser();
+  if (!browser) {
+    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器门户测试");
+    return;
+  }
+
+  const profile = mkdtempSync(join(tmpdir(), "drcom-portal-captcha-"));
+  const fixtureUrl = `${pathToFileURL(join(__dirname, "fixtures", "portal-async.html")).href}?mode=captcha`;
+  const child = spawn(browser, [
+    "--headless=new",
+    "--allow-file-access-from-files",
+    "--disable-gpu",
+    "--no-first-run",
+    "--remote-debugging-port=0",
+    `--user-data-dir=${profile}`,
+    "--window-size=390,844",
+    fixtureUrl
+  ], { stdio: ["ignore", "ignore", "pipe"] });
+
+  try {
+    const debuggerUrl = await waitForDebugger(child);
+    const pageUrl = await waitForPage(new URL(debuggerUrl).port, "portal-async.html");
+    const view = await evaluateAtViewport(pageUrl, 390, 844, `(async () => {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        if (document.querySelector('#drcom-captcha-hint')) break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      document.querySelector('#school-action')?.click();
+      return {
+        hasCaptcha: Boolean(document.querySelector('input[name="captcha"]')),
+        hasModernRoot: Boolean(document.querySelector('#drcom-modern-root')),
+        hasHint: Boolean(document.querySelector('#drcom-captcha-hint')),
+        modernActive: document.documentElement.classList.contains('drcom-modern-active'),
+        schoolActionCount: globalThis.portalDiagnosticsFixture?.schoolActionCount || 0
+      };
+    })()`);
+
+    assert.equal(view.hasCaptcha, true, `学校验证码控件应保留：${JSON.stringify(view)}`);
+    assert.equal(view.hasModernRoot, false, `验证码场景不应接管：${JSON.stringify(view)}`);
+    assert.equal(view.hasHint, true, `验证码场景应提供说明：${JSON.stringify(view)}`);
+    assert.equal(view.modernActive, false, `验证码场景不得隐藏原页面：${JSON.stringify(view)}`);
+    assert.equal(view.schoolActionCount, 1, `学校原始操作仍应可点击：${JSON.stringify(view)}`);
   } finally {
     await cleanupBrowserProfile(child, profile);
   }

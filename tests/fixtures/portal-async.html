@@ -56,11 +56,28 @@
             portal: {
               enabled: fixtureParams.get("modernize") !== "off",
               title: "徐医校园网",
+              onlineDetailMode: fixtureParams.get("detail") || "classic",
               appearance: {}
             }
           };
         case "portal:appearance:get":
           return { ok: true, appearance: { theme: "system", accent: "#007aff", background: "fresh" } };
+        case "portal:status:get":
+          return {
+            state: "online",
+            phase: "online",
+            message: "当前校园网会话在线。",
+            checkedAt: Date.UTC(2026, 8, 2, 1, 2),
+            session: {
+              account: "20***18",
+              usedMinutes: 125,
+              totalKilobytes: 1234567,
+              uploadKilobytes: 500000,
+              downloadKilobytes: 734567,
+              balanceYuan: 12.34,
+              network: { ipv4: "10.***.***.3", mac: "AA:BB:CC:**:**:**" }
+            }
+          };
         default:
           return { ok: true };
       }
@@ -121,12 +138,16 @@
     };
 
     setTimeout(() => {
-      const online = new URLSearchParams(location.search).get("mode") === "online";
+      const mode = new URLSearchParams(location.search).get("mode");
+      const online = mode === "online";
+      const captcha = mode === "captcha";
       const original = document.createElement("main");
       original.id = "school-portal-fixture";
       original.innerHTML = online
         ? '<button name="logout" type="button">注销</button><button id="school-action" type="button">学校原始操作</button>'
-        : '<form><input name="user_account"><input type="password" name="user_password"><button id="school-action" type="button">学校原始操作</button></form>';
+        : captcha
+          ? '<form><input name="user_account"><input type="password" name="user_password"><input name="captcha"><button id="school-action" type="button">学校验证码操作</button></form>'
+          : '<form><input name="user_account"><input type="password" name="user_password"><button id="school-action" type="button">学校原始操作</button></form>';
       document.body.append(original);
       document.getElementById("school-action").addEventListener("click", () => {
         schoolActionCount += 1;
@@ -134,8 +155,10 @@
     }, 100);
   </script>
   <script src="../../CRX/account-utils.js"></script>
+  <script src="../../CRX/portal-session.js"></script>
   <script src="../../CRX/appearance.js"></script>
   <script src="../../CRX/portal-ui.js"></script>
+  <script src="../../CRX/confirm-dialog.js"></script>
   <script src="../../CRX/portal-diagnostics-utils.js"></script>
   <script src="../../CRX/background/diagnostics-service.js"></script>
   <script src="../../CRX/portal-diagnostics.js"></script>

@@ -34,6 +34,7 @@ function readCentralDirectory(zipBuffer) {
 test("诊断运行时模块以依赖顺序进入分发白名单", () => {
   const archivePaths = RELEASE_FILES.map((entry) => entry.archivePath);
   const expected = [
+    "portal-session.js",
     "portal-diagnostics-utils.js",
     "background/diagnostics-service.js",
     "background/portal-context.js",

@@ -66,8 +66,81 @@ test("只在功能启用且页面可识别为登录或在线状态时接管", ()
   const { shouldTakeOver } = require(portalUiPath);
   assert.equal(shouldTakeOver({ enabled: true, online: false, hasPasswordField: true }), true);
   assert.equal(shouldTakeOver({ enabled: true, online: true, hasPasswordField: false }), true);
+  assert.equal(shouldTakeOver({ enabled: true, online: false, hasPasswordField: true, hasCaptcha: true }), false);
   assert.equal(shouldTakeOver({ enabled: false, online: false, hasPasswordField: true }), false);
   assert.equal(shouldTakeOver({ enabled: true, online: false, hasPasswordField: false }), false);
+});
+
+test("经典在线模式显示时间与总流量并把完整脱敏字段放入折叠详情", () => {
+  const { renderPortalMarkup } = require(portalUiPath);
+  const markup = renderPortalMarkup({
+    online: true,
+    onlineDetailMode: "classic",
+    checkedAt: Date.UTC(2026, 8, 2, 1, 2),
+    session: {
+      account: "20***18",
+      usedMinutes: 125,
+      totalKilobytes: 1234567,
+      uploadKilobytes: 500000,
+      downloadKilobytes: 734567,
+      balanceYuan: 12.34,
+      loginAt: Date.UTC(2026, 8, 2, 0, 0),
+      externalIp: "192.***.***.202",
+      network: {
+        ipv4: "10.***.***.3",
+        ipv6: "2001:***::***:1",
+        mac: "AA:BB:CC:**:**:**",
+        vlan: "123",
+        acIp: "10.***.***.2",
+        acName: "campus-ac"
+      }
+    }
+  });
+
+  assert.match(markup, /id="drcom-used-time"[^>]*>125 分钟</);
+  assert.match(markup, /id="drcom-total-flow"[^>]*>1\.18 GB</);
+  assert.match(markup, /<details id="drcom-session-details">/);
+  assert.doesNotMatch(markup, /<details id="drcom-session-details" open>/);
+  for (const value of ["20***18", "488.28 MB", "717.35 MB", "¥12.34", "192.***.***.202", "AA:BB:CC:**:**:**", "campus-ac"]) {
+    assert.match(markup, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.doesNotMatch(markup, /202513010318|10\.10\.10\.3|AA-BB-CC-DD-EE-FF/);
+});
+
+test("完整、简化和隐藏模式按约定控制在线详情", () => {
+  const { renderPortalMarkup } = require(portalUiPath);
+  const session = { usedMinutes: 5, totalKilobytes: 2048, account: "20***18" };
+  const full = renderPortalMarkup({ online: true, onlineDetailMode: "full", session });
+  const minimal = renderPortalMarkup({ online: true, onlineDetailMode: "minimal", session });
+  const hidden = renderPortalMarkup({ online: true, onlineDetailMode: "hidden", session });
+
+  assert.match(full, /<details id="drcom-session-details" open>/);
+  assert.match(full, /20\*\*\*18/);
+  assert.doesNotMatch(minimal, /drcom-session-details|drcom-used-time|drcom-total-flow/);
+  assert.match(minimal, /drcom-refresh-status|自助服务|drcom-logout/);
+  assert.doesNotMatch(hidden, /drcom-session-details|drcom-used-time|drcom-total-flow|drcom-refresh-status|自助服务/);
+  assert.match(hidden, /drcom-logout/);
+});
+
+test("登录页按学校顺序提供运营商、重置和四个官方辅助入口", () => {
+  const { renderPortalMarkup } = require(portalUiPath);
+  const markup = renderPortalMarkup({ online: false });
+  const campus = markup.indexOf('<option value="">校园网</option>');
+  const unicom = markup.indexOf('<option value="@unicom">');
+  const telecom = markup.indexOf('<option value="@telecom">');
+  const mobile = markup.indexOf('<option value="@cmcc">');
+
+  assert.ok(campus < unicom && unicom < telecom && telecom < mobile);
+  assert.match(markup, /id="drcom-reset"/);
+  for (const [label, href] of [
+    ["自助服务", "http://self.xzhmu.edu.cn"],
+    ["账号激活", "https://authserver.xzhmu.edu.cn/retrieve-password/accountActivation/index.html#/?service=http%3A%2F%2F10.10.10.2"],
+    ["使用说明", "http://self.xzhmu.edu.cn/guide.htm"],
+    ["找回密码", "https://authserver.xzhmu.edu.cn/retrieve-password/retrievePassword/index.html"]
+  ]) {
+    assert.match(markup, new RegExp(`href="${href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*target="_blank"[^>]*rel="noopener noreferrer"[^>]*>${label}`));
+  }
+  assert.match(markup, /扫码或验证码登录请使用学校原始页面/);
 });
 
 test("门户界面转义可配置标题并始终提供恢复原页面操作", () => {

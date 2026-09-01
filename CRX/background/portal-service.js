@@ -45,7 +45,14 @@ async function syncPortalContentScript(state) {
     id: CUSTOM_PORTAL_SCRIPT_ID,
     matches: [pattern],
     css: ["design-tokens.css", "portal.css"],
-    js: ["account-utils.js", "appearance.js", "portal-ui.js", "portal-modernizer.js"],
+    js: [
+      "account-utils.js",
+      "portal-session.js",
+      "appearance.js",
+      "portal-ui.js",
+      "confirm-dialog.js",
+      "portal-modernizer.js"
+    ],
     runAt: "document_start",
     persistAcrossSessions: true
   }]);

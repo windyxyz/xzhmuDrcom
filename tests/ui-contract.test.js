@@ -195,8 +195,10 @@ test("门户共享令牌和纯逻辑模块在内容脚本之前加载", () => {
   assert.deepEqual(portalScript.css, ["design-tokens.css", "portal.css"]);
   assert.deepEqual(portalScript.js, [
     "account-utils.js",
+    "portal-session.js",
     "appearance.js",
     "portal-ui.js",
+    "confirm-dialog.js",
     "portal-diagnostics-utils.js",
     "portal-diagnostics.js",
     "portal-modernizer.js"

@@ -40,8 +40,10 @@
       ],
       "js": [
         "account-utils.js",
+        "portal-session.js",
         "appearance.js",
         "portal-ui.js",
+        "confirm-dialog.js",
         "portal-diagnostics-utils.js",
         "portal-diagnostics.js",
         "portal-modernizer.js"

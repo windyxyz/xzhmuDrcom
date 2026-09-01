@@ -1300,7 +1300,14 @@ test("保存自定义门户后会为已授权来源注册现代认证内容脚�
     id: "drcom-custom-portal",
     matches: ["http://192.168.8.1/*"],
     css: ["design-tokens.css", "portal.css"],
-    js: ["account-utils.js", "appearance.js", "portal-ui.js", "portal-modernizer.js"],
+    js: [
+      "account-utils.js",
+      "portal-session.js",
+      "appearance.js",
+      "portal-ui.js",
+      "confirm-dialog.js",
+      "portal-modernizer.js"
+    ],
     runAt: "document_start",
     persistAcrossSessions: true
   }]);

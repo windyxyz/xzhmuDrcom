@@ -10,6 +10,7 @@ const RELEASE_FILES = [
   ["CRX/manifest.json", "manifest.json"],
   ["LICENSE", "LICENSE"],
   ["CRX/account-utils.js", "account-utils.js"],
+  ["CRX/portal-session.js", "portal-session.js"],
   ["CRX/appearance.js", "appearance.js"],
   ["CRX/portal-diagnostics-utils.js", "portal-diagnostics-utils.js"],
   ["CRX/confirm-dialog.js", "confirm-dialog.js"],

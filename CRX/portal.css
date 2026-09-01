@@ -1,5 +1,5 @@
 html.drcom-modern-active, html.drcom-modern-active body { min-height: 100% !important; min-height: 100dvh !important; margin: 0 !important; overflow: auto !important; color-scheme: light dark; background: var(--color-canvas) !important; }
-html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appearance) { display: none !important; }
+html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appearance):not(.confirm-dialog) { display: none !important; }
 #drcom-private-appearance { position: fixed; z-index: 2147483646; inset: 0; display: block !important; overflow: hidden; pointer-events: none; }
 #drcom-modern-root, #drcom-modern-root * { box-sizing: border-box; }
 #drcom-modern-root {
@@ -52,13 +52,38 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
 .drcom-primary-button:hover { filter: brightness(1.04); }
 .drcom-secondary-button { margin-top: 24px; border: 1px solid var(--color-separator-strong); color: var(--color-text); background: var(--color-surface); }
 .drcom-secondary-button:hover { background: var(--color-surface-hover); }
+.drcom-login-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+.drcom-login-actions .drcom-secondary-button { min-width: 88px; margin-top: 0; }
+.drcom-support-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.drcom-support-links a, .drcom-online-tools a, .drcom-online-tools button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--color-separator); border-radius: 12px; padding: 8px 10px; color: var(--color-accent); background: var(--color-surface); text-decoration: none; font-size: 13px; font-weight: 650; }
+.drcom-support-links a:hover, .drcom-online-tools a:hover, .drcom-online-tools button:hover { background: var(--color-surface-hover); }
+.drcom-original-capabilities { color: var(--color-text-secondary); font-size: 12px; text-align: center; }
 .drcom-form-status { min-height: 20px; color: var(--color-text-secondary); font-size: 13px; }
 .drcom-form-status[data-state="error"] { color: var(--color-danger); }
 .drcom-state-view { text-align: center; }
 /* deslop-ignore-next-line 19 -- compact binary status indicator */
 .drcom-status-mark { width: 13px; height: 13px; margin: 0 auto 22px; display: block; border-radius: 50%; background: var(--color-success); }
+.drcom-session-summary { margin-top: 24px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; text-align: left; }
+.drcom-session-summary > div { min-width: 0; padding: 14px; border: 1px solid var(--color-separator); border-radius: 14px; background: var(--color-surface); }
+.drcom-session-summary span { display: block; color: var(--color-text-secondary); font-size: 12px; }
+.drcom-session-summary strong { display: block; margin-top: 4px; overflow-wrap: anywhere; font-size: 18px; font-variant-numeric: tabular-nums; }
+#drcom-session-details { margin-top: 14px; border: 1px solid var(--color-separator); border-radius: 14px; padding: 0 14px; background: var(--color-surface); text-align: left; }
+#drcom-session-details summary { min-height: 46px; display: flex; align-items: center; color: var(--color-accent); cursor: pointer; font-size: 13px; font-weight: 650; }
+.drcom-session-list { margin: 0 0 14px; display: grid; gap: 0; }
+.drcom-session-list > div { min-width: 0; display: grid; grid-template-columns: minmax(92px, 0.7fr) minmax(0, 1.3fr); gap: 12px; padding: 9px 0; border-top: 1px solid var(--color-separator); }
+.drcom-session-list dt { color: var(--color-text-secondary); font-size: 12px; }
+.drcom-session-list dd { min-width: 0; margin: 0; overflow-wrap: anywhere; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+.drcom-online-tools { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.drcom-online-tools button { width: 100%; color: var(--color-text); cursor: pointer; }
+.drcom-checked-at { margin-top: 8px !important; color: var(--color-text-secondary); font-size: 12px; }
 .drcom-state-view .drcom-secondary-button { width: 100%; }
 .drcom-page > footer { padding: 14px 0 4px; color: var(--color-text-secondary); font-size: 12px; text-align: center; }
+
+#drcom-captcha-hint { position: fixed; z-index: 2147483647; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); left: 16px; width: min(560px, calc(100% - 32px)); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; border: 1px solid var(--color-separator-strong); border-radius: 16px; padding: 14px 16px; color: var(--color-text); background: var(--color-surface-raised); box-shadow: var(--shadow-popover); font-family: var(--font-ui); }
+#drcom-captcha-hint strong, #drcom-captcha-hint span { min-width: 0; }
+#drcom-captcha-hint span { grid-column: 1; color: var(--color-text-secondary); font-size: 13px; }
+#drcom-captcha-hint button { grid-column: 2; grid-row: 1 / span 2; min-width: 44px; min-height: 44px; border: 0; border-radius: 12px; color: var(--color-accent); background: transparent; font: inherit; font-weight: 650; cursor: pointer; }
+.confirm-dialog { z-index: 2147483647; }
 
 @media (max-width: 560px) {
   .drcom-page { width: min(100% - 20px, 1080px); gap: 10px; }
@@ -74,6 +99,10 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   .drcom-surface { margin: 12px 0; padding: 24px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left)); border-radius: 20px; }
   #drcom-modern-root h1 { font-size: 27px; }
   .drcom-login-form input, .drcom-login-form select { font-size: 16px; }
+  .drcom-login-actions, .drcom-support-links, .drcom-online-tools, .drcom-session-summary { grid-template-columns: 1fr; }
+  .drcom-login-actions .drcom-secondary-button { width: 100%; }
+  .drcom-session-list > div { grid-template-columns: 1fr; gap: 3px; }
+  .drcom-session-list dd { text-align: left; }
 }
 @media (max-width: 260px) { .drcom-header strong { display: none; } .drcom-header { grid-template-columns: auto 1fr; } .drcom-header-actions { justify-self: end; } #drcom-restore-original { display: none; } .drcom-surface { padding-right: 12px; padding-left: 12px; } }
 @media (max-height: 540px) and (orientation: landscape) { .drcom-surface { margin: 12px 0; } }

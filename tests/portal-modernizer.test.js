@@ -112,6 +112,7 @@ class FakeElement {
 
 function createHarness(options = {}) {
   const messages = [];
+  const confirmations = [];
   const roots = new Map();
   const observers = [];
   const deferredActions = new Set(options.deferredActions || []);
@@ -153,7 +154,8 @@ function createHarness(options = {}) {
       return null;
     },
     querySelector(selector) {
-      if (selector === 'input[type="password"]') return pageState === "login" ? originalPassword : null;
+      if (selector === 'input[name="captcha"]') return pageState === "captcha" ? { value: "" } : null;
+      if (selector === 'input[type="password"]') return pageState === "login" || pageState === "captcha" ? originalPassword : null;
       if (pageState === "online" && /logout/i.test(selector)) return { value: "" };
       if (pageState === "pending") return null;
       if (/DDDDD|user_account|username/i.test(selector)) return originalUsername;
@@ -175,13 +177,31 @@ function createHarness(options = {}) {
   const responses = {
     "portal:config:get": {
       ok: true,
-      portal: { enabled: true, title: "徐医校园网", appearance: { theme: "light", accent: "#0f766e" } }
+      portal: {
+        enabled: true,
+        title: "徐医校园网",
+        onlineDetailMode: "classic",
+        appearance: { theme: "light", accent: "#0f766e" }
+      }
     },
     "portal:appearance:get": {
       ok: true,
       appearance: { theme: "light", accent: "#0f766e", background: "fresh", backgroundImage: "" }
     },
     "account:save": { ok: true, accountId: "saved-account" },
+    "portal:status:get": {
+      state: "online",
+      phase: "online",
+      message: "当前校园网会话在线。",
+      checkedAt: Date.UTC(2026, 8, 2, 1, 2),
+      session: {
+        account: "20***18",
+        usedMinutes: 125,
+        totalKilobytes: 1234567,
+        uploadKilobytes: 500000,
+        downloadKilobytes: 734567
+      }
+    },
     "drcom:login": { ok: true, success: true, online: true, message: "登录成功" },
     "drcom:logout": { ok: true, success: true, online: false, message: "已下线" },
     "redirect:markPortalTab": { ok: true },
@@ -252,7 +272,14 @@ function createHarness(options = {}) {
     }
   };
   context.DrcomAppearance = appearance;
+  context.DrcomConfirmDialog = {
+    async ask(input) {
+      confirmations.push(structuredClone(input));
+      return options.confirmResult !== false;
+    }
+  };
   return {
+    confirmations,
     context,
     document,
     messages,
@@ -322,9 +349,48 @@ test("现代登录表单保存账号后发起认证并切换到在线状态", as
 
   assert.deepEqual(
     harness.messages.map((message) => message.action),
-    ["portal:config:get", "portal:appearance:get", "account:save", "drcom:login"]
+    ["portal:config:get", "portal:appearance:get", "account:save", "drcom:login", "portal:status:get"]
   );
   assert.match(harness.document.getElementById("drcom-modern-root").innerHTML, /已经连接校园网/);
+});
+
+test("在线页面读取脱敏会话并支持手动刷新详情", async () => {
+  const harness = createHarness({ online: true });
+  await loadModernizer(harness);
+  await harness.flush();
+
+  let root = harness.document.getElementById("drcom-modern-root");
+  assert.match(root.innerHTML, /125 分钟/);
+  assert.match(root.innerHTML, /1\.18 GB/);
+  assert.equal(harness.messages.filter((message) => message.action === "portal:status:get").length, 1);
+
+  harness.responses["portal:status:get"] = {
+    state: "online",
+    phase: "online",
+    message: "状态已刷新。",
+    checkedAt: Date.UTC(2026, 8, 2, 1, 3),
+    session: { usedMinutes: 126, totalKilobytes: 2048 }
+  };
+  await harness.document.getElementById("drcom-refresh-status").emit("click");
+  await harness.flush();
+
+  root = harness.document.getElementById("drcom-modern-root");
+  assert.match(root.innerHTML, /126 分钟/);
+  assert.match(root.innerHTML, /2\.00 MB/);
+  assert.equal(harness.messages.filter((message) => message.action === "portal:status:get").length, 2);
+});
+
+test("取消注销确认不会调用后台下线", async () => {
+  const harness = createHarness({ online: true, confirmResult: false });
+  await loadModernizer(harness);
+  await harness.flush();
+
+  await harness.document.getElementById("drcom-logout").emit("click");
+  await harness.flush();
+
+  assert.equal(harness.confirmations.length, 1);
+  assert.match(harness.confirmations[0].message, /注销并解绑 MAC/);
+  assert.equal(harness.messages.some((message) => message.action === "drcom:logout"), false);
 });
 
 test("下线认证失败时门户界面保持在线并显示错误", async () => {
@@ -343,6 +409,38 @@ test("下线认证失败时门户界面保持在线并显示错误", async () =>
   const root = harness.document.getElementById("drcom-modern-root");
   assert.match(root.innerHTML, /已经连接校园网/);
   assert.equal(harness.document.getElementById("drcom-form-status").textContent, "下线失败");
+});
+
+test("重置按钮清空现代登录表单并恢复保存选项", async () => {
+  const harness = createHarness();
+  await loadModernizer(harness);
+  const username = harness.document.getElementById("drcom-username");
+  const suffix = harness.document.getElementById("drcom-suffix");
+  const password = harness.document.getElementById("drcom-password");
+  const remember = harness.document.getElementById("drcom-remember");
+  username.value = "sample";
+  suffix.value = "@cmcc";
+  password.value = "masked";
+  remember.checked = false;
+
+  await harness.document.getElementById("drcom-reset").emit("click", { preventDefault() {} });
+
+  assert.equal(username.value, "");
+  assert.equal(suffix.value, "");
+  assert.equal(password.value, "");
+  assert.equal(remember.checked, true);
+});
+
+test("验证码页面保留学校原始控件且只显示非阻断提示", async () => {
+  const harness = createHarness({ pageState: "captcha" });
+  await loadModernizer(harness);
+  await harness.flush();
+
+  assert.equal(harness.document.getElementById("drcom-modern-root"), null);
+  assert.ok(harness.document.getElementById("drcom-captcha-hint"));
+  assert.equal(harness.document.documentElement.classList.contains("drcom-modern-active"), false);
+  assert.ok(harness.document.querySelector('input[type="password"]'));
+  assert.equal(harness.messages.some((message) => message.action === "portal:status:get"), false);
 });
 
 test("自定义背景只写入 closed Shadow DOM 且个性化按钮打开设置", async () => {
