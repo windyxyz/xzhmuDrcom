@@ -34,7 +34,8 @@ DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩
 | 外观 | 系统/浅色/深色、强调色、自定义背景、压缩和可读性参数 | appearance.js、design-tokens.css |
 | 私有门户背景 | 图片只进入 closed Shadow DOM，轻 DOM 不出现 Data URL | portal-modernizer.js |
 | 危险操作确认 | 删除、覆盖导入、恢复设置、清空记录、清除背景均可取消 | confirm-dialog.js |
-| 诊断 | 最近 10 次登录、下线和状态记录，默认脱敏 | state-store.js、drcom-client.js |
+| 请求记录 | 最近 10 次登录、下线和状态记录，默认脱敏 | state-store.js、drcom-client.js |
+| 门户诊断 | 用户选择后在默认门户本机记录脱敏的页面结构、操作类型和资源元数据 | portal-diagnostics-utils.js、portal-diagnostics.js、diagnostics-service.js |
 | 发布 | 固定白名单、顺序、时间戳和 SHA-256 | scripts/package-extension.js |
 
 ## 3. 目录与职责
@@ -58,6 +59,7 @@ CRX/
 ├─ popup.html / popup.css / popup.js
 ├─ options.html / options.css / options.js
 ├─ portal-ui.js / portal-modernizer.js / portal.css
+├─ portal-diagnostics-utils.js / portal-diagnostics.js
 └─ portal-preview.html / portal-preview.js
 
 scripts/
@@ -81,6 +83,9 @@ docs/product-design.md         产品与界面设计约束
 - **background/connection-service.js**：登录单通道、连接状态、重试、活动身份、下线、状态检查和保活。
 - **background/portal-service.js**：自定义内容脚本注册、标签页短时保护、外观输出和网页 sender 校验。
 - **background/message-router.js**：可信上下文限制、动作白名单和返回数据裁剪。
+- **background/diagnostics-service.js**：门户诊断的二次脱敏、串行写入、容量预留和会话裁剪。
+- **portal-diagnostics-utils.js**：内容脚本和后台共用的 URL、文本、目标和记录脱敏工具。
+- **portal-diagnostics.js**：只在默认门户隔离世界运行的尽力而为诊断记录器。
 
 portal-preview.* 不是扩展运行入口，也不进入发布 ZIP，但真实浏览器测试直接依赖它来渲染生产门户表单，因此必须保留。
 
@@ -237,6 +242,46 @@ iframe、伪造来源、过期标签和非白名单动作都会被拒绝。当�
 
 portal-modernizer 会观察原表单提交和动态登录/下线脚本，读取 user_account、user_password 和网络字段。脚本捕获优先于 900ms 表单兜底。密码可以进入用户明确选择保存的账号，但不会进入请求记录。
 
+### 8.5 异步接管状态机
+
+内容脚本在 DOMContentLoaded 后异步读取门户配置和外观。配置确认启用后，`MutationObserver` 等待页面形成可识别的登录或在线状态，并通过一个 microtask 合并连续 DOM 变化。识别到密码字段的登录页或在线页且 `shouldTakeOver` 允许时，观察器停止、覆盖层挂载；原始 DOM 不删除。
+
+挂载、配置读取或后台通信出错时会移除覆盖层，原页面继续可用。用户点击“使用原始登录页”会停止就绪观察器、移除覆盖层，并在本次内容脚本生命周期内保持为终止状态，不会再次自动接管。在线视图的下线只在用户点击下线控件后发送 `drcom:logout`；失败时仍停留在线视图并显示错误。
+
+### 8.6 门户诊断模式
+
+门户诊断是独立于请求记录的可选本地功能，默认关闭。其完整数据流如下：
+
+~~~text
+portal-diagnostics.js (isolated world)
+  -> diagnostics:status/start/append/end
+message-router.js (strict sender validation)
+  -> diagnostics-service.js (second redaction + serialized mutation + pruning)
+  -> chrome.storage.local.drcomPortalDiagnostics
+options.js
+  -> diagnostics:set/get/export/clear (extension pages only)
+~~~
+
+诊断内容脚本先限定自身只在 `http://10.10.10.2` 运行。网页发送方还必须是顶层 frame，且 `sender.url` 与当前 `sender.tab.url` 的 origin 都精确为该默认 origin；自定义网关、iframe 和扩展页管理动作都会被拒绝。扩展页面可管理、读取、导出或清空；网页内容脚本只可使用以下会话动作。
+
+| action | 发送方 | 含义 |
+| --- | --- | --- |
+| `diagnostics:status` | 已验证的默认门户 | 查询开关，不返回会话内容 |
+| `diagnostics:start` | 已验证的默认门户 | 创建当前页面会话 |
+| `diagnostics:append` | 已验证的默认门户 | 追加一条已脱敏记录 |
+| `diagnostics:end` | 已验证的默认门户 | 标记会话结束 |
+| `diagnostics:set`、`diagnostics:get`、`diagnostics:export`、`diagnostics:clear` | 扩展页 | 设置、读取、导出或清空本地记录 |
+
+本地键为 `chrome.storage.local.drcomPortalDiagnostics`，schema 为 version、enabled、updatedAt 和 sessions；默认值为 version 1、`enabled: false`、`updatedAt: 0`、空 sessions。每个会话含 id、startedAt、endedAt、origin、pageKind、title、url、records 与 truncated；每条记录只保留允许的类型、时间、页面种类，以及经脱敏后的 URL、目标描述、方法、资源发起类型、状态、时长、摘要或消息。
+
+共享清理器先在隔离世界脱敏，后台写入前再脱敏一次。它不记录输入值、凭据、Cookie、存储内容、完整账号、IP 或 MAC；URL 只保留安全协议 action，其余查询值会替换；文本中的敏感标识也会清理。诊断不是加密容器，导出前和分享前仍必须人工复核。
+
+所有会话按 startedAt 排序，先删除最早会话以维持最多 10 个会话；超过总计 1 MiB 时继续从最早会话裁剪；只剩一个会话仍超限时删除其最早记录并标记 `truncated`。单条 DOM 摘要最大 64 KiB，URL 最大 4096 字节。写入还保留 512 KiB 本地存储余量：总存储达到或预计达到软限制时，本次开始或追加会返回“记录已暂停”，不会越过该余量。
+
+会话先查询状态，开启时才 start；随后记录初始 DOM 摘要、click/submit/change/focus、资源及资源错误、去抖后的 mutation，并在 pagehide 追加结束事件后 end。待发送队列最多保留 20 条；后台暂不可用时，队首保留以便下一次 flush 重试，溢出时丢弃最早待发送项。pagehide 会清除定时器并断开 MutationObserver 和 PerformanceObserver，且 end 至多发送一次；整个记录器失败时静默退出，不影响门户。
+
+未来做门户兼容性时，可由用户在扩展设置页导出诊断 JSON，并自行保存相应页面的 MHTML，再在不含私人捕获的工作目录中导入为本地测试 fixture。先人工确认导出内容没有原始密码、账号、IP 或 MAC；私人 JSON/MHTML 不进入 Git、不放入 `TEMP/`，也不在问题、文档或测试中引用其原始值。基于脱敏 fixture 的差异分析应另立计划，不能改变此诊断模式的本地、默认关闭边界。
+
 ## 9. 数据模型与迁移
 
 ### 9.1 storage.local
@@ -350,6 +395,8 @@ Session 状态只在当前扩展/浏览器 Session 内使用；activeIdentity �
 | redirect:markPortalTab | 开启短时保护 | 是 | 是 |
 | redirect:clearPortalTab | 清除保护 | 是 | 否 |
 | options:open | 打开扩展设置 | 是 | 是 |
+| diagnostics:status/start/append/end | 默认门户诊断会话 | 否 | 是，仅限顶层 `http://10.10.10.2` |
+| diagnostics:set/get/export/clear | 诊断管理与导出 | 是 | 否 |
 
 message-router.js 先判定发送方，再执行白名单，最后裁剪门户可见返回值。门户不能通过包装未知 action 绕过校验。
 
@@ -365,7 +412,7 @@ message-router.js 先判定发送方，再执行白名单，最后裁剪门户�
 
 ### 11.3 设置页
 
-分为网络、账号、外观、高级和关于。网络提供连接概览、门户、状态测试、启动登录和保活；账号管理密码和每账号网络参数；外观处理主题、强调色、背景与本机压缩；高级包含门户/API、协议、抓包 URL、短时保护、请求记录和恢复默认。抓包导入若命中已有自然键，会在覆盖名称、密码和网络参数前确认。
+分为网络、账号、外观、高级和关于。网络提供连接概览、门户、状态测试、启动登录和保活；账号管理密码和每账号网络参数；外观处理主题、强调色、背景与本机压缩；高级包含门户/API、协议、抓包 URL、短时保护、请求记录、默认关闭的门户诊断卡和恢复默认。诊断卡展示开关、占用、会话数、JSON 导出与确认后的清空。抓包导入若命中已有自然键，会在覆盖名称、密码和网络参数前确认。
 
 ### 11.4 确认对话框
 
@@ -406,6 +453,12 @@ npm run verify
 - npm run verify：汇总静态、单元、浏览器和打包测试。
 
 浏览器清理会在 kill 前注册 exit 监听；正常退出有有限等待，超时后使用 SIGKILL，再删除独立临时 profile，任何路径都不会无限等待。
+
+门户诊断与异步接管的定向回归位于 `tests/portal-diagnostics-utils.test.js`、`tests/portal-diagnostics.test.js`、`tests/portal-modernizer.test.js`、`tests/background.test.js`、`tests/options-ui.test.js` 和 `tests/ui-contract.test.js`。在接触真实门户前，先运行：
+
+~~~powershell
+node --test tests/portal-diagnostics-utils.test.js tests/portal-diagnostics.test.js tests/portal-modernizer.test.js tests/background.test.js tests/options-ui.test.js tests/ui-contract.test.js
+~~~
 
 手工回归至少覆盖安装/更新、四种后缀、保存/临时登录、活动身份下线、结构化协议结果、失败重试、保活、防跳转、门户切换、私有背景、危险操作取消/确认、窄屏/触控/高对比，以及所有输出无真实凭据。
 
