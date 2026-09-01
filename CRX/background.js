@@ -5,6 +5,7 @@ importScripts(
   "portal-diagnostics-utils.js",
   "background/state-store.js",
   "background/diagnostics-service.js",
+  "background/portal-context.js",
   "background/drcom-client.js",
   "background/account-service.js",
   "background/connection-service.js",

@@ -31,10 +31,13 @@
 
 ## 连接恢复
 
+- 登录先查询 `/drcom/chkstatus`；已在线时直接返回，不读取门户上下文，也不发送密码。
+- 首次登录从当前门户 URL 或首页的 `v46ip`、`ss5`、`v4ip`、`ss3` 静态变量取得实时 IP；没有有效实时/全局 IP 时停止认证，历史账号 IP 不会触发密码请求。启用 `find_mac` 时，有效返回 MAC 会真正进入最终登录请求。
 - 弹窗区分检查中、需要登录、登录中、等待重试、需要处理和已在线。
 - 任意两个入口同时触发登录时只执行一个真实 DrCOM 请求。
 - 临时网络错误从 30 秒开始指数退避，最长等待 5 分钟；密码或账号错误会停止自动重试并提示人工检查。
-- 跳转保护和连接恢复状态保存在 `storage.session`，后台服务被 Chrome 回收后不会立即丢失。
+- 跳转保护、连接恢复状态和本次实际认证身份保存在 `storage.session`，后台服务被 Chrome 回收后不会立即丢失。注销不回退到界面选择的其他账号；只有状态复核明确离线才清除身份。
+- 保活只在状态明确为离线时恢复登录；超时、网络错误和异步门户空壳均保持未知状态，不发送凭据。
 - 保活任务在浏览器启动和扩展更新时自检，配置未变化时不会重复清除和创建。
 - 自定义背景保存上限约 3 MB；超限原图会从高质量档开始多轮压缩并逐级缩放，完整扩展状态超过安全预算时会在写入前给出明确提示。
 
@@ -53,6 +56,7 @@ npm run verify
 - `CRX/manifest.json`：扩展权限、入口和版本。
 - `CRX/background.js`：经典 Service Worker 的依赖加载与 Chrome 事件注册。
 - `CRX/background/state-store.js`：schema 12、存储迁移、连接 Session 和串行写入。
+- `CRX/background/portal-context.js`：安全解析当前门户运行上下文和实时 IP，不执行页面脚本。
 - `CRX/background/drcom-client.js`：DrCOM 请求构造、结构化响应解析和日志脱敏。
 - `CRX/background/account-service.js`：自然键去重、账号生命周期和网络参数更新。
 - `CRX/background/connection-service.js`：登录单通道、活动身份、退出、退避与保活。

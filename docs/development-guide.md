@@ -51,6 +51,7 @@ CRX/
 ├─ background/
 │  ├─ state-store.js
 │  ├─ diagnostics-service.js
+│  ├─ portal-context.js
 │  ├─ drcom-client.js
 │  ├─ account-service.js
 │  ├─ connection-service.js
@@ -79,6 +80,7 @@ docs/product-design.md         产品与界面设计约束
 
 - **background.js**：按固定顺序调用 importScripts，只注册安装、启动、Alarm、消息和标签更新事件。
 - **background/state-store.js**：schema 12、默认值、迁移、串行写入、容量预算、Session 状态和请求记录。
+- **background/portal-context.js**：请求门户首页，按白名单静态解析实时 IP；不执行页面脚本，也不把正文或具体地址写入日志。
 - **background/drcom-client.js**：请求构造、超时、响应解析、错误分类与敏感信息清理。
 - **background/account-service.js**：账号规范化、自然键去重、保存、选择、删除和网络参数更新。
 - **background/connection-service.js**：登录单通道、连接状态、重试、活动身份、下线、状态检查和保活。
@@ -92,7 +94,7 @@ portal-preview.* 不是扩展运行入口，也不进入发布 ZIP，但真实�
 
 ## 4. 运行时架构
 
-后台保持 Manifest V3 经典 Service Worker，不切换 ES Module。background.js 通过 importScripts 载入共享账号工具和七个后台模块，测试 VM 使用同一加载顺序。
+后台保持 Manifest V3 经典 Service Worker，不切换 ES Module。background.js 通过 importScripts 载入共享账号工具和八个后台模块，测试 VM 使用同一加载顺序。
 
 ~~~mermaid
 flowchart LR
@@ -103,8 +105,10 @@ flowchart LR
   R --> S[状态与 Session]
   R --> A[账号服务]
   R --> C[连接服务]
+  C --> X[门户运行上下文]
   C --> D[DrCOM 客户端]
   R --> G[门户服务]
+  X --> H[10.10.10.2 门户首页]
   S --> L[storage.local]
   S --> SS[storage.session]
   C --> AL[chrome.alarms]
@@ -167,7 +171,7 @@ DrcomAccountUtils 同时供浏览器页面、后台和 CommonJS 测试使用，�
 
 ### 6.3 临时账号与活动身份
 
-用户取消“保存账号”时，登录使用临时账号。成功后只把下线所需的最小 activeIdentity 写入 chrome.storage.session：
+用户取消“保存账号”时，登录使用临时账号。确认登录成功后只把实际认证身份和本次实时网络上下文写入 chrome.storage.session 的 activeIdentity：
 
 - 保存账号 ID（临时账号为空）；
 - 用户名和后缀；
@@ -175,13 +179,13 @@ DrcomAccountUtils 同时供浏览器页面、后台和 CommonJS 测试使用，�
 - saved 或 transient 来源；
 - 认证时间。
 
-activeIdentity 不保存密码，能在 Service Worker 被回收后继续用于本次浏览器 Session 的下线。
+activeIdentity 不保存密码，也不依赖长期账号中的历史 IP；它能在 Service Worker 被回收后继续用于本次浏览器 Session 的下线。
 
 ### 6.4 下线与删除
 
-下线优先使用 activeIdentity，不回退到界面当前选择的其他账号。缺少有效 MAC 时会尝试 find_mac；仍无法获得时返回可理解提示。
+下线只使用 activeIdentity，绝不回退到界面当前选择或调用参数中的其他账号。后台先尝试取得当前门户 IP，失败时才使用 activeIdentity 中的本次会话网络。存在有效 MAC 时先调用 unbind_mac；没有 MAC、解绑失败、复核仍在线或状态未知时，改用包含协议占位字段和当前网络参数的完整 Portal/logout。
 
-下线成功会清除重试 Alarm、清空 activeIdentity，并把连接状态原子设置为 offline。下线失败不会伪造离线，也不会清除实际身份。
+unbind_mac 或 Portal/logout 返回成功并不等于最终成功。后台按 300ms、800ms、1500ms 复核 `/drcom/chkstatus`；只有明确 offline 才清除重试/保活 Alarm、清空 activeIdentity，并把连接状态原子设置为 offline。状态 online 或 unknown 时保留真实状态与活动身份，并返回可理解错误。
 
 删除账号前显示具体名称和脱敏账号，默认焦点在取消按钮，Escape 可以取消。删除只影响选定账号；设置重置明确保留账号。
 
@@ -195,11 +199,29 @@ activeIdentity 不保存密码，能在 Service Worker 被回收后继续用于�
 
 所有入口共享 drcom-login 单通道，同一时刻只发送一个真实登录任务。手工登录会清除旧重试；自动登录在 blocked 为 true 或尚未到 nextRetryAt 时跳过。
 
+登录状态机固定为：
+
+~~~text
+/drcom/chkstatus 明确在线 -> 直接成功，不发送密码
+离线或未知 -> 获取当前门户运行上下文
+无有效 IP -> 失败，不构造含 user_password 的请求
+有有效 IP -> 可选 find_mac，并采用其有效 MAC -> Portal/login
+result=1 -> 成功
+result=0 + ret_code=2 + 已在线语义 -> 再查状态，只有 online 才成功
+其他明确失败或未知响应 -> 失败
+~~~
+
+当前 IP 始终覆盖账号历史 IP；账号历史 `network.wlanUserIp` 不参与自动回退。IP 缺失时，后台在构造登录 URL 之前停止，因此密码不会被发送。保活只在状态明确为 offline 时调用登录；unknown 不会发送凭据。
+
 临时网络错误从 30 秒开始指数退避，增加最多 20% 抖动，最长 5 分钟。密码/账号、设备/MAC、流量/余额错误进入 action_required 并停止自动重试。
 
 ### 7.3 请求构造
 
-默认 API 为 http://10.10.10.2:801/eportal/。登录使用 GET，并写入 Portal/login、callback、login_method、user_account、user_password、网络参数、jsVersion 和随机值。启用 findMacBeforeLogin 时先调用 find_mac。下线有认证身份时优先使用 unbind_mac；没有任何身份时才使用传统 logout。
+默认 API 为 http://10.10.10.2:801/eportal/。登录前由 portal-context.js 使用 `credentials: "include"`、`cache: "no-store"` 和 8 秒超时请求门户首页。IP 优先级为当前页面 URL 的 `ip`、`wlanuserip`、`wlan_user_ip`、`userip`、`user-ip`、`UserIP`、`uip`、`station_ip`，随后依次为页面静态字符串变量 `v46ip`、`ss5`、`v4ip`、按原门户算法解码的 `ss3`，最后才是设置页明确填写且验证有效的全局 IP。解析器只接受白名单变量、简单字符串字面量和合法 IPv4，不使用 eval、Function 或脚本注入。
+
+登录使用 GET，并写入 Portal/login、callback、login_method、user_account、user_password、本次网络参数、jsVersion 和随机值。启用 findMacBeforeLogin 时，取得有效 IP 后依次用纯学号和带后缀账号调用 find_mac；返回的有效 MAC 会进入最终登录请求。
+
+完整 Portal/logout 写入 `login_method`、协议占位 `user_account=drcom`、`user_password=123`、`ac_logout=1`、`register_mode=1`、当前 IP/IPv6/MAC/AC 参数、空 VLAN、jsVersion、callback 和随机值。请求日志中的 URL 会隐藏占位密码及其他敏感查询参数。
 
 ### 7.4 响应解析优先级
 
@@ -210,7 +232,9 @@ DrCOM 响应固定按以下优先级处理：
 3. 可识别的状态响应；
 4. 安全兜底。
 
-未知结果按失败处理，不因文本中偶然出现 success、logout 或类似关键词而误报成功。诊断记录保留 HTTP 状态码和必要协议信息，但清除密码、完整账号、敏感查询参数和返回体中的凭据。
+`result=1` 是明确登录成功；`result=0 + ret_code=2` 只有同时包含“已经在线”语义时才进入待复核，复核为 online 才成功。ret_code=2/3 不再统一解释为 MAC 冲突，而是结合账号、密码、余额、设备和绑定语义分类。
+
+`/drcom/chkstatus` 只把明确协议结果映射为 online/offline；网络、HTTP、超时、未知协议和空壳页面均为 unknown。门户 HTML 兼容回退必须出现明确登录表单或注销标志。未知结果按失败处理，不因文本中偶然出现 success、logout 或类似关键词而误报成功。诊断记录保留 HTTP 状态码和必要协议信息，但不保留门户正文，并清除密码、完整账号、具体 IP/MAC、敏感查询参数和返回体中的凭据。
 
 ## 8. 门户接管与隐私隔离
 
@@ -241,7 +265,7 @@ iframe、伪造来源、过期标签和非白名单动作都会被拒绝。当�
 
 ### 8.4 原门户捕获
 
-portal-modernizer 会观察原表单提交和动态登录/下线脚本，读取 user_account、user_password 和网络字段。脚本捕获优先于 900ms 表单兜底。密码可以进入用户明确选择保存的账号，但不会进入请求记录。
+portal-modernizer 会观察原表单提交和动态登录/下线脚本，读取 user_account、user_password 和明确网络字段。脚本捕获优先于 900ms 表单兜底。现代登录消息经过严格 sender 校验后，由后台使用 `sender.url` 参与当前门户上下文解析；内容脚本不再从可见页面文字猜测 IP。密码可以进入用户明确选择保存的账号，但不会进入请求记录。
 
 ### 8.5 异步接管状态机
 

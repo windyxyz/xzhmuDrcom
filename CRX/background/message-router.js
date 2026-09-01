@@ -115,10 +115,12 @@ async function handleMessage(message, sender) {
 
     case "drcom:login":
       await markSenderTab(sender);
-      return loginAccount(message.accountId || "", message.account || null);
+      return loginAccount(message.accountId || "", message.account || null, {
+        portalPageUrl: fromWebPage ? String(sender.url || "") : ""
+      });
 
     case "drcom:logout":
-      return logout(message.accountId || "", message.account || null);
+      return logout();
 
     case "drcom:status":
       return checkStatus();

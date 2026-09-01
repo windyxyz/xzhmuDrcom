@@ -209,6 +209,7 @@ test("后台入口只负责依赖加载和事件注册", () => {
     "portal-diagnostics-utils.js",
     "background/state-store.js",
     "background/diagnostics-service.js",
+    "background/portal-context.js",
     "background/drcom-client.js",
     "background/account-service.js",
     "background/connection-service.js",
@@ -804,17 +805,21 @@ test("状态检测确认在线后会清除退避并恢复在线状态", async ()
   };
   const background = loadBackground({
     sessionStore,
-    fetch: async () => ({
+    fetch: async (input) => ({
       ok: true,
       status: 200,
+      url: String(input),
       async text() {
-        return '<button name="logout">下线</button>';
+        return 'dr1001({"result":1})';
       }
     })
   });
   background.getState = async () => ({
     recentRequests: [],
-    config: { portalUrl: "http://10.10.10.2/" }
+    config: {
+      portalUrl: "http://10.10.10.2/",
+      login: { callbackPrefix: "dr" }
+    }
   });
   background.addRequestRecord = async () => undefined;
 
@@ -827,19 +832,25 @@ test("状态检测确认在线后会清除退避并恢复在线状态", async ()
 });
 
 test("不同入口同时触发登录时也只发送一个 DrCOM 请求", async () => {
-  let requests = 0;
+  const requests = [];
   let release;
   const waiting = new Promise((resolve) => { release = resolve; });
   const background = loadBackground({
-    fetch: async () => {
-      requests += 1;
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      requests.push(url);
+      if (url.pathname === "/drcom/chkstatus") {
+        return { ok: true, status: 200, url: url.toString(), async text() { return 'dr1001({"result":0})'; } };
+      }
+      if (url.port !== "801") {
+        return { ok: true, status: 200, url: url.toString(), async text() { return '<script>var v4ip="192.0.2.46";</script>'; } };
+      }
       await waiting;
       return {
         ok: true,
         status: 200,
-        async text() {
-          return '{"result":"1","msg":"success"}';
-        }
+        url: url.toString(),
+        async text() { return '{"result":"1","msg":"success"}'; }
       };
     }
   });
@@ -851,6 +862,7 @@ test("不同入口同时触发登录时也只发送一个 DrCOM 请求", async (
     ],
     recentRequests: [],
     config: {
+      portalUrl: "http://10.10.10.2/",
       apiUrl: "http://10.10.10.2:801/eportal/",
       login: {
         accountPrefix: ",0,",
@@ -877,7 +889,7 @@ test("不同入口同时触发登录时也只发送一个 DrCOM 请求", async (
   release();
   await Promise.all([first, second]);
 
-  assert.equal(requests, 1);
+  assert.equal(requests.filter((url) => url.searchParams.get("a") === "login").length, 1);
 });
 
 test("临时登录身份跨后台重启保留且退出不会误用当前选中账号", async () => {
@@ -886,15 +898,18 @@ test("临时登录身份跨后台重启保留且退出不会误用当前选中�
   const fetchStub = async (input) => {
     const url = new URL(String(input));
     requests.push(url);
+    if (url.pathname === "/drcom/chkstatus") {
+      return { ok: true, status: 200, url: url.toString(), async text() { return 'dr1001({"result":0})'; } };
+    }
+    if (url.port !== "801") {
+      return { ok: true, status: 200, url: url.toString(), async text() { return '<script>var v4ip="10.0.0.99";</script>'; } };
+    }
     const action = url.searchParams.get("a");
     return {
       ok: true,
       status: 200,
-      async text() {
-        return action === "unbind_mac"
-          ? '{"result":"1","msg":"logout success"}'
-          : '{"result":"1","msg":"success"}';
-      }
+      url: url.toString(),
+      async text() { return action === "unbind_mac" ? '{"result":"1","msg":"logout success"}' : '{"result":"1","msg":"success"}'; }
     };
   };
   const state = {
@@ -902,6 +917,7 @@ test("临时登录身份跨后台重启保留且退出不会误用当前选中�
     accounts: [account({ username: "selected-user", suffix: "@telecom" })],
     recentRequests: [],
     config: {
+      portalUrl: "http://10.10.10.2/",
       apiUrl: "http://10.10.10.2:801/eportal/",
       login: {
         accountPrefix: ",0,",
@@ -946,6 +962,7 @@ test("临时登录身份跨后台重启保留且退出不会误用当前选中�
     name: "drcomAssistant.retry",
     when: Date.now() + 30000
   };
+  restartedWorker.waitForLogoutDelay = async () => undefined;
   const logout = await restartedWorker.logout();
   const logoutRequest = requests.find((url) => url.searchParams.get("a") === "unbind_mac");
 
@@ -983,30 +1000,40 @@ test("下线失败时保留真实在线状态和活动身份", async () => {
   };
   const background = loadBackground({
     sessionStore,
-    fetch: async () => ({
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/drcom/chkstatus") {
+        return { ok: true, status: 200, url: url.toString(), async text() { return 'dr1001({"result":1})'; } };
+      }
+      if (url.port !== "801") {
+        return { ok: true, status: 200, url: url.toString(), async text() { return '<script>var v4ip="10.0.0.99";</script>'; } };
+      }
+      return {
       ok: true,
       status: 200,
-      async text() {
-        return '{"result":"0","message":"logout failed"}';
-      }
-    })
+      url: url.toString(),
+      async text() { return '{"result":"0","message":"logout failed"}'; }
+      };
+    }
   });
   background.getState = async () => ({
     selectedAccountId: "account-1",
     accounts: [account({ username: "selected-user" })],
     recentRequests: [],
     config: {
+      portalUrl: "http://10.10.10.2/",
       apiUrl: "http://10.10.10.2:801/eportal/",
       login: { callbackPrefix: "dr", jsVersion: "3.3.2" },
       network: { wlanUserIp: "", wlanUserMac: "000000000000" }
     }
   });
   background.addRequestRecord = async () => undefined;
+  background.waitForLogoutDelay = async () => undefined;
 
   const result = await background.logout();
 
   assert.equal(result.success, false);
-  assert.match(result.message, /logout failed|下线失败/i);
+  assert.match(result.message, /注销未完成|仍然在线/i);
   assert.equal(sessionStore.drcomAssistantSession.connection.phase, "online");
   assert.equal(sessionStore.drcomAssistantSession.connection.message, "已连接");
   assert.equal(sessionStore.drcomAssistantSession.activeIdentity.username, "temporary-user");

@@ -36,6 +36,7 @@ test("诊断运行时模块以依赖顺序进入分发白名单", () => {
   const expected = [
     "portal-diagnostics-utils.js",
     "background/diagnostics-service.js",
+    "background/portal-context.js",
     "portal-diagnostics.js"
   ];
   let previousIndex = -1;

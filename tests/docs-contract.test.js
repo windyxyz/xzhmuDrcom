@@ -12,6 +12,7 @@ test("开发指南覆盖最终架构、生命周期、接口、测试、打包�
   const guide = read("docs/development-guide.md");
   for (const term of [
     "background/state-store.js",
+    "background/portal-context.js",
     "background/drcom-client.js",
     "DrcomAccountUtils",
     "schemaVersion: 12",

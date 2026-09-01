@@ -44,12 +44,12 @@ async function loginAccount(accountId, transientAccount, options = {}) {
       message: options.reason || (automatic ? "正在自动恢复连接。" : "正在登录校园网。"),
       updatedAt: Date.now()
     });
-    const result = await performLoginAccount(accountId, transientAccount);
+    const result = await performLoginAccount(accountId, transientAccount, options);
     return recordLoginOutcome(result);
   });
 }
 
-async function performLoginAccount(accountId, transientAccount) {
+async function performLoginAccount(accountId, transientAccount, options = {}) {
   const state = await getState();
   const isTransient = Boolean(transientAccount);
   const account = transientAccount
@@ -60,27 +60,84 @@ async function performLoginAccount(accountId, transientAccount) {
     throw new Error("请先保存或选择账号");
   }
 
-  if (state.config.login.findMacBeforeLogin !== false) {
-    try {
-      await fetchDrcom(buildFindMacRequest(account, state.config), "find_mac");
-    } catch (error) {}
+  const currentStatus = await queryPortalSessionStatus(state.config);
+  if (currentStatus.state === "online") {
+    return {
+      ...currentStatus,
+      ok: true,
+      success: true,
+      online: true,
+      message: "账号已经在线，无需重复登录。"
+    };
   }
 
-  const request = buildLoginRequest(account, state.config);
-  const result = await fetchDrcom(request, "login");
+  const portalContext = await resolvePortalRuntimeContext(state.config, options.portalPageUrl || "");
+  if (!portalContext.ok) {
+    return {
+      ok: false,
+      success: false,
+      online: false,
+      failureCode: portalContext.failureCode || "portal_context_missing",
+      message: portalContext.message || "未取得当前校园网 IP，认证密码尚未发送。",
+      diagnostic: portalContext.diagnostic || {}
+    };
+  }
+
+  const network = mergeRuntimeLoginNetwork(account, state.config, portalContext.network);
+
+  if (state.config.login.findMacBeforeLogin !== false) {
+    for (const includeSuffix of [false, true]) {
+      try {
+        const probe = await fetchDrcom(buildFindMacRequest(account, state.config, {
+          networkOverride: network,
+          includeSuffix
+        }), "find_mac");
+        const mac = extractMacFromResponse(probe.data, probe.raw);
+        if (isUsableMac(mac)) {
+          network.wlanUserMac = accountUtils.normalizeMac(mac);
+          break;
+        }
+      } catch (error) {}
+    }
+  }
+
+  const request = buildLoginRequest(account, state.config, network);
+  let result = await fetchDrcom(request, "login");
+  if (result.requiresStatusConfirmation) {
+    const confirmed = await queryPortalSessionStatus(state.config);
+    result = confirmed.state === "online"
+      ? { ...result, success: true, online: true, message: "账号已经在线，无需重复登录。" }
+      : { ...result, success: false, online: false, message: "网关提示账号可能在线，但状态复核未确认在线。" };
+  }
   return {
     ...result,
     authenticatedIdentity: sanitizeActiveIdentity({
       accountId: isTransient ? "" : account.id,
       username: account.username,
       suffix: account.suffix,
-      network: account.network,
+      network,
       source: isTransient ? "transient" : "saved",
       authenticatedAt: Date.now()
     })
   };
 }
 
+
+function mergeRuntimeLoginNetwork(account, config, runtimeNetwork) {
+  const accountNetwork = account && account.network || {};
+  const configNetwork = config && config.network || {};
+  const fresh = runtimeNetwork || {};
+  const wlanUserMac = [fresh.wlanUserMac, accountNetwork.wlanUserMac, configNetwork.wlanUserMac]
+    .map((value) => accountUtils.normalizeMac(value))
+    .find((value) => isUsableMac(value)) || "000000000000";
+  return {
+    wlanUserIp: stringValue(fresh.wlanUserIp).trim(),
+    wlanUserIpv6: stringValue(fresh.wlanUserIpv6 || accountNetwork.wlanUserIpv6 || configNetwork.wlanUserIpv6).trim(),
+    wlanUserMac,
+    wlanAcIp: stringValue(fresh.wlanAcIp || accountNetwork.wlanAcIp || configNetwork.wlanAcIp).trim(),
+    wlanAcName: stringValue(fresh.wlanAcName || accountNetwork.wlanAcName || configNetwork.wlanAcName).trim()
+  };
+}
 function runLoginSingleFlight(key, task) {
   const normalizedKey = stringValue(key) || "default";
   const existing = loginFlights.get(normalizedKey);
@@ -191,141 +248,179 @@ async function recordLoginOutcome(result, options = {}) {
   };
 }
 
-async function logout(accountId = "", transientAccount = null) {
+async function logout() {
   const state = await getState();
   const session = await getSessionState();
-  const activeIdentity = session.activeIdentity;
-  const requestedAccount = transientAccount
-    ? sanitizeAccount(transientAccount)
-    : state.accounts.find((item) => item.id === accountId);
-  const account = activeIdentity || requestedAccount;
+  const account = session.activeIdentity;
 
-  if (!account) {
-    const legacyRequest = buildLegacyLogoutRequest(state.config);
-    const legacyResult = await fetchDrcom(legacyRequest, "logout");
-    return recordLogoutOutcome(legacyResult);
+  const network = await resolveCurrentLogoutNetwork(account, state.config);
+  let unbindResult = null;
+  let confirmation = null;
+
+  if (account && isUsableMac(network.wlanUserMac)) {
+    unbindResult = await fetchDrcom(buildUnbindRequest(account, state.config, network), "logout");
+    if (unbindResult.success) {
+      confirmation = await confirmPortalOffline(state.config);
+      if (confirmation.state === "offline") {
+        return recordLogoutOutcome(unbindResult, confirmation);
+      }
+    }
   }
 
-  const network = await resolveLogoutNetwork(account, state.config);
-  const request = buildLogoutRequest(account, state.config, network);
-  const result = await fetchDrcom(request, "logout");
-
-  if (!result.success && !isUsableMac(network.wlanUserMac)) {
-    return {
-      ...result,
-      message: `${result.message || "下线失败"}；当前账号没有有效 wlan_user_mac，DrCOM 的 unbind_mac 下线通常需要真实 MAC。请在账号设置的抓包参数里填入类似 580205DC58C2 的 MAC，或先在原认证页下线一次让插件自动记录。`
-    };
+  const portalResult = await fetchDrcom(buildPortalLogoutRequest(state.config, network), "logout");
+  confirmation = await confirmPortalOffline(state.config);
+  if (confirmation.state === "offline") {
+    return recordLogoutOutcome(portalResult, confirmation);
   }
 
-  return recordLogoutOutcome(result);
+  const stateMessage = confirmation.state === "online"
+    ? "注销未完成，校园网会话仍然在线。"
+    : "注销请求已发送，但无法确认已经离线。";
+  return {
+    ...(portalResult || unbindResult || {}),
+    ok: false,
+    success: false,
+    online: confirmation.state === "online" || session.connection.phase === "online",
+    phase: session.connection.phase,
+    message: stateMessage,
+    confirmationState: confirmation.state
+  };
 }
 
-async function recordLogoutOutcome(result) {
-  if (!result || !result.success) return result;
+async function recordLogoutOutcome(result, confirmation) {
+  if (!confirmation || confirmation.state !== "offline") {
+    return {
+      ...(result || {}),
+      ok: false,
+      success: false,
+      message: "注销请求已发送，但尚未确认已经离线。"
+    };
+  }
   await chrome.alarms.clear(RETRY_ALARM);
+  await chrome.alarms.clear(KEEPALIVE_ALARM);
   const { session } = await mutateSession((draft) => {
     draft.activeIdentity = null;
     draft.connection = {
       ...DEFAULT_CONNECTION_STATE,
       phase: "offline",
-      message: result.message || "已下线。",
+      message: "已确认校园网会话离线。",
       updatedAt: Date.now()
     };
   });
   await updateActionBadge(session.connection);
-  return { ...result, online: false, phase: "offline" };
+  return {
+    ...(result || {}),
+    ok: true,
+    success: true,
+    online: false,
+    phase: "offline",
+    message: "已确认校园网会话离线。",
+    confirmationState: "offline"
+  };
 }
 
-async function resolveLogoutNetwork(account, config) {
-  const network = { ...config.network, ...account.network };
-  if (isUsableMac(network.wlanUserMac)) {
-    network.wlanUserMac = accountUtils.normalizeMac(network.wlanUserMac);
-    return network;
-  }
+async function resolveCurrentLogoutNetwork(account, config) {
+  const stored = account && account.network || {};
+  const configured = config && config.network || {};
+  let fresh = {};
+  try {
+    const context = await resolvePortalRuntimeContext(config, config.portalUrl || "");
+    if (context.ok) fresh = context.network || {};
+  } catch (error) {}
 
-  for (const includeSuffix of [true, false]) {
-    try {
-      const probe = await fetchDrcom(buildFindMacRequest(account, config, includeSuffix), "find_mac");
-      const mac = extractMacFromResponse(probe.data, probe.raw);
-      if (isUsableMac(mac)) {
-        network.wlanUserMac = mac;
-        break;
-      }
-    } catch (error) {}
-  }
+  const wlanUserMac = [fresh.wlanUserMac, stored.wlanUserMac, configured.wlanUserMac]
+    .map((value) => accountUtils.normalizeMac(value))
+    .find((value) => isUsableMac(value)) || "000000000000";
+  return {
+    wlanUserIp: stringValue(fresh.wlanUserIp || stored.wlanUserIp || configured.wlanUserIp).trim(),
+    wlanUserIpv6: stringValue(fresh.wlanUserIpv6 || stored.wlanUserIpv6 || configured.wlanUserIpv6).trim(),
+    wlanUserMac,
+    wlanAcIp: stringValue(fresh.wlanAcIp || stored.wlanAcIp || configured.wlanAcIp).trim(),
+    wlanAcName: stringValue(fresh.wlanAcName || stored.wlanAcName || configured.wlanAcName).trim()
+  };
+}
 
-  network.wlanUserMac = accountUtils.normalizeMac(network.wlanUserMac) || "000000000000";
-  return network;
+async function confirmPortalOffline(config) {
+  let status = { state: "unknown" };
+  for (const delay of [300, 800, 1500]) {
+    await waitForLogoutDelay(delay);
+    status = await queryPortalSessionStatus(config);
+    if (status.state === "offline") return status;
+  }
+  return status;
+}
+
+function waitForLogoutDelay(delay) {
+  return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
 async function checkStatus() {
   const state = await getState();
+  const previousRuntime = await getConnectionState();
   await setConnectionState({
     phase: "checking",
     message: "正在检查校园网连接状态。",
     updatedAt: Date.now()
   });
+
+  let result = await queryPortalSessionStatus(state.config);
+  if (result.state === "unknown") {
+    const pageResult = await queryPortalPageStatus(state.config);
+    if (pageResult.state !== "unknown") result = pageResult;
+  }
+
+  const now = Date.now();
+  const runtime = await getConnectionState();
+  const phase = resolveStatusPhase(result.state, runtime, previousRuntime, now);
+  if (result.state === "online") await chrome.alarms.clear(RETRY_ALARM);
+  await setConnectionState({
+    phase,
+    attempt: result.state === "online" ? 0 : runtime.attempt,
+    nextRetryAt: result.state === "online" ? 0 : runtime.nextRetryAt,
+    blocked: result.state === "online" ? false : runtime.blocked,
+    message: result.message,
+    updatedAt: now
+  });
+  await addRequestRecord({ kind: "status", ...result });
+  return { ...result, phase };
+}
+
+async function queryPortalPageStatus(config) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
-
   try {
-    const response = await fetch(state.config.portalUrl, {
+    const response = await fetch(config.portalUrl, {
       method: "GET",
       cache: "no-store",
       credentials: "include",
       signal: controller.signal
     });
-    const text = await response.text();
-    const result = parsePortalStatus(response.status, text, state.config.portalUrl);
-    const now = Date.now();
-    const runtime = await getConnectionState();
-    const phase = result.online
-      ? "online"
-      : runtime.blocked
-        ? "action_required"
-        : runtime.nextRetryAt > now
-          ? "waiting"
-          : "captive";
-    if (result.online) {
-      await chrome.alarms.clear(RETRY_ALARM);
-    }
-    await setConnectionState({
-      phase,
-      attempt: result.online ? 0 : runtime.attempt,
-      nextRetryAt: result.online ? 0 : runtime.nextRetryAt,
-      blocked: result.online ? false : runtime.blocked,
-      message: result.message,
-      updatedAt: now
-    });
-    await addRequestRecord({ kind: "status", ...result });
-    return { ...result, phase };
+    return parsePortalStatus(response.status, await response.text(), config.portalUrl);
   } catch (error) {
-    const result = {
+    return {
       ok: false,
       success: false,
       online: false,
-      message: error && error.name === "AbortError" ? "访问 10.10.10.2 超时，请确认已连接校园网。" : `无法访问认证页：${error.message || error}`,
+      state: "unknown",
+      message: error && error.name === "AbortError"
+        ? "访问 10.10.10.2 超时，无法确认校园网状态。"
+        : "无法确认校园网会话状态。",
       statusCode: 0,
-      url: state.config.portalUrl,
+      url: config.portalUrl,
       raw: ""
     };
-    const now = Date.now();
-    const runtime = await getConnectionState();
-    const phase = runtime.blocked
-      ? "action_required"
-      : runtime.nextRetryAt > now
-        ? "waiting"
-        : "offline";
-    await setConnectionState({
-      phase,
-      message: result.message,
-      updatedAt: now
-    });
-    await addRequestRecord({ kind: "status", ...result });
-    return { ...result, phase };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function resolveStatusPhase(status, runtime, previousRuntime, now) {
+  if (status === "online") return "online";
+  if (runtime.blocked) return "action_required";
+  if (runtime.nextRetryAt > now) return "waiting";
+  if (status === "offline") return "captive";
+  const previousPhase = stringValue(previousRuntime && previousRuntime.phase).trim();
+  return previousPhase && previousPhase !== "checking" ? previousPhase : "idle";
 }
 
 async function keepAliveTick() {
@@ -338,7 +433,7 @@ async function keepAliveTick() {
   if (!canAttemptAutomaticLogin(runtime)) return;
 
   const status = await checkStatus();
-  if (!status.online) {
+  if (status.state === "offline") {
     await loginAccount(state.selectedAccountId, null, {
       automatic: true,
       reason: "连接守护正在恢复校园网。"

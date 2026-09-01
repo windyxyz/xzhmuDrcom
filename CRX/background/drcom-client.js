@@ -52,10 +52,73 @@ async function fetchDrcom(request, kind) {
   }
 }
 
-function buildLoginRequest(account, config) {
+function buildStatusRequest(config) {
+  const portalOrigin = new URL(config.portalUrl).origin;
+  const url = new URL("/drcom/chkstatus", `${portalOrigin}/`);
+  url.searchParams.set("callback", `${config.login.callbackPrefix || "dr"}1001`);
+  url.searchParams.set("v", createNonce());
+  return { url: url.toString(), redactedUrl: url.toString() };
+}
+
+async function queryPortalSessionStatus(config) {
+  const request = buildStatusRequest(config);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(request.url, {
+      method: "GET",
+      cache: "no-store",
+      credentials: "include",
+      headers: { "Accept": "application/javascript, application/json, text/plain, */*" },
+      signal: controller.signal
+    });
+    const parsed = parseDrcomText(await response.text());
+    const resultCode = parsed.result === undefined || parsed.result === null
+      ? ""
+      : stringValue(parsed.result).trim();
+    const state = response.ok && resultCode === "1"
+      ? "online"
+      : response.ok && resultCode === "0"
+        ? "offline"
+        : "unknown";
+    return {
+      ok: response.ok && state !== "unknown",
+      success: state === "online",
+      online: state === "online",
+      state,
+      statusCode: response.status,
+      message: state === "online"
+        ? "当前校园网会话在线。"
+        : state === "offline"
+          ? "当前需要登录校园网。"
+          : "校园网会话状态不明确。",
+      diagnostic: { statusCode: response.status, resultCode },
+      url: request.redactedUrl,
+      raw: ""
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      success: false,
+      online: false,
+      state: "unknown",
+      statusCode: 0,
+      message: error && error.name === "AbortError"
+        ? "校园网状态检查超时。"
+        : "无法确认校园网会话状态。",
+      diagnostic: { statusCode: 0, resultCode: "" },
+      url: request.redactedUrl,
+      raw: ""
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function buildLoginRequest(account, config, networkOverride = null) {
   const ts = createTimestamp();
   const url = new URL(config.apiUrl);
-  const network = { ...config.network, ...account.network };
+  const network = networkOverride || { ...config.network, ...account.network };
 
   url.search = "";
   url.searchParams.set("c", "Portal");
@@ -75,9 +138,11 @@ function buildLoginRequest(account, config) {
   return { url: url.toString(), redactedUrl: redactSensitiveUrl(url.toString()) };
 }
 
-function buildFindMacRequest(account, config, includeSuffix = false) {
+function buildFindMacRequest(account, config, options = {}) {
+  const normalizedOptions = typeof options === "boolean" ? { includeSuffix: options } : options || {};
+  const includeSuffix = normalizedOptions.includeSuffix === true;
   const url = new URL(config.apiUrl);
-  const network = { ...config.network, ...account.network };
+  const network = normalizedOptions.networkOverride || { ...config.network, ...account.network };
   url.search = "";
   url.searchParams.set("c", "Portal");
   url.searchParams.set("a", "find_mac");
@@ -91,7 +156,7 @@ function buildFindMacRequest(account, config, includeSuffix = false) {
   return { url: url.toString(), redactedUrl: url.toString() };
 }
 
-function buildLogoutRequest(account, config, networkOverride = null) {
+function buildUnbindRequest(account, config, networkOverride = null) {
   const ts = createTimestamp();
   const url = new URL(config.apiUrl);
   const network = networkOverride || { ...config.network, ...account.network };
@@ -108,16 +173,28 @@ function buildLogoutRequest(account, config, networkOverride = null) {
   return { url: url.toString(), redactedUrl: redactSensitiveUrl(url.toString()) };
 }
 
-function buildLegacyLogoutRequest(config) {
+function buildPortalLogoutRequest(config, networkOverride = null) {
   const ts = createTimestamp();
   const url = new URL(config.apiUrl);
+  const network = networkOverride || config.network || {};
   url.search = "";
   url.searchParams.set("c", "Portal");
   url.searchParams.set("a", "logout");
   url.searchParams.set("callback", `${config.login.callbackPrefix}${ts}`);
   url.searchParams.set("login_method", config.login.loginMethod || "1");
+  url.searchParams.set("user_account", "drcom");
+  url.searchParams.set("user_password", "123");
+  url.searchParams.set("ac_logout", "1");
+  url.searchParams.set("register_mode", "1");
+  url.searchParams.set("wlan_user_ip", network.wlanUserIp || "");
+  url.searchParams.set("wlan_user_ipv6", network.wlanUserIpv6 || "");
+  url.searchParams.set("wlan_vlan_id", "");
+  url.searchParams.set("wlan_user_mac", accountUtils.normalizeMac(network.wlanUserMac) || "000000000000");
+  url.searchParams.set("wlan_ac_ip", network.wlanAcIp || "");
+  url.searchParams.set("wlan_ac_name", network.wlanAcName || "");
+  url.searchParams.set("jsVersion", config.login.jsVersion || "3.3.2");
   url.searchParams.set("v", createNonce());
-  return { url: url.toString(), redactedUrl: url.toString() };
+  return { url: url.toString(), redactedUrl: redactSensitiveUrl(url.toString()) };
 }
 
 function plainStudentId(value) {
@@ -161,12 +238,18 @@ function parseDrcomText(text) {
 function normalizeDrcomResult(kind, statusCode, data, rawText) {
   const raw = stringValue(rawText);
   const msg = decodeMessage(data.msg || data.msga || data.message || data.error || "");
-  const protocolValue = data.result ?? data.ret_code ?? data.ret ?? data.success;
+  const resultValue = data.result ?? data.success;
+  const retValue = data.ret_code ?? data.ret;
+  const resultCode = resultValue === undefined || resultValue === null
+    ? ""
+    : stringValue(resultValue).trim().toLowerCase();
+  const retCode = retValue === undefined || retValue === null ? "" : stringValue(retValue).trim();
+  const protocolValue = resultValue ?? retValue;
   const protocolCode = protocolValue === undefined || protocolValue === null
     ? ""
     : stringValue(protocolValue).trim().toLowerCase();
   const httpOk = statusCode >= 200 && statusCode < 300;
-  const diagnostic = { statusCode, protocolCode };
+  const diagnostic = { statusCode, protocolCode, resultCode, retCode };
   const failureTokens = new Set(["0", "false", "fail", "failed", "error", "-1"]);
   const successTokens = new Set(["1", "ok", "true", "success"]);
   const alreadyOnline = /已经在线|已在线|has been online|already online|E2620/i.test(`${msg} ${raw}`);
@@ -182,11 +265,24 @@ function normalizeDrcomResult(kind, statusCode, data, rawText) {
     };
   }
 
+  if (kind === "login" && resultCode === "0" && retCode === "2" && alreadyOnline) {
+    return {
+      success: false,
+      online: false,
+      requiresStatusConfirmation: true,
+      message: "网关提示账号已经在线，正在复核实际状态。",
+      data,
+      httpOk,
+      diagnostic
+    };
+  }
+
   if (protocolCode) {
     if (failureTokens.has(protocolCode)) {
       return {
         success: false,
         online: false,
+        requiresStatusConfirmation: false,
         message: humanizeError(msg || protocolCode, data, kind),
         data,
         httpOk,
@@ -247,25 +343,27 @@ function normalizeDrcomResult(kind, statusCode, data, rawText) {
 
 function parsePortalStatus(statusCode, text, url) {
   const raw = stringValue(text);
-  const online = /name=["']logout["']|data-localize=["'][^"']*logout|注销|下线|已连接|在线/i.test(raw);
-  const loginPage = /name=["']DDDDD["']|name=["']upass["']|user_account|登录|认证/i.test(raw);
+  const httpOk = statusCode >= 200 && statusCode < 400;
+  const onlineMarker = /name=["']logout["']|data-localize=["'][^"']*logout|注销成功|下线成功|已连接|当前在线/i.test(raw);
+  const loginForm = /name=["']DDDDD["']|name=["']upass["']|name=["']user_account["'][\s\S]{0,2000}name=["']user_password["']/i.test(raw);
+  const state = httpOk && onlineMarker ? "online" : httpOk && loginForm ? "offline" : "unknown";
 
   return {
-    ok: statusCode >= 200 && statusCode < 400,
-    success: online,
-    online,
+    ok: httpOk && state !== "unknown",
+    success: state === "online",
+    online: state === "online",
+    state,
     statusCode,
     url,
-    message: online ? "当前页面显示已在线。" : loginPage ? "当前需要登录。" : "已访问认证页，但状态不明确。",
-    raw: trimRaw(raw)
+    message: state === "online" ? "当前页面显示已在线。" : state === "offline" ? "当前需要登录。" : "已访问认证页，但状态不明确。",
+    raw: ""
   };
 }
 
 function humanizeError(message, data, kind = "login") {
   const msg = decodeMessage(message);
-  const retCode = stringValue(data.ret_code || data.ret);
 
-  if (/AC999/i.test(msg) || retCode === "2" || retCode === "3") {
+  if (/AC999|设备数量|终端数量|MAC\s*冲突/i.test(msg)) {
     return `设备数量超限或 MAC 冲突：${msg}`;
   }
   if (/userid error1|用户不存在|账号不存在/i.test(msg)) {
@@ -314,6 +412,11 @@ function redactSensitiveUrl(value) {
         url.searchParams.set(key, "******");
       }
     }
+    for (const key of ["wlan_user_ip", "wlanuserip", "userip", "wlan_user_ipv6", "wlan_user_mac", "wlan_ac_ip", "wlan_ac_name"]) {
+      if (url.searchParams.has(key)) {
+        url.searchParams.set(key, "******");
+      }
+    }
     if (url.searchParams.has("user_account")) {
       const current = url.searchParams.get("user_account") || "";
       const parsed = accountUtils.parse(current);
@@ -322,7 +425,7 @@ function redactSensitiveUrl(value) {
     }
     return url.toString();
   } catch (error) {
-    return raw.replace(/(user_password|password|upass|0MKKey)=([^&\s]+)/gi, "$1=******");
+    return redactNetworkIdentifiers(raw.replace(/(user_password|password|upass|0MKKey)=([^&\s]+)/gi, "$1=******"));
   }
 }
 
@@ -336,7 +439,7 @@ function redactSensitiveText(value) {
   const quotedAccountPattern = /(["']?user_account["']?\s*[:=]\s*)(["'])([\s\S]*?)\2/gi;
   const passwordPattern = /(["']?(?:user_password|password|upass|0MKKey)["']?\s*[:=]\s*)([^"'&,;\s}]+)/gi;
   const accountPattern = /(["']?user_account["']?\s*[:=]\s*)([^"'&;\s}]+)/gi;
-  return raw
+  const sanitized = raw
     .replace(quotedPasswordPattern, (match, prefix, quote) => `${prefix}${quote}******${quote}`)
     .replace(quotedAccountPattern, (match, prefix, quote, accountValue) => {
       const normalized = accountUtils.decode(accountValue).trim();
@@ -350,6 +453,24 @@ function redactSensitiveText(value) {
       const parsed = accountUtils.parse(normalized);
       const hasPrefix = normalized.startsWith(",0,");
       return `${prefix}${hasPrefix ? ",0," : ""}${accountUtils.mask(parsed.username)}${parsed.suffix}`;
+    });
+  return redactNetworkIdentifiers(sanitized);
+}
+
+function redactNetworkIdentifiers(value) {
+  return stringValue(value)
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted-ip]")
+    .replace(/\b[0-9a-f]{2}(?:[:-][0-9a-f]{2}){5}\b/gi, "[redacted-mac]")
+    .replace(/(?<![0-9a-f-])[0-9a-f]{12}(?![0-9a-f-])/gi, "[redacted-mac]")
+    .replace(/\[?[0-9a-f:]{2,}\]?/gi, (candidate) => {
+      const literal = candidate.replace(/^\[|\]$/g, "");
+      if (!literal.includes(":")) return candidate;
+      try {
+        const parsed = new URL(`http://[${literal}]/`);
+        return parsed.hostname.includes(":") ? "[redacted-ip]" : candidate;
+      } catch (error) {
+        return candidate;
+      }
     });
 }
 

@@ -253,7 +253,7 @@
 
   function collectNetworkValues() {
     return {
-      wlanUserIp: findNetworkValue("wlan_user_ip") || guessIp(),
+      wlanUserIp: findNetworkValue("wlan_user_ip"),
       wlanUserMac: findNetworkValue("wlan_user_mac"),
       wlanUserIpv6: findNetworkValue("wlan_user_ipv6"),
       wlanAcIp: findNetworkValue("wlan_ac_ip"),
@@ -358,7 +358,7 @@
         suffix: parsed.suffix,
         password: String(userPassword)
       }, {
-        wlanUserIp: extra.wlanUserIp || findNetworkValue("wlan_user_ip") || guessIp(),
+        wlanUserIp: extra.wlanUserIp || findNetworkValue("wlan_user_ip"),
         wlanUserMac: extra.wlanUserMac || findNetworkValue("wlan_user_mac"),
         wlanUserIpv6: extra.wlanUserIpv6 || findNetworkValue("wlan_user_ipv6"),
         wlanAcIp: extra.wlanAcIp || findNetworkValue("wlan_ac_ip"),
@@ -374,7 +374,7 @@
       action: "account:network:update",
       userAccount: parsed.username + parsed.suffix,
       network: {
-        wlanUserIp: extra.wlanUserIp || findNetworkValue("wlan_user_ip") || guessIp(),
+        wlanUserIp: extra.wlanUserIp || findNetworkValue("wlan_user_ip"),
         wlanUserMac: extra.wlanUserMac || findNetworkValue("wlan_user_mac"),
         wlanUserIpv6: extra.wlanUserIpv6 || findNetworkValue("wlan_user_ipv6"),
         wlanAcIp: extra.wlanAcIp || findNetworkValue("wlan_ac_ip"),
@@ -396,12 +396,6 @@
   function findNetworkValue(name) {
     const input = document.querySelector(`[name="${name}"], #${name}`);
     return input && "value" in input ? String(input.value || "").trim() : "";
-  }
-
-  function guessIp() {
-    const text = document.documentElement ? document.documentElement.innerText || "" : "";
-    const match = text.match(/\b(?:10|172|192)\.(?:\d{1,3}\.){2}\d{1,3}\b/);
-    return match ? match[0] : "";
   }
 
   function isOnlinePage() {
