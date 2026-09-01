@@ -78,18 +78,18 @@ test("经典在线模式显示时间与总流量并把完整脱敏字段放入�
     onlineDetailMode: "classic",
     checkedAt: Date.UTC(2026, 8, 2, 1, 2),
     session: {
-      account: "20***18",
+      account: "de***42",
       usedMinutes: 125,
       totalKilobytes: 1234567,
       uploadKilobytes: 500000,
       downloadKilobytes: 734567,
       balanceYuan: 12.34,
       loginAt: Date.UTC(2026, 8, 2, 0, 0),
-      externalIp: "192.***.***.202",
+      externalIp: "198.***.***.202",
       network: {
-        ipv4: "10.***.***.3",
+        ipv4: "192.***.***.3",
         ipv6: "2001:***::***:1",
-        mac: "AA:BB:CC:**:**:**",
+        mac: "02:00:00:**:**:**",
         vlan: "123",
         acIp: "10.***.***.2",
         acName: "campus-ac"
@@ -101,10 +101,10 @@ test("经典在线模式显示时间与总流量并把完整脱敏字段放入�
   assert.match(markup, /id="drcom-total-flow"[^>]*>1\.18 GB</);
   assert.match(markup, /<details id="drcom-session-details">/);
   assert.doesNotMatch(markup, /<details id="drcom-session-details" open>/);
-  for (const value of ["20***18", "488.28 MB", "717.35 MB", "¥12.34", "192.***.***.202", "AA:BB:CC:**:**:**", "campus-ac"]) {
+  for (const value of ["de***42", "488.28 MB", "717.35 MB", "¥12.34", "198.***.***.202", "02:00:00:**:**:**", "campus-ac"]) {
     assert.match(markup, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  assert.doesNotMatch(markup, /202513010318|10\.10\.10\.3|AA-BB-CC-DD-EE-FF/);
+  assert.doesNotMatch(markup, /demo-student-42|192\.0\.2\.3|02-00-00-00-00-03/);
 });
 
 test("完整、简化和隐藏模式按约定控制在线详情", () => {

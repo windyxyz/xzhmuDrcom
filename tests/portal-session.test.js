@@ -11,17 +11,17 @@ test('门户会话摘要会换算学校的时间、流量和余额字段', () =>
 
   const session = normalizeSession({
     result: 1,
-    uid: '202513010318@telecom',
+    uid: 'demo-student-42@telecom',
     time: '125',
     flow: '1234567',
     flow_in: '500000',
     flow_out: '734567',
     fee: '123456',
     login_time: '1769990400',
-    xip: '202.202.202.202',
-    wlan_user_ip: '10.10.10.3',
+    xip: '198.51.100.202',
+    wlan_user_ip: '192.0.2.3',
     wlan_user_ipv6: '2001:db8::1',
-    wlan_user_mac: 'AA-BB-CC-DD-EE-FF',
+    wlan_user_mac: '02-00-00-00-00-03',
     wlan_vlan_id: '123',
     wlan_ac_ip: '10.10.10.2',
     wlan_ac_name: 'campus-ac',
@@ -29,18 +29,18 @@ test('门户会话摘要会换算学校的时间、流量和余额字段', () =>
   });
 
   assert.deepEqual(session, {
-    account: '20***18',
+    account: 'de***42',
     usedMinutes: 125,
     totalKilobytes: 1234567,
     uploadKilobytes: 500000,
     downloadKilobytes: 734567,
     balanceYuan: 12.34,
     loginAt: 1769990400000,
-    externalIp: '202.***.***.202',
+    externalIp: '198.***.***.202',
     network: {
-      ipv4: '10.***.***.3',
+      ipv4: '192.***.***.3',
       ipv6: '2001:***::***:1',
-      mac: 'AA:BB:CC:**:**:**',
+      mac: '02:00:00:**:**:**',
       vlan: '123',
       acIp: '10.***.***.2',
       acName: 'campus-ac'
@@ -81,12 +81,12 @@ test('完整敏感标识不会进入门户会话摘要', () => {
   const { normalizeSession } = require(portalSessionPath);
   const serialized = JSON.stringify(normalizeSession({
     result: 1,
-    uid: '202513010318@telecom',
-    xip: '202.202.202.202',
-    wlan_user_ip: '10.10.10.3',
+    uid: 'demo-student-42@telecom',
+    xip: '198.51.100.202',
+    wlan_user_ip: '192.0.2.3',
     wlan_user_ipv6: '2001:db8:1234:5678:9abc:def0:1234:5678',
-    wlan_user_mac: 'AA-BB-CC-DD-EE-FF'
+    wlan_user_mac: '02-00-00-00-00-03'
   }));
 
-  assert.doesNotMatch(serialized, /202513010318|202\.202\.202\.202|10\.10\.10\.3|AA-BB-CC-DD-EE-FF|AABBCCDDEEFF/);
+  assert.doesNotMatch(serialized, /demo-student-42|198\.51\.100\.202|192\.0\.2\.3|02-00-00-00-00-03|020000000003/);
 });
