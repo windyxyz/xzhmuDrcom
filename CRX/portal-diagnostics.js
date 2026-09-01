@@ -17,6 +17,7 @@
   let mutationObserver = null;
   let performanceObserver = null;
   let sessionId = "";
+  let appendPaused = false;
   let shutdownPromise = null;
   let stopped = false;
   let ended = false;
@@ -86,10 +87,17 @@
   }
 
   function detectPageKind() {
+    let hasPasswordField = false;
     for (const element of controls()) {
-      if (String(element.tagName || "").toUpperCase() === "INPUT" && String(element.getAttribute("type") || "").toLowerCase() === "password") return "login";
+      const name = String(element.getAttribute("name") || "").toLowerCase();
+      const localize = String(element.getAttribute("data-localize") || "").toLowerCase();
+      if (name === "logout" || localize.includes("logout")) return "online";
+      if (String(element.tagName || "").toUpperCase() === "INPUT"
+          && String(element.getAttribute("type") || "").toLowerCase() === "password") {
+        hasPasswordField = true;
+      }
     }
-    return "unknown";
+    return hasPasswordField ? "login" : "unknown";
   }
 
   function buildDomSummary() {
@@ -103,18 +111,23 @@
   }
 
   function queueRecord(record) {
-    if (!sessionId) return Promise.resolve();
+    if (!sessionId || appendPaused) return Promise.resolve();
     pending.push(utils.sanitizeRecord(record));
     if (pending.length > MAX_PENDING_RECORDS) pending.shift();
     return flushPending();
   }
 
   function flushPending() {
+    if (appendPaused) return Promise.resolve();
     if (activeFlush) return activeFlush;
     activeFlush = (async () => {
       while (pending.length) {
         try {
-          await send({ action: "diagnostics:append", sessionId, record: pending[0] });
+          const response = await send({ action: "diagnostics:append", sessionId, record: pending[0] });
+          if (!response || response.ok !== true || response.stored !== true) {
+            appendPaused = true;
+            return;
+          }
           pending.shift();
         } catch (error) {
           return;

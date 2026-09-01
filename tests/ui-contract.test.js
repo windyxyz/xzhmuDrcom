@@ -143,6 +143,7 @@ test("portal diagnostics controls live inside advanced settings", () => {
     "portal-diagnostics-status",
     "portal-diagnostics-storage",
     "portal-diagnostics-sessions",
+    "portal-diagnostics-dropped",
     "export-portal-diagnostics",
     "clear-portal-diagnostics"
   ]) {

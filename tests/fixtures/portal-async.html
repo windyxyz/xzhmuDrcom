@@ -7,35 +7,138 @@
 </head>
 <body>
   <script>
+    const fixtureParams = new URLSearchParams(location.search);
+    const fixtureStorage = {
+      drcomPortalDiagnostics: {
+        version: 1,
+        enabled: fixtureParams.get("diagnostics") === "enabled",
+        updatedAt: 0,
+        droppedRecords: 0,
+        paused: false,
+        sessions: []
+      }
+    };
+    let appendFailuresRemaining = Number(fixtureParams.get("failAppends")) || 0;
+    let appendFailures = 0;
+    let appendAttempts = 0;
+    let schoolActionCount = 0;
+
+    function selectedFixtureStorage(keys) {
+      if (!keys) return structuredClone(fixtureStorage);
+      const names = Array.isArray(keys) ? keys : [keys];
+      return Object.fromEntries(names
+        .filter((key) => key in fixtureStorage)
+        .map((key) => [key, structuredClone(fixtureStorage[key])]));
+    }
+
+    async function dispatchFixtureMessage(message) {
+      const sender = { url: location.href, tab: { url: location.href } };
+      switch (message.action) {
+        case "diagnostics:status":
+          return getPortalDiagnosticsStatus();
+        case "diagnostics:start":
+          return startPortalDiagnosticsSession(message.page || {}, sender);
+        case "diagnostics:append":
+          return appendPortalDiagnosticRecord(message.sessionId || "", message.record || {});
+        case "diagnostics:end":
+          return endPortalDiagnosticsSession(message.sessionId || "");
+        case "diagnostics:set":
+          return setPortalDiagnosticsEnabled(message.enabled === true);
+        case "diagnostics:get":
+          return readPortalDiagnostics();
+        case "diagnostics:export":
+          return exportPortalDiagnostics();
+        case "diagnostics:clear":
+          return clearPortalDiagnostics();
+        case "portal:config:get":
+          return {
+            ok: true,
+            portal: {
+              enabled: fixtureParams.get("modernize") !== "off",
+              title: "徐医校园网",
+              appearance: {}
+            }
+          };
+        case "portal:appearance:get":
+          return { ok: true, appearance: { theme: "system", accent: "#007aff", background: "fresh" } };
+        default:
+          return { ok: true };
+      }
+    }
+
+    const fixtureRuntime = {
+      lastError: null,
+      sendMessage(message, callback) {
+        if (message.action === "diagnostics:append") {
+          appendAttempts += 1;
+          if (appendFailuresRemaining > 0) {
+            appendFailuresRemaining -= 1;
+            appendFailures += 1;
+            fixtureRuntime.lastError = { message: "injected diagnostics failure" };
+            callback(undefined);
+            fixtureRuntime.lastError = null;
+            return;
+          }
+        }
+        Promise.resolve(dispatchFixtureMessage(message)).then(callback, (error) => {
+          fixtureRuntime.lastError = { message: error.message || String(error) };
+          callback(undefined);
+          fixtureRuntime.lastError = null;
+        });
+      }
+    };
+
     globalThis.chrome = {
-      runtime: {
-        lastError: null,
-        sendMessage(message, callback) {
-          if (message.action === "portal:config:get") {
-            callback({ ok: true, portal: { enabled: true, title: "徐医校园网", appearance: {} } });
-            return;
+      runtime: fixtureRuntime,
+      storage: {
+        local: {
+          async get(keys) {
+            return selectedFixtureStorage(keys);
+          },
+          async set(patch) {
+            Object.assign(fixtureStorage, structuredClone(patch));
+          },
+          async getBytesInUse(keys) {
+            return new TextEncoder().encode(JSON.stringify(selectedFixtureStorage(keys))).byteLength;
           }
-          if (message.action === "portal:appearance:get") {
-            callback({ ok: true, appearance: { theme: "system", accent: "#007aff", background: "fresh" } });
-            return;
-          }
-          callback({ ok: true });
         }
       }
     };
+
+    globalThis.portalDiagnosticsFixture = {
+      async read() {
+        return readPortalDiagnostics();
+      },
+      get appendAttempts() {
+        return appendAttempts;
+      },
+      get appendFailures() {
+        return appendFailures;
+      },
+      get schoolActionCount() {
+        return schoolActionCount;
+      }
+    };
+
     setTimeout(() => {
       const online = new URLSearchParams(location.search).get("mode") === "online";
       const original = document.createElement("main");
       original.id = "school-portal-fixture";
       original.innerHTML = online
-        ? '<button name="logout" type="button">注销</button>'
-        : '<form><input name="user_account"><input type="password" name="user_password"></form>';
+        ? '<button name="logout" type="button">注销</button><button id="school-action" type="button">学校原始操作</button>'
+        : '<form><input name="user_account"><input type="password" name="user_password"><button id="school-action" type="button">学校原始操作</button></form>';
       document.body.append(original);
+      document.getElementById("school-action").addEventListener("click", () => {
+        schoolActionCount += 1;
+      });
     }, 100);
   </script>
   <script src="../../CRX/account-utils.js"></script>
   <script src="../../CRX/appearance.js"></script>
   <script src="../../CRX/portal-ui.js"></script>
+  <script src="../../CRX/portal-diagnostics-utils.js"></script>
+  <script src="../../CRX/background/diagnostics-service.js"></script>
+  <script src="../../CRX/portal-diagnostics.js"></script>
   <script src="../../CRX/portal-modernizer.js"></script>
 </body>
 </html>

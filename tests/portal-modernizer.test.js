@@ -56,6 +56,9 @@ class FakeElement {
   }
 
   querySelector(selector) {
+    if (this.id === "drcom-modern-root" && this.document.failPortalEventBinding) {
+      throw new Error("injected portal event binding failure");
+    }
     if (selector.startsWith("#")) return this.childrenById.get(selector.slice(1)) || null;
     return null;
   }
@@ -113,6 +116,8 @@ function createHarness(options = {}) {
   const observers = [];
   const deferredActions = new Set(options.deferredActions || []);
   const pendingCallbacks = new Map();
+  const microtaskErrors = [];
+  const scheduleMicrotask = queueMicrotask;
   let pageState = options.pageState || (options.online ? "online" : "login");
   let shouldTakeOverCalls = 0;
   let modernRootMountCount = 0;
@@ -125,6 +130,7 @@ function createHarness(options = {}) {
   };
   const document = {
     readyState: "complete",
+    failPortalEventBinding: options.failPortalEventBinding === true,
     closedShadowRoots: new Map(),
     documentElement,
     body: {
@@ -226,7 +232,15 @@ function createHarness(options = {}) {
     globalThis: null,
     location: { href: "http://10.10.10.2/" },
     MutationObserver: FakeMutationObserver,
-    queueMicrotask,
+    queueMicrotask(callback) {
+      scheduleMicrotask(() => {
+        try {
+          callback();
+        } catch (error) {
+          microtaskErrors.push(error);
+        }
+      });
+    },
     setTimeout
   });
   context.globalThis = context;
@@ -242,6 +256,7 @@ function createHarness(options = {}) {
     context,
     document,
     messages,
+    microtaskErrors,
     responses,
     setPageState(nextState) {
       pageState = nextState;
@@ -479,6 +494,19 @@ test("接管会在注入现代根节点前断开就绪观察器", async () => {
   assert.equal(harness.modernRootMountCount(), 1);
   assert.equal(harness.shouldTakeOverCalls(), 1);
   assert.equal(harness.connectedObserverCount(), 1);
+});
+
+test("异步接管在根节点插入后失败会完整回滚并保留学校页面", async () => {
+  const harness = createHarness({ pageState: "login", failPortalEventBinding: true });
+  await loadModernizer(harness);
+  await harness.flush();
+
+  assert.equal(harness.modernRootMountCount(), 1);
+  assert.equal(harness.document.getElementById("drcom-modern-root"), null);
+  assert.equal(harness.document.documentElement.classList.contains("drcom-modern-active"), false);
+  assert.equal(harness.connectedObserverCount(), 1);
+  assert.equal(harness.microtaskErrors.length, 0);
+  assert.ok(harness.document.querySelector('input[type="password"]'));
 });
 
 test("用户恢复原始页后页面状态变化不会重新挂载或重连就绪观察器", async () => {

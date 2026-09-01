@@ -52,7 +52,12 @@
     recognitionQueued = true;
     queueMicrotask(() => {
       recognitionQueued = false;
-      tryMountRecognizedPortal();
+      try {
+        tryMountRecognizedPortal();
+      } catch (error) {
+        stopPortalReadinessObserver();
+        removeModernPortal();
+      }
     });
   }
 
@@ -72,28 +77,33 @@
 
   function mountPortal(config, online) {
     if (userRestoredOriginal) return;
-    removeModernPortal();
-    const root = document.createElement("div");
-    root.id = "drcom-modern-root";
-    root.innerHTML = ui.renderPortalMarkup({
-      title: config.title || "徐医校园网",
-      online,
-      host: portalHost(config.portalUrl)
-    });
-    if (globalThis.DrcomAppearance) {
-      const normalized = globalThis.DrcomAppearance.normalizeAppearance(config.appearance || {});
-      globalThis.DrcomAppearance.applyToRoot(root, {
-        ...normalized,
-        background: "fresh",
-        backgroundImage: ""
+    try {
+      removeModernPortal();
+      const root = document.createElement("div");
+      root.id = "drcom-modern-root";
+      root.innerHTML = ui.renderPortalMarkup({
+        title: config.title || "徐医校园网",
+        online,
+        host: portalHost(config.portalUrl)
       });
-      root.dataset.appearanceBackground = normalized.background;
-      installPrivateAppearance(normalized);
+      if (globalThis.DrcomAppearance) {
+        const normalized = globalThis.DrcomAppearance.normalizeAppearance(config.appearance || {});
+        globalThis.DrcomAppearance.applyToRoot(root, {
+          ...normalized,
+          background: "fresh",
+          backgroundImage: ""
+        });
+        root.dataset.appearanceBackground = normalized.background;
+        installPrivateAppearance(normalized);
+      }
+      document.body.append(root);
+      document.documentElement.classList.add("drcom-modern-active");
+      bindPortalEvents(root, online);
+      if (!online) prefillFromOriginalPage(root);
+    } catch (error) {
+      removeModernPortal();
+      throw error;
     }
-    document.body.append(root);
-    document.documentElement.classList.add("drcom-modern-active");
-    bindPortalEvents(root, online);
-    if (!online) prefillFromOriginalPage(root);
   }
 
   function installPrivateAppearance(input) {

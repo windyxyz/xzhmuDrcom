@@ -41,7 +41,7 @@ function loadBackground(options = {}) {
     atob,
     clearTimeout,
     console,
-    crypto: webcrypto,
+    crypto: options.crypto || webcrypto,
     fetch: options.fetch || fetch,
     setTimeout,
     chrome: {
@@ -1209,6 +1209,27 @@ test("门户诊断默认关闭且网页只能读取安全状态", async () => {
   assert.doesNotMatch(JSON.stringify(result), /sessions|records/);
 });
 
+test("后台生成的 UUID 即使包含纯数字段也保持会话可寻址", async () => {
+  const background = loadBackground({
+    crypto: { randomUUID: () => "12345678-abcd-4abc-8abc-abcdefabcdef" }
+  });
+  await background.setPortalDiagnosticsEnabled(true);
+  const start = await background.startPortalDiagnosticsSession({ pageKind: "login" }, portalSender());
+  const appended = await background.appendPortalDiagnosticRecord(start.sessionId, {
+    type: "click",
+    at: 1,
+    target: { tag: "button", id: "login" }
+  });
+  const ended = await background.endPortalDiagnosticsSession(start.sessionId);
+  const read = await background.readPortalDiagnostics();
+
+  assert.equal(start.sessionId, "12345678-abcd-4abc-8abc-abcdefabcdef");
+  assert.equal(appended.stored, true);
+  assert.equal(ended.ended, true);
+  assert.equal(read.sessions[0].id, "12345678-abcd-4abc-8abc-abcdefabcdef");
+  assert.equal(read.sessions[0].records.length, 1);
+});
+
 test("门户诊断会在写入和读取时再次清除敏感数据", async () => {
   const background = loadBackground();
   await background.handleMessage({ action: "diagnostics:set", enabled: true }, { id: "test-extension-id" });
@@ -1240,6 +1261,25 @@ test("门户诊断保留最新十个会话并串行化并发写入", async () =>
   assert.equal(new Set(result.sessions.map((session) => session.id)).size, 10);
   assert.equal(result.sessions.some((session) => session.id === starts[0].sessionId), false);
   assert.equal(result.sessions.some((session) => session.id === starts[1].sessionId), false);
+});
+
+test("门户诊断按记录精确累计被会话上限淘汰的数量", async () => {
+  const background = loadBackground();
+  await background.setPortalDiagnosticsEnabled(true);
+  for (let index = 0; index < 12; index += 1) {
+    const start = await background.startPortalDiagnosticsSession({ pageKind: "login" }, portalSender());
+    const appended = await background.appendPortalDiagnosticRecord(start.sessionId, {
+      type: "click",
+      at: index + 1,
+      target: { tag: "button", id: `control-${index + 1}` }
+    });
+    assert.equal(appended.stored, true);
+  }
+
+  const result = await background.readPortalDiagnostics();
+  assert.equal(result.sessionCount, 10);
+  assert.equal(result.droppedRecords, 2);
+  assert.equal(result.paused, false);
 });
 
 test("门户诊断按时间淘汰乱序旧会话且限制损坏 URL 大小", async () => {
@@ -1279,6 +1319,7 @@ test("门户诊断在一 MiB 上限内移除最早记录", async () => {
   assert.ok(result.bytes <= 1048576);
   assert.ok(result.sessions[0].records.length < 20);
   assert.equal(result.sessions[0].truncated, true);
+  assert.ok(result.droppedRecords > 0);
 });
 
 test("门户诊断将 DOM 摘要截断为 64 KiB UTF-8", async () => {
@@ -1295,9 +1336,15 @@ test("门户诊断在浏览器存储保留空间时暂停写入但仍可清除",
   await background.setPortalDiagnosticsEnabled(true);
   const blocked = await background.startPortalDiagnosticsSession({ pageKind: "login" }, portalSender());
   const cleared = await background.clearPortalDiagnostics();
-  assert.deepEqual(JSON.parse(JSON.stringify(blocked)), { ok: false, error: "本地存储接近上限，诊断记录已暂停" });
+  assert.deepEqual(JSON.parse(JSON.stringify(blocked)), {
+    ok: false,
+    paused: true,
+    error: "本地存储接近上限，诊断记录已暂停"
+  });
   assert.equal(cleared.ok, true);
   assert.equal(cleared.sessionCount, 0);
+  assert.equal(cleared.droppedRecords, 0);
+  assert.equal(cleared.paused, false);
 });
 
 test("门户诊断接近总配额时拒绝会越过阈值的新负载", async () => {
@@ -1320,8 +1367,14 @@ test("门户诊断接近总配额时拒绝会越过阈值的新负载", async ()
   });
   assert.deepEqual(JSON.parse(JSON.stringify(result)), {
     ok: false,
+    stored: false,
+    paused: true,
     error: "本地存储接近上限，诊断记录已暂停"
   });
+  const read = await background.readPortalDiagnostics();
+  assert.equal(read.droppedRecords, 1);
+  assert.equal(read.paused, true);
+  assert.equal(read.sessions[0].records.length, 0);
 });
 
 test("门户诊断并发写入按队列中的最新占用量拒绝第二个会话", async () => {
@@ -1390,8 +1443,39 @@ test("门户诊断第二次净化和导出后保留安全资源字段", async ()
   });
   const exported = await background.exportPortalDiagnostics();
   const record = exported.export.diagnostics.sessions[0].records[0];
+  assert.equal(
+    exported.export.redactionNotice,
+    "输入值、凭据、Cookie、存储内容、完整账号、IP 和 MAC 已排除或脱敏。"
+  );
+  assert.equal(
+    exported.export.completenessNotice,
+    "诊断为尽力记录；关闭、暂停、淘汰、存储受限、页面卸载或后台不可用时可能不完整。"
+  );
+  assert.equal(exported.export.diagnostics.droppedRecords, 0);
+  assert.equal(exported.export.diagnostics.paused, false);
   assert.equal(record.initiatorType, "script");
   assert.equal(record.status, 0);
   assert.equal(record.duration, 2.5);
   assert.equal("method" in record, false);
+});
+
+test("门户诊断后台与导出再次隐藏敏感 URL 组件", async () => {
+  const background = loadBackground();
+  await background.setPortalDiagnosticsEnabled(true);
+  const start = await background.startPortalDiagnosticsSession({ pageKind: "login" }, portalSender());
+  await background.appendPortalDiagnosticRecord(start.sessionId, {
+    type: "resource",
+    url: "https://202600000001.example.test/assets/abcdef0123456789abcdef0123456789.js?202600000001=value",
+    initiatorType: "script",
+    status: 200,
+    duration: 1
+  });
+
+  const exported = await background.exportPortalDiagnostics();
+  const record = exported.export.diagnostics.sessions[0].records[0];
+  assert.equal(
+    record.url,
+    "https://redacted-id.example.test/assets/[redacted-secret].js?redacted-id=%5Bredacted%5D"
+  );
+  assert.doesNotMatch(JSON.stringify(exported), /202600000001|abcdef0123456789abcdef0123456789/);
 });

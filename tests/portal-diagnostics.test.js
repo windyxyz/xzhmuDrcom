@@ -27,7 +27,10 @@ function createHarness(options = {}) {
   const mutationObservers = [];
   const performanceObservers = [];
   const sent = [];
+  const delivered = [];
+  const callbacks = [];
   const timers = new Map();
+  const deferredActions = new Set(options.deferredActions || []);
   const controls = options.controls || [
     new FakeElement("form", { id: "login-form" }),
     new FakeElement("input", { id: "student-account", name: "user_account", type: "text" }),
@@ -50,7 +53,7 @@ function createHarness(options = {}) {
     "diagnostics:end": { ok: true, ended: true },
     ...(options.responses || {})
   };
-  const messageFailures = [...(options.messageFailures || [])];
+  const messageFailures = [...(options.messageFailures || options.appendFailures || [])];
   const document = {
     title: options.title || "校园网登录",
     documentElement: { nodeType: 1, tagName: "HTML" },
@@ -71,10 +74,15 @@ function createHarness(options = {}) {
       runtime: {
         lastError: null,
         sendMessage(message, callback) {
-          sent.push(JSON.parse(JSON.stringify(message)));
+          const copy = JSON.parse(JSON.stringify(message));
+          sent.push(copy);
+          if (deferredActions.has(message.action)) {
+            callbacks.push({ message: copy, callback });
+            return;
+          }
           const failure = message.action === "diagnostics:append" ? messageFailures.shift() : null;
           if (failure) {
-            context.chrome.runtime.lastError = { message: failure };
+            context.chrome.runtime.lastError = { message: String(failure) };
             callback(undefined);
             context.chrome.runtime.lastError = null;
             return;
@@ -82,6 +90,7 @@ function createHarness(options = {}) {
           const response = typeof responses[message.action] === "function"
             ? responses[message.action](message)
             : responses[message.action];
+          delivered.push(copy);
           callback(response || { ok: true });
         }
       }
@@ -111,7 +120,7 @@ function createHarness(options = {}) {
   context.DrcomPortalDiagnosticsUtils = utils;
 
   return {
-    context, controls, document, mutationObservers, passwordInput, performanceObservers, sent,
+    callbacks, context, controls, delivered, document, mutationObservers, passwordInput, performanceObservers, sent,
     async advance(milliseconds) {
       now += milliseconds;
       const due = [...timers.entries()].filter(([, timer]) => timer.due <= now);
@@ -121,7 +130,7 @@ function createHarness(options = {}) {
       }
       await flush();
     },
-    async emit(type, target) {
+    async emit(type, target = document.documentElement) {
       for (const { listener } of listeners.get(type) || []) listener({ target });
       await flush();
     },
@@ -131,6 +140,26 @@ function createHarness(options = {}) {
     },
     async emitResources(entries) {
       for (const observer of performanceObservers) observer.callback({ getEntries: () => entries });
+      await flush();
+    },
+    listenerCount(type) {
+      return (listeners.get(type) || []).length;
+    },
+    async resolveNext(action, response) {
+      const index = callbacks.findIndex((item) => item.message.action === action);
+      assert.notEqual(index, -1, `missing deferred ${action}`);
+      const { message, callback } = callbacks.splice(index, 1)[0];
+      delivered.push(message);
+      callback(response || responses[action] || { ok: true });
+      await flush();
+    },
+    async rejectNext(action) {
+      const index = callbacks.findIndex((item) => item.message.action === action);
+      assert.notEqual(index, -1, `missing deferred ${action}`);
+      const { callback } = callbacks.splice(index, 1)[0];
+      context.chrome.runtime.lastError = { message: "offline" };
+      callback(undefined);
+      context.chrome.runtime.lastError = null;
       await flush();
     }
   };
@@ -172,6 +201,34 @@ test("诊断只记录密码框结构且从不读取值", async () => {
   const focus = records(harness, "focus").at(-1);
   assert.equal(focus.target.type, "password");
   assert.equal("value" in focus.target, false);
+});
+
+test("初始注销结构在不读取文案或控件值时识别为在线页", async () => {
+  const logout = new FakeElement("button", { name: "logout", type: "button" });
+  const harness = createHarness({ enabled: true, controls: [logout] });
+  Object.defineProperty(harness.document, "body", {
+    get() { throw new Error("诊断页型识别不得读取页面文案"); }
+  });
+  await loadDiagnostics(harness);
+
+  const start = harness.sent.find((message) => message.action === "diagnostics:start");
+  assert.equal(start.page.pageKind, "online");
+  assert.equal(records(harness, "dom")[0].pageKind, "online");
+});
+
+test("延迟出现的注销本地化标记会把变更记录识别为在线页", async () => {
+  const harness = createHarness({ enabled: true, controls: [] });
+  Object.defineProperty(harness.document, "body", {
+    get() { throw new Error("诊断页型识别不得读取页面文案"); }
+  });
+  await loadDiagnostics(harness);
+  harness.controls.push(new FakeElement("button", { "data-localize": "portal.logout.action" }));
+  await harness.emitMutations();
+  await harness.advance(250);
+
+  const mutation = records(harness, "mutation")[0];
+  assert.equal(mutation.pageKind, "online");
+  assert.match(mutation.summary, /"pageKind":"online"/);
 });
 
 test("启用的会话记录结构事件并以安全页面数据启动", async () => {
@@ -225,6 +282,29 @@ test("资源记录保留经过净化的 URL 与数值元数据", async () => {
   assert.equal(resource[1].duration, 3);
 });
 
+test("记录器发送前隐藏 URL 键、主机标签和两类不透明令牌", async () => {
+  const harness = createHarness({
+    enabled: true,
+    url: "http://10.10.10.2/?202600000001=value",
+    resourceEntries: [{
+      name: "https://202600000001.example.test/assets/abcdef0123456789abcdef0123456789.js?202600000001=value",
+      initiatorType: "script",
+      responseStatus: 200,
+      duration: 1
+    }]
+  });
+  await loadDiagnostics(harness);
+
+  const start = harness.sent.find((message) => message.action === "diagnostics:start");
+  const resource = records(harness, "resource")[0];
+  assert.equal(start.page.url, "http://10.10.10.2/?redacted-id=%5Bredacted%5D");
+  assert.equal(
+    resource.url,
+    "https://redacted-id.example.test/assets/[redacted-secret].js?redacted-id=%5Bredacted%5D"
+  );
+  assert.doesNotMatch(JSON.stringify(harness.sent), /202600000001|abcdef0123456789abcdef0123456789/);
+});
+
 test("资源加载错误只记录元素描述", async () => {
   const harness = createHarness({ enabled: true });
   await loadDiagnostics(harness);
@@ -248,6 +328,74 @@ test("pagehide 会记录结束事件且只结束一次", async () => {
   assert.equal(harness.performanceObservers[0].disconnected, true);
 });
 
+test("pagehide 在 status 等待期间阻止后续 start、append 和 end", async () => {
+  const harness = createHarness({ deferredActions: ["diagnostics:status"] });
+  await loadDiagnostics(harness);
+  assert.equal(harness.listenerCount("pagehide"), 1);
+  await harness.emit("pagehide");
+  await harness.resolveNext("diagnostics:status", { ok: true, enabled: true });
+
+  assert.deepEqual(harness.sent.map((message) => message.action), ["diagnostics:status"]);
+  assert.equal(harness.mutationObservers.length, 0);
+  assert.equal(harness.performanceObservers.length, 0);
+});
+
+test("pagehide 在 start 等待期间只结束已创建会话且不安装记录器", async () => {
+  const harness = createHarness({ enabled: true, deferredActions: ["diagnostics:start"] });
+  await loadDiagnostics(harness);
+  assert.equal(harness.listenerCount("pagehide"), 1);
+  await harness.emit("pagehide");
+  await harness.resolveNext("diagnostics:start", { ok: true, sessionId: "late-session" });
+  await harness.emit("pagehide");
+
+  assert.deepEqual(harness.sent.map((message) => message.action), ["diagnostics:status", "diagnostics:start", "diagnostics:end"]);
+  assert.equal(harness.sent.at(-1).sessionId, "late-session");
+  assert.equal(harness.mutationObservers.length, 0);
+  assert.equal(harness.performanceObservers.length, 0);
+});
+
+test("pagehide 等待活动 FIFO 刷新完成后才结束会话", async () => {
+  const harness = createHarness({ enabled: true, deferredActions: ["diagnostics:append"] });
+  await loadDiagnostics(harness);
+  assert.equal(harness.sent.at(-1).action, "diagnostics:append");
+  await harness.emit("pagehide");
+  assert.equal(harness.sent.some((message) => message.action === "diagnostics:end"), false);
+
+  await harness.resolveNext("diagnostics:append");
+  await harness.resolveNext("diagnostics:append");
+  assert.deepEqual(harness.sent.map((message) => message.action), ["diagnostics:status", "diagnostics:start", "diagnostics:append", "diagnostics:append", "diagnostics:end"]);
+});
+
+test("pagehide 在活动 append 首次失败后有界重试 FIFO 队列再结束", async () => {
+  const harness = createHarness({ enabled: true, deferredActions: ["diagnostics:append"] });
+  await loadDiagnostics(harness);
+  await harness.emit("pagehide");
+  await harness.rejectNext("diagnostics:append");
+  assert.equal(harness.sent.some((message) => message.action === "diagnostics:end"), false);
+
+  await harness.resolveNext("diagnostics:append");
+  await harness.resolveNext("diagnostics:append");
+  assert.deepEqual(harness.sent.map((message) => message.action), ["diagnostics:status", "diagnostics:start", "diagnostics:append", "diagnostics:append", "diagnostics:append", "diagnostics:end"]);
+  assert.deepEqual(harness.delivered.filter((message) => message.action === "diagnostics:append").map((message) => message.record.type), ["dom", "pagehide"]);
+});
+
+test("失败队列精确保留最近 20 条不同控件记录并按 FIFO 恢复", async () => {
+  const controls = Array.from({ length: 23 }, (_, index) =>
+    new FakeElement("button", { id: `control-${String(index + 1).padStart(2, "0")}` })
+  );
+  const harness = createHarness({ enabled: true, controls, appendFailures: Array(22).fill("offline") });
+  await loadDiagnostics(harness);
+  for (const control of controls.slice(0, 22)) await harness.emit("click", control);
+  await harness.emit("focus", controls[22]);
+
+  const delivered = harness.delivered.filter((message) => message.action === "diagnostics:append");
+  assert.equal(delivered.length, 21);
+  assert.deepEqual(delivered.slice(1).map((message) => message.record.target.id), [
+    "control-04", "control-05", "control-06", "control-07", "control-08", "control-09", "control-10", "control-11", "control-12", "control-13",
+    "control-14", "control-15", "control-16", "control-17", "control-18", "control-19", "control-20", "control-21", "control-22", "control-23"
+  ]);
+});
+
 test("离线消息失败时保留至多 20 条记录并按队列顺序恢复", async () => {
   const harness = createHarness({ enabled: true, messageFailures: Array(23).fill("offline") });
   await loadDiagnostics(harness);
@@ -258,6 +406,29 @@ test("离线消息失败时保留至多 20 条记录并按队列顺序恢复", a
   const appended = harness.sent.filter((message) => message.action === "diagnostics:append");
   assert.ok(appended.length >= 43);
   assert.deepEqual(records(harness).slice(-20).map((record) => record.type), Array(19).fill("click").concat(["focus"]));
+});
+
+test("后台明确拒绝或未存储 append 时记录器进入暂停且不继续发送", async () => {
+  for (const response of [
+    { ok: false, stored: false, paused: true, error: "quota" },
+    { ok: true, stored: false }
+  ]) {
+    let appendCalls = 0;
+    const harness = createHarness({
+      enabled: true,
+      responses: {
+        "diagnostics:append": () => {
+          appendCalls += 1;
+          return response;
+        }
+      }
+    });
+    await loadDiagnostics(harness);
+    await harness.emit("click", harness.controls.at(-1));
+    await harness.emit("focus", harness.controls.at(-1));
+
+    assert.equal(appendCalls, 1);
+  }
 });
 
 test("对抗性页面文字、属性、标题和 URL 永远不会进入发送消息", async () => {

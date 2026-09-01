@@ -21,6 +21,7 @@ function createOptionsHarness(options = {}) {
     "portal-diagnostics-status": { textContent: "" },
     "portal-diagnostics-storage": { textContent: "" },
     "portal-diagnostics-sessions": { textContent: "" },
+    "portal-diagnostics-dropped": { textContent: "" },
     "export-portal-diagnostics": { disabled: false },
     "clear-portal-diagnostics": { disabled: false },
     toast: { hidden: true, textContent: "" }
@@ -84,6 +85,8 @@ test("门户诊断加载会显示精确开关、占用和会话状态", async ()
     enabled: true,
     bytes: 1536,
     sessionCount: 2,
+    droppedRecords: 3,
+    paused: false,
     limits: { bytes: 1024 * 1024, sessions: 10 },
     sessions: []
   } });
@@ -92,6 +95,24 @@ test("门户诊断加载会显示精确开关、占用和会话状态", async ()
   assert.equal(harness.elements.get("portal-diagnostics-status").textContent, "诊断模式已开启");
   assert.equal(harness.elements.get("portal-diagnostics-storage").textContent, "1.5 KB / 1 MiB");
   assert.equal(harness.elements.get("portal-diagnostics-sessions").textContent, "2 / 10");
+  assert.equal(harness.elements.get("portal-diagnostics-dropped").textContent, "3 条");
+});
+
+test("门户诊断暂停和淘汰状态会明确显示", async () => {
+  const harness = createOptionsHarness({ diagnostics: {
+    ok: true,
+    enabled: true,
+    bytes: 4096,
+    sessionCount: 1,
+    droppedRecords: 7,
+    paused: true,
+    limits: { bytes: 1024 * 1024, sessions: 10 },
+    sessions: []
+  } });
+  await harness.context.loadPortalDiagnostics();
+
+  assert.equal(harness.elements.get("portal-diagnostics-status").textContent, "诊断记录已暂停");
+  assert.equal(harness.elements.get("portal-diagnostics-dropped").textContent, "7 条");
 });
 
 test("门户诊断开关请求失败时不乐观改变显示状态并可恢复", async () => {

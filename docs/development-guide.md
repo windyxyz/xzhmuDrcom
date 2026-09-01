@@ -273,15 +273,15 @@ options.js
 | `diagnostics:end` | 已验证的默认门户 | 标记会话结束 |
 | `diagnostics:set`、`diagnostics:get`、`diagnostics:export`、`diagnostics:clear` | 扩展页 | 设置、读取、导出或清空本地记录 |
 
-本地键为 `chrome.storage.local.drcomPortalDiagnostics`，schema 为 version、enabled、updatedAt 和 sessions；默认值为 version 1、`enabled: false`、`updatedAt: 0`、空 sessions。每个会话含 id、startedAt、endedAt、origin、pageKind、title、url、records 与 truncated；每条记录只保留允许的类型、时间、页面种类，以及经脱敏后的 URL、目标描述、方法、资源发起类型、状态、时长、摘要或消息。
+本地键为 `chrome.storage.local.drcomPortalDiagnostics`，schema 为 version、enabled、updatedAt、droppedRecords、paused 和 sessions；默认值为 version 1、`enabled: false`、`updatedAt: 0`、`droppedRecords: 0`、`paused: false`、空 sessions。每个会话含 id、startedAt、endedAt、origin、pageKind、title、url、records 与 truncated；每条记录只保留允许的类型、时间、页面种类，以及经脱敏后的 URL、目标描述、方法、资源发起类型、状态、时长、摘要或消息。
 
-共享清理器先在隔离世界脱敏，后台写入前再脱敏一次。它不记录输入值、凭据、Cookie、存储内容、完整账号、IP 或 MAC；URL 只保留安全协议 action，其余查询值会替换；文本中的敏感标识也会清理。诊断不是加密容器，导出前和分享前仍必须人工复核。
+共享清理器先在隔离世界脱敏，后台写入前再脱敏一次。它不记录输入值、凭据、Cookie、存储内容、完整账号、IP 或 MAC；URL 查询键和值及主机标签都会按同一敏感标识规则清理并限制长度；文本中的敏感标识也会清理。诊断不是加密容器，导出固定包含脱敏边界与“记录可能不完整”的提示，导出前和分享前仍必须人工复核。
 
-所有会话按 startedAt 排序，先删除最早会话以维持最多 10 个会话；超过总计 1 MiB 时继续从最早会话裁剪；只剩一个会话仍超限时删除其最早记录并标记 `truncated`。单条 DOM 摘要最大 64 KiB，URL 最大 4096 字节。写入还保留 512 KiB 本地存储余量：总存储达到或预计达到软限制时，本次开始或追加会返回“记录已暂停”，不会越过该余量。
+所有会话按 startedAt 排序，先删除最早会话以维持最多 10 个会话；超过总计 1 MiB 时继续从最早会话裁剪；只剩一个会话仍超限时删除其最早记录并标记 `truncated`。每次淘汰都会累计到 `droppedRecords`。单条 DOM 摘要最大 64 KiB，URL 最大 4096 字节。写入还保留 512 KiB 本地存储余量：总存储达到或预计达到软限制时，本次开始或追加会返回“记录已暂停”并持久化 `paused: true`，不会越过该余量；用户重新开启诊断后才清除暂停状态。
 
-会话先查询状态，开启时才 start；随后记录初始 DOM 摘要、click/submit/change/focus、资源及资源错误、去抖后的 mutation，并在 pagehide 追加结束事件后 end。待发送队列最多保留 20 条；后台暂不可用时，队首保留以便下一次 flush 重试，溢出时丢弃最早待发送项。pagehide 会清除定时器并断开 MutationObserver 和 PerformanceObserver，且 end 至多发送一次；整个记录器失败时静默退出，不影响门户。
+会话先查询状态，开启时才 start；随后记录初始 DOM 摘要、click/submit/change/focus、资源及资源错误、去抖后的 mutation，并在 pagehide 追加结束事件后 end。待发送队列最多保留 20 条；后台传输暂不可用时，队首保留以便下一次 flush 重试；后台明确拒绝或返回 `stored: false` 时，记录器停止继续采集，避免无声丢失；溢出时丢弃最早待发送项。pagehide 会清除定时器并断开 MutationObserver 和 PerformanceObserver，且 end 至多发送一次；整个记录器失败时静默退出，不影响门户。
 
-未来做门户兼容性时，可由用户在扩展设置页导出诊断 JSON，并自行保存相应页面的 MHTML，再在不含私人捕获的工作目录中导入为本地测试 fixture。先人工确认导出内容没有原始密码、账号、IP 或 MAC；私人 JSON/MHTML 不进入 Git、不放入 `TEMP/`，也不在问题、文档或测试中引用其原始值。基于脱敏 fixture 的差异分析应另立计划，不能改变此诊断模式的本地、默认关闭边界。
+未来做门户兼容性时，可由用户在扩展设置页导出诊断 JSON，并自行保存相应页面的 MHTML，再在不含私人捕获的工作目录中导入为本地测试 fixture。先人工确认导出内容没有原始密码、账号、IP 或 MAC。私人 JSON/MHTML 只允许临时保存在已由本机忽略规则（例如 `.git/info/exclude`）覆盖、且经 `git check-ignore -q TEMP` 验证的仓库内 `TEMP/`，或仓库外的私有位置；人工复核前绝不能暂存、提交、分享、引用或摘录，也不能把原始值放入问题、文档或测试。基于人工复核并进一步脱敏的 fixture 做差异分析应另立计划，不能改变此诊断模式的本地、默认关闭边界。
 
 ## 9. 数据模型与迁移
 

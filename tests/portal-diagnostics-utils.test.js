@@ -117,6 +117,21 @@ test("诊断 URL 只保留白名单协议 action 值并为其他参数保留键�
   assert.equal(utils.sanitizeUrl("http://10.10.10.2/?a=student&action=not-safe"), "http://10.10.10.2/?a=%5Bredacted%5D&action=%5Bredacted%5D");
 });
 
+test("诊断 URL 会隐藏敏感键和主机标签并限制结构名称长度", () => {
+  assert.equal(
+    utils.sanitizeUrl("https://202600000001.example.test/path?202600000001=value&safe_name=value"),
+    "https://redacted-id.example.test/path?redacted-id=%5Bredacted%5D&safe_name=%5Bredacted%5D"
+  );
+  assert.equal(
+    utils.sanitizeUrl("https://abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz.example.test/?abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz=value"),
+    "https://abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijk.example.test/?abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl=%5Bredacted%5D"
+  );
+  assert.equal(
+    utils.sanitizeText("abcdef0123456789abcdef0123456789"),
+    "[redacted-secret]"
+  );
+});
+
 test("诊断文本完整删除带空格的凭据、授权头和多段 Cookie", () => {
   const result = utils.sanitizeText("Authorization: Bearer secret-value Cookie: sid=one; token=two password = \"fake secret value\"");
   assert.doesNotMatch(result, /Bearer|secret-value|sid=one|token=two|fake secret value/);

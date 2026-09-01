@@ -9,6 +9,8 @@
   const safeProtocolActions = new Set(["login", "logout", "unbind_mac"]);
   const safeResourceInitiatorTypes = new Set(["beacon", "css", "fetch", "iframe", "img", "link", "other", "script", "video", "xmlhttprequest"]);
   const fixedPortalHost = "10.10.10.2";
+  const maxHostnameLabelBytes = 63;
+  const maxQueryKeyBytes = 64;
 
   function utf8Bytes(value) {
     return encoder.encode(String(value ?? "")).byteLength;
@@ -37,7 +39,11 @@
       const isFixedHost = hostname === fixedPortalHost;
       const isIpv4 = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(hostname);
       const isIpv6 = hostname.includes(":");
-      const host = isFixedHost || (!isIpv4 && !isIpv6) ? url.host : "[redacted-ip]";
+      const host = isFixedHost
+        ? url.host
+        : (!isIpv4 && !isIpv6)
+          ? hostname.split(".").map((label) => sanitizeUrlName(label, maxHostnameLabelBytes, "redacted-label").toLowerCase()).join(".") + (url.port ? `:${url.port}` : "")
+          : "[redacted-ip]";
       const path = url.pathname.split("/").map((segment) => {
         try { segment = decodeURIComponent(segment); } catch (error) { /* keep encoded segment */ }
         return sanitizeText(segment, 256).replace(/[/?#]/g, "");
@@ -47,7 +53,8 @@
         const safeValue = (key === "a" || key === "action") && safeProtocolActions.has(queryValue)
           ? queryValue
           : "[redacted]";
-        query.push(`${encodeURIComponent(key)}=${encodeURIComponent(safeValue)}`);
+        const safeKey = sanitizeUrlName(key, maxQueryKeyBytes, "redacted-key");
+        query.push(`${encodeURIComponent(safeKey)}=${encodeURIComponent(safeValue)}`);
       }
       return `${url.protocol}//${host}${path}${query.length ? `?${query.join("&")}` : ""}`;
     } catch (error) {
@@ -79,9 +86,9 @@
       .replace(/(?:电信|联通|移动)/g, "[redacted-suffix]")
       .replace(/(?<![A-Za-z0-9+/_=-])[A-Za-z0-9+/_=-]{20,}(?![A-Za-z0-9+/_=-])/g, (candidate) => {
         const classes = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter((pattern) => pattern.test(candidate)).length;
-        if (classes < 3) return candidate;
+        if (classes < 2) return candidate;
         const uniqueRatio = new Set(candidate).size / candidate.length;
-        return uniqueRatio >= 0.55 ? "[redacted-secret]" : candidate;
+        return uniqueRatio >= 0.45 ? "[redacted-secret]" : candidate;
       })
       .replace(/\s+/g, " ")
       .trim();
@@ -90,6 +97,12 @@
 
   function cleanDescriptor(value, maxBytes = 160) {
     return sanitizeText(value, maxBytes).replace(/[^\p{L}\p{N}_:.@#\- ]/gu, "");
+  }
+
+  function sanitizeUrlName(value, maxBytes, fallback) {
+    const clean = sanitizeText(value, maxBytes)
+      .replace(/[^\p{L}\p{N}_.:\-]/gu, "");
+    return clean || fallback;
   }
 
   function sanitizeTarget(input = {}) {

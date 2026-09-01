@@ -1,7 +1,8 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { existsSync, mkdtempSync } = require("node:fs");
+const { existsSync, mkdtempSync, readFileSync } = require("node:fs");
+const { createServer } = require("node:http");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const { spawn } = require("node:child_process");
@@ -102,6 +103,55 @@ function evaluateAtViewport(webSocketUrl, width, height, expression) {
       clearTimeout(timeout);
       reject(new Error("无法连接浏览器调试目标"));
     });
+  });
+}
+
+function startPortalFixtureServer() {
+  const routes = new Map([
+    ["/portal-async.html", [join(__dirname, "fixtures", "portal-async.html"), "text/html; charset=utf-8"]],
+    ["/CRX/design-tokens.css", [join(__dirname, "..", "CRX", "design-tokens.css"), "text/css; charset=utf-8"]],
+    ["/CRX/portal.css", [join(__dirname, "..", "CRX", "portal.css"), "text/css; charset=utf-8"]],
+    ["/CRX/account-utils.js", [join(__dirname, "..", "CRX", "account-utils.js"), "text/javascript; charset=utf-8"]],
+    ["/CRX/appearance.js", [join(__dirname, "..", "CRX", "appearance.js"), "text/javascript; charset=utf-8"]],
+    ["/CRX/portal-ui.js", [join(__dirname, "..", "CRX", "portal-ui.js"), "text/javascript; charset=utf-8"]],
+    ["/CRX/portal-diagnostics-utils.js", [join(__dirname, "..", "CRX", "portal-diagnostics-utils.js"), "text/javascript; charset=utf-8"]],
+    ["/CRX/background/diagnostics-service.js", [join(__dirname, "..", "CRX", "background", "diagnostics-service.js"), "text/javascript; charset=utf-8"]],
+    ["/CRX/portal-diagnostics.js", [join(__dirname, "..", "CRX", "portal-diagnostics.js"), "text/javascript; charset=utf-8"]],
+    ["/CRX/portal-modernizer.js", [join(__dirname, "..", "CRX", "portal-modernizer.js"), "text/javascript; charset=utf-8"]]
+  ]);
+  const server = createServer((request, response) => {
+    let pathname = "";
+    try {
+      pathname = new URL(request.url, "http://10.10.10.2").pathname;
+    } catch (error) {
+      response.writeHead(400);
+      response.end("bad request");
+      return;
+    }
+    const route = routes.get(pathname);
+    if (!route) {
+      response.writeHead(404);
+      response.end("not found");
+      return;
+    }
+    response.writeHead(200, {
+      "Cache-Control": "no-store",
+      "Content-Type": route[1]
+    });
+    response.end(readFileSync(route[0]));
+  });
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.removeListener("error", reject);
+      resolve({ server, port: server.address().port });
+    });
+  });
+}
+
+function closePortalFixtureServer(server) {
+  return new Promise((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
   });
 }
 
@@ -653,5 +703,112 @@ test("异步出现的在线标记会渲染真实浏览器连接状态", { timeou
     assert.equal(view.hasOriginalPortal, true, `异步在线标记应已出现：${JSON.stringify(view)}`);
   } finally {
     await cleanupBrowserProfile(child, profile);
+  }
+});
+
+test("真实浏览器诊断支持采集导出、关闭停写且失败不阻断学校控件", { timeout: 30_000 }, async (t) => {
+  if (typeof WebSocket !== "function") {
+    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器门户诊断测试");
+    return;
+  }
+
+  const browser = findBrowser();
+  if (!browser) {
+    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器门户诊断测试");
+    return;
+  }
+
+  const fixtureServer = await startPortalFixtureServer();
+  const profile = mkdtempSync(join(tmpdir(), "drcom-portal-diagnostics-"));
+  const fixtureUrl = "http://10.10.10.2/portal-async.html?diagnostics=enabled&modernize=off";
+  const child = spawn(browser, [
+    "--headless=new",
+    "--disable-gpu",
+    "--no-first-run",
+    "--remote-debugging-port=0",
+    `--proxy-server=http://127.0.0.1:${fixtureServer.port}`,
+    "--proxy-bypass-list=<-loopback>",
+    `--user-data-dir=${profile}`,
+    "--window-size=390,844",
+    fixtureUrl
+  ], { stdio: ["ignore", "ignore", "pipe"] });
+
+  try {
+    const debuggerUrl = await waitForDebugger(child);
+    const port = new URL(debuggerUrl).port;
+    let pageUrl = await waitForPage(port, "portal-async.html");
+    const captured = await evaluateAtViewport(pageUrl, 390, 844, `(async () => {
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        if (globalThis.portalDiagnosticsFixture && document.querySelector('#school-action')) {
+          const state = await globalThis.portalDiagnosticsFixture.read();
+          if (state.sessionCount === 1 && state.sessions[0].records.length > 0) break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      if (!globalThis.portalDiagnosticsFixture) return { missingFixtureApi: true };
+      const button = document.querySelector('#school-action');
+      button.click();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const enabledState = await globalThis.portalDiagnosticsFixture.read();
+      const exported = await new Promise((resolve) => chrome.runtime.sendMessage({ action: 'diagnostics:export' }, resolve));
+      const beforeDisable = enabledState.sessions[0].records.length;
+      await new Promise((resolve) => chrome.runtime.sendMessage({ action: 'diagnostics:set', enabled: false }, resolve));
+      button.click();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const disabledState = await globalThis.portalDiagnosticsFixture.read();
+      return {
+        missingFixtureApi: false,
+        hasClickRecord: enabledState.sessions[0].records.some((record) => record.type === 'click' && record.target.id === 'school-action'),
+        exportRecordCount: exported.export.diagnostics.sessions[0].records.length,
+        redactionNotice: exported.export.redactionNotice,
+        beforeDisable,
+        afterDisable: disabledState.sessions[0].records.length,
+        schoolActionCount: globalThis.portalDiagnosticsFixture.schoolActionCount,
+        enabledAfterDisable: disabledState.enabled
+      };
+    })()`);
+
+    assert.equal(captured.missingFixtureApi, false, `诊断 fixture API 必须存在：${JSON.stringify(captured)}`);
+    assert.equal(captured.hasClickRecord, true, `真实记录器必须捕获学校控件：${JSON.stringify(captured)}`);
+    assert.ok(captured.exportRecordCount > 0, `真实服务必须导出记录：${JSON.stringify(captured)}`);
+    assert.equal(captured.redactionNotice, "输入值、凭据、Cookie、存储内容、完整账号、IP 和 MAC 已排除或脱敏。");
+    assert.equal(captured.afterDisable, captured.beforeDisable, `关闭后不得新增记录：${JSON.stringify(captured)}`);
+    assert.equal(captured.schoolActionCount, 2, `关闭诊断不应阻断学校控件：${JSON.stringify(captured)}`);
+    assert.equal(captured.enabledAfterDisable, false);
+
+    await evaluateAtViewport(pageUrl, 390, 844, `(() => {
+      location.href = 'http://10.10.10.2/portal-async.html?diagnostics=enabled&modernize=off&failAppends=100';
+      return true;
+    })()`);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    pageUrl = await waitForPage(port, "portal-async.html");
+    const failed = await evaluateAtViewport(pageUrl, 390, 844, `(async () => {
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        if (globalThis.portalDiagnosticsFixture && document.querySelector('#school-action')) break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      if (!globalThis.portalDiagnosticsFixture) return { missingFixtureApi: true };
+      document.querySelector('#school-action').click();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const state = await globalThis.portalDiagnosticsFixture.read();
+      return {
+        missingFixtureApi: false,
+        appendFailures: globalThis.portalDiagnosticsFixture.appendFailures,
+        storedRecords: state.sessions[0].records.length,
+        schoolActionCount: globalThis.portalDiagnosticsFixture.schoolActionCount,
+        schoolButtonEnabled: document.querySelector('#school-action').disabled === false,
+        originalPasswordPresent: Boolean(document.querySelector('input[type="password"]'))
+      };
+    })()`);
+
+    assert.equal(failed.missingFixtureApi, false, `失败 fixture API 必须存在：${JSON.stringify(failed)}`);
+    assert.ok(failed.appendFailures >= 2, `必须实际注入记录器消息失败：${JSON.stringify(failed)}`);
+    assert.equal(failed.storedRecords, 0);
+    assert.equal(failed.schoolActionCount, 1, `记录器失败不应阻断学校点击：${JSON.stringify(failed)}`);
+    assert.equal(failed.schoolButtonEnabled, true);
+    assert.equal(failed.originalPasswordPresent, true);
+  } finally {
+    await cleanupBrowserProfile(child, profile);
+    await closePortalFixtureServer(fixtureServer.server);
   }
 });

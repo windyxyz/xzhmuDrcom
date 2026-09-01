@@ -129,14 +129,19 @@ function renderPortalDiagnostics(diagnostics) {
   const status = $("portal-diagnostics-status");
   const storage = $("portal-diagnostics-storage");
   const sessions = $("portal-diagnostics-sessions");
+  const dropped = $("portal-diagnostics-dropped");
   if (!diagnostics || diagnostics.ok === false) return;
   const enabled = diagnostics.enabled === true;
   const bytes = Math.max(0, Number(diagnostics.bytes) || 0);
   const sessionCount = Math.max(0, Number(diagnostics.sessionCount) || 0);
+  const droppedRecords = Math.max(0, Math.floor(Number(diagnostics.droppedRecords) || 0));
   if (input) input.checked = enabled;
-  if (status) status.textContent = enabled ? "诊断模式已开启" : "诊断模式已关闭";
+  if (status) status.textContent = diagnostics.paused === true
+    ? "诊断记录已暂停"
+    : enabled ? "诊断模式已开启" : "诊断模式已关闭";
   if (storage) storage.textContent = formatPortalDiagnosticsSize(bytes) + " / " + formatPortalDiagnosticsSize(portalDiagnosticsLimitBytes(diagnostics));
   if (sessions) sessions.textContent = sessionCount + " / " + portalDiagnosticsLimitSessions(diagnostics);
+  if (dropped) dropped.textContent = droppedRecords + " 条";
 }
 
 async function loadPortalDiagnostics() {
