@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="../../CRX/design-tokens.css">
+  <link rel="stylesheet" href="../../CRX/portal.css">
+</head>
+<body>
+  <script>
+    globalThis.chrome = {
+      runtime: {
+        lastError: null,
+        sendMessage(message, callback) {
+          if (message.action === "portal:config:get") {
+            callback({ ok: true, portal: { enabled: true, title: "徐医校园网", appearance: {} } });
+            return;
+          }
+          if (message.action === "portal:appearance:get") {
+            callback({ ok: true, appearance: { theme: "system", accent: "#007aff", background: "fresh" } });
+            return;
+          }
+          callback({ ok: true });
+        }
+      }
+    };
+    setTimeout(() => {
+      const online = new URLSearchParams(location.search).get("mode") === "online";
+      const original = document.createElement("main");
+      original.id = "school-portal-fixture";
+      original.innerHTML = online
+        ? '<button name="logout" type="button">注销</button>'
+        : '<form><input name="user_account"><input type="password" name="user_password"></form>';
+      document.body.append(original);
+    }, 100);
+  </script>
+  <script src="../../CRX/account-utils.js"></script>
+  <script src="../../CRX/appearance.js"></script>
+  <script src="../../CRX/portal-ui.js"></script>
+  <script src="../../CRX/portal-modernizer.js"></script>
+</body>
+</html>

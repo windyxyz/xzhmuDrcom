@@ -31,6 +31,22 @@ function readCentralDirectory(zipBuffer) {
   return entries;
 }
 
+test("诊断运行时模块以依赖顺序进入分发白名单", () => {
+  const archivePaths = RELEASE_FILES.map((entry) => entry.archivePath);
+  const expected = [
+    "portal-diagnostics-utils.js",
+    "background/diagnostics-service.js",
+    "portal-diagnostics.js"
+  ];
+  let previousIndex = -1;
+
+  for (const path of expected) {
+    const currentIndex = archivePaths.indexOf(path);
+    assert.ok(currentIndex > previousIndex, `${path} must be packaged after its dependencies`);
+    previousIndex = currentIndex;
+  }
+});
+
 test("扩展 ZIP 只包含固定顺序的运行白名单并排除预览与源码文件", () => {
   const projectRoot = join(__dirname, "..");
   const outputDirectory = mkdtempSync(join(tmpdir(), "drcom-package-"));

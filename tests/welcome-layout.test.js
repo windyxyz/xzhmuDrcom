@@ -559,3 +559,99 @@ test("门户预览会在真实浏览器中渲染生产登录表单", { timeout: 
     await cleanupBrowserProfile(child, profile);
   }
 });
+
+test("异步出现的门户登录控件会触发真实浏览器接管", { timeout: 20_000 }, async (t) => {
+  if (typeof WebSocket !== "function") {
+    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器门户测试");
+    return;
+  }
+
+  const browser = findBrowser();
+  if (!browser) {
+    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器门户测试");
+    return;
+  }
+
+  const profile = mkdtempSync(join(tmpdir(), "drcom-portal-async-login-"));
+  const fixtureUrl = pathToFileURL(join(__dirname, "fixtures", "portal-async.html")).href;
+  const child = spawn(browser, [
+    "--headless=new",
+    "--allow-file-access-from-files",
+    "--disable-gpu",
+    "--no-first-run",
+    "--remote-debugging-port=0",
+    `--user-data-dir=${profile}`,
+    "--window-size=390,844",
+    fixtureUrl
+  ], { stdio: ["ignore", "ignore", "pipe"] });
+
+  try {
+    const debuggerUrl = await waitForDebugger(child);
+    const pageUrl = await waitForPage(new URL(debuggerUrl).port, "portal-async.html");
+    const view = await evaluateAtViewport(pageUrl, 390, 844, `(async () => {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        if (document.querySelector('#drcom-login-form')) break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return {
+        hasLoginForm: Boolean(document.querySelector('#drcom-login-form')),
+        hasOriginalPortal: Boolean(document.querySelector('#school-portal-fixture')),
+        hasModernRoot: Boolean(document.querySelector('#drcom-modern-root'))
+      };
+    })()`);
+
+    assert.equal(view.hasLoginForm, true, `异步登录页应被接管：${JSON.stringify(view)}`);
+    assert.equal(view.hasOriginalPortal, true, `异步门户原始结构应已出现：${JSON.stringify(view)}`);
+    assert.equal(view.hasModernRoot, true, `异步门户应渲染现代根节点：${JSON.stringify(view)}`);
+  } finally {
+    await cleanupBrowserProfile(child, profile);
+  }
+});
+
+test("异步出现的在线标记会渲染真实浏览器连接状态", { timeout: 20_000 }, async (t) => {
+  if (typeof WebSocket !== "function") {
+    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器门户测试");
+    return;
+  }
+
+  const browser = findBrowser();
+  if (!browser) {
+    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器门户测试");
+    return;
+  }
+
+  const profile = mkdtempSync(join(tmpdir(), "drcom-portal-async-online-"));
+  const fixtureUrl = `${pathToFileURL(join(__dirname, "fixtures", "portal-async.html")).href}?mode=online`;
+  const child = spawn(browser, [
+    "--headless=new",
+    "--allow-file-access-from-files",
+    "--disable-gpu",
+    "--no-first-run",
+    "--remote-debugging-port=0",
+    `--user-data-dir=${profile}`,
+    "--window-size=390,844",
+    fixtureUrl
+  ], { stdio: ["ignore", "ignore", "pipe"] });
+
+  try {
+    const debuggerUrl = await waitForDebugger(child);
+    const pageUrl = await waitForPage(new URL(debuggerUrl).port, "portal-async.html");
+    const view = await evaluateAtViewport(pageUrl, 390, 844, `(async () => {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        if (document.querySelector('#drcom-logout')) break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return {
+        hasLogout: Boolean(document.querySelector('#drcom-logout')),
+        status: document.querySelector('#drcom-state-title')?.textContent || '',
+        hasOriginalPortal: Boolean(document.querySelector('#school-portal-fixture'))
+      };
+    })()`);
+
+    assert.equal(view.hasLogout, true, `异步在线页应显示下线操作：${JSON.stringify(view)}`);
+    assert.equal(view.status, "已经连接校园网", `异步在线页应显示连接状态：${JSON.stringify(view)}`);
+    assert.equal(view.hasOriginalPortal, true, `异步在线标记应已出现：${JSON.stringify(view)}`);
+  } finally {
+    await cleanupBrowserProfile(child, profile);
+  }
+});

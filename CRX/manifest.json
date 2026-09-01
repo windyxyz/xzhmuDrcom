@@ -42,6 +42,8 @@
         "account-utils.js",
         "appearance.js",
         "portal-ui.js",
+        "portal-diagnostics-utils.js",
+        "portal-diagnostics.js",
         "portal-modernizer.js"
       ],
       "run_at": "document_start"
