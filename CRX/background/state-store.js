@@ -38,6 +38,7 @@ const DEFAULT_STATE = {
     },
     ui: {
       modernizePortal: true,
+      onlineDetailMode: "classic",
       title: "徐医校园网",
       accent: "#007aff",
       theme: "system",
@@ -65,6 +66,7 @@ const STATE_UNCHANGED = Symbol("state-unchanged");
 const WEB_PAGE_ACTIONS = new Set([
   "portal:config:get",
   "portal:appearance:get",
+  "portal:status:get",
   "account:save",
   "account:network:update",
   "drcom:login",
@@ -159,6 +161,9 @@ function normalizeState(input) {
   state.config.ui.theme = ["system", "light", "dark"].includes(state.config.ui.theme)
     ? state.config.ui.theme
     : DEFAULT_STATE.config.ui.theme;
+  state.config.ui.onlineDetailMode = ["classic", "full", "minimal", "hidden"].includes(state.config.ui.onlineDetailMode)
+    ? state.config.ui.onlineDetailMode
+    : DEFAULT_STATE.config.ui.onlineDetailMode;
   if (previousSchemaVersion < 11 && state.config.ui.background === "paper") state.config.ui.theme = "light";
   if (previousSchemaVersion < 11 && state.config.ui.background === "night") state.config.ui.theme = "dark";
   state.config.ui.background = state.config.ui.background === "custom" ? "custom" : DEFAULT_STATE.config.ui.background;

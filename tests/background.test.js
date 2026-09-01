@@ -206,6 +206,7 @@ function portalSender(overrides = {}) {
 test("后台入口只负责依赖加载和事件注册", () => {
   const source = readFileSync(join(__dirname, "..", "CRX", "background.js"), "utf8");
   const modulePaths = [
+    'portal-session.js',
     "portal-diagnostics-utils.js",
     "background/state-store.js",
     "background/diagnostics-service.js",
@@ -222,6 +223,107 @@ test("后台入口只负责依赖加载和事件注册", () => {
   for (const modulePath of modulePaths) {
     assert.match(source, new RegExp(modulePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.doesNotThrow(() => readFileSync(join(__dirname, "..", "CRX", modulePath), "utf8"));
+  }
+});
+test('在线状态结果携带脱敏会话摘要', async () => {
+  const payload = JSON.stringify({
+    result: '1',
+    uid: 'student-account@telecom',
+    time: '125',
+    flow: '1234567',
+    flow_in: '500000',
+    flow_out: '734567',
+    fee: '123456',
+    login_time: '1769990400',
+    xip: '192.0.2.202',
+    wlan_user_ip: '192.0.2.3',
+    wlan_user_ipv6: '2001:db8::1',
+    wlan_user_mac: '02-00-00-00-00-03',
+    wlan_vlan_id: '123',
+    wlan_ac_ip: '192.0.2.2',
+    wlan_ac_name: 'campus-ac'
+  });
+  const background = loadBackground({
+    fetch: async () => ({ ok: true, status: 200, async text() { return 'dr1001(' + payload + ')'; } })
+  });
+  const result = await background.queryPortalSessionStatus({
+    portalUrl: 'http://10.10.10.2/',
+    login: { callbackPrefix: 'dr' }
+  });
+
+  assert.equal(result.state, 'online');
+  assert.deepEqual(JSON.parse(JSON.stringify(result.session)), {
+    account: 'st***nt',
+    usedMinutes: 125,
+    totalKilobytes: 1234567,
+    uploadKilobytes: 500000,
+    downloadKilobytes: 734567,
+    balanceYuan: 12.34,
+    loginAt: 1769990400000,
+    externalIp: '192.***.***.202',
+    network: {
+      ipv4: '192.***.***.3',
+      ipv6: '2001:***::***:1',
+      mac: '02:00:00:**:**:**',
+      vlan: '123',
+      acIp: '192.***.***.2',
+      acName: 'campus-ac'
+    }
+  });
+  assert.doesNotMatch(JSON.stringify(result), /student-account|192\.0\.2\.|02-00-00-00-00-03/);
+});
+
+test('portal:status:get 只向可信顶层门户返回裁剪后的状态和会话摘要', async () => {
+  const payload = JSON.stringify({
+    result: '1',
+    uid: 'private-student@telecom',
+    time: '45',
+    flow: '2048',
+    xip: '192.0.2.99',
+    wlan_user_ip: '192.0.2.3',
+    wlan_user_mac: '02-00-00-00-00-03'
+  });
+  const background = loadBackground({
+    fetch: async () => ({ ok: true, status: 200, async text() { return 'dr1001(' + payload + ')'; } })
+  });
+
+  const result = JSON.parse(JSON.stringify(await background.handleMessage(
+    { action: 'portal:status:get' },
+    portalSender()
+  )));
+
+  assert.equal(result.state, 'online');
+  assert.equal(result.phase, 'online');
+  assert.equal(typeof result.checkedAt, 'number');
+  assert.deepEqual(result.session, {
+    account: 'pr***nt',
+    usedMinutes: 45,
+    totalKilobytes: 2048,
+    externalIp: '192.***.***.99',
+    network: {
+      ipv4: '192.***.***.3',
+      mac: '02:00:00:**:**:**'
+    }
+  });
+  assert.deepEqual(Object.keys(result).sort(), ['checkedAt', 'message', 'phase', 'session', 'state']);
+  assert.doesNotMatch(JSON.stringify(result), /private-student|192\.0\.2\.|02-00-00-00-00-03|raw|diagnostic|statusCode|url/);
+});
+
+test('portal:status:get 拒绝 iframe、伪造来源和已经离开门户的标签', async () => {
+  const invalid = [
+    { background: loadBackground(), sender: portalSender({ frameId: 1 }) },
+    { background: loadBackground(), sender: portalSender({ origin: 'http://evil.example', url: 'http://evil.example/' }) },
+    {
+      background: loadBackground({ currentTabs: { 1: { id: 1, url: 'http://example.com/' } } }),
+      sender: portalSender()
+    }
+  ];
+
+  for (const item of invalid) {
+    await assert.rejects(
+      item.background.handleMessage({ action: 'portal:status:get' }, item.sender),
+      /来源|顶层|门户|标签页/
+    );
   }
 });
 
@@ -248,6 +350,7 @@ test("门户安全配置不携带背景数据且专用外观接口单独返回�
       network: { wlanUserIp: "10.0.0.8" },
       ui: {
         modernizePortal: true,
+        onlineDetailMode: "full",
         title: "徐医校园网",
         accent: "#0f766e",
         theme: "light",
@@ -275,6 +378,7 @@ test("门户安全配置不携带背景数据且专用外观接口单独返回�
     portal: {
       enabled: true,
       title: "徐医校园网",
+      onlineDetailMode: "full",
       appearance: {
         theme: "light",
         accent: "#0f766e"
@@ -312,6 +416,7 @@ test("旧版本配置升级后默认启用可恢复的门户接管", () => {
 
   assert.equal(normalized.schemaVersion, 12);
   assert.equal(normalized.config.ui.modernizePortal, true);
+  assert.equal(normalized.config.ui.onlineDetailMode, "classic");
   assert.equal("hideOriginalPortal" in normalized.config.ui, false);
   assert.equal("subtitle" in normalized.config.ui, false);
   assert.equal("density" in normalized.config.ui, false);
@@ -320,6 +425,12 @@ test("旧版本配置升级后默认启用可恢复的门户接管", () => {
   assert.equal(normalized.config.ui.backgroundBlur, 14);
   assert.equal(normalized.config.ui.backgroundDim, 0.42);
   assert.equal(normalized.config.ui.backgroundScale, 1.04);
+
+  const invalidMode = background.normalizeState({
+    schemaVersion: 12,
+    config: { ui: { onlineDetailMode: "unsupported" } }
+  });
+  assert.equal(invalidMode.config.ui.onlineDetailMode, "classic");
 });
 
 test("schema 12 会清理历史无效账号与 UI 字段并幂等写回", async () => {

@@ -71,6 +71,7 @@ async function handleMessage(message, sender) {
           enabled: state.config.ui.modernizePortal !== false,
           title: stringValue(state.config.ui.title).trim() || DEFAULT_STATE.config.ui.title,
           portalUrl: state.config.portalUrl,
+          onlineDetailMode: state.config.ui.onlineDetailMode,
           appearance: safePortalAppearance(state.config.ui)
         }
       };
@@ -79,6 +80,17 @@ async function handleMessage(message, sender) {
     case "portal:appearance:get": {
       const state = await getState();
       return { ok: true, appearance: publicAppearance(state.config.ui) };
+    }
+
+    case "portal:status:get": {
+      const result = await checkStatus();
+      return {
+        state: result.state,
+        phase: result.phase,
+        message: result.message,
+        checkedAt: Date.now(),
+        session: result.session || null
+      };
     }
 
     case "account:save": {

@@ -1,5 +1,7 @@
 "use strict";
 
+var portalSession = globalThis.DrcomPortalSession;
+
 var accountUtils = globalThis.DrcomAccountUtils;
 
 async function fetchDrcom(request, kind) {
@@ -86,6 +88,9 @@ async function queryPortalSessionStatus(config) {
       success: state === "online",
       online: state === "online",
       state,
+      session: state === "online" && portalSession
+        ? portalSession.normalizeSession(parsed)
+        : null,
       statusCode: response.status,
       message: state === "online"
         ? "当前校园网会话在线。"

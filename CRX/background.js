@@ -2,6 +2,7 @@
 
 importScripts(
   "account-utils.js",
+  "portal-session.js",
   "portal-diagnostics-utils.js",
   "background/state-store.js",
   "background/diagnostics-service.js",
