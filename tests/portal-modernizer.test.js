@@ -115,6 +115,7 @@ function createHarness(options = {}) {
   const pendingCallbacks = new Map();
   let pageState = options.pageState || (options.online ? "online" : "login");
   let shouldTakeOverCalls = 0;
+  let modernRootMountCount = 0;
   const originalUsername = { value: "" };
   const originalPassword = { value: "" };
   const documentElement = {
@@ -130,6 +131,8 @@ function createHarness(options = {}) {
       innerText: "",
       append(element) {
         roots.set(element.id, element);
+        if (element.id === "drcom-modern-root") modernRootMountCount += 1;
+        notifyMutation([{ addedNodes: [element], removedNodes: [] }]);
       }
     },
     addEventListener() {},
@@ -152,9 +155,13 @@ function createHarness(options = {}) {
       return null;
     },
     removeRoot(root) {
-      roots.delete(root.id);
+      if (!roots.delete(root.id)) return;
+      notifyMutation([{ addedNodes: [], removedNodes: [root] }]);
     }
   };
+  function notifyMutation(records) {
+    observers.forEach((observer) => observer.trigger(records));
+  }
   function updatePageText() {
     document.body.innerText = pageState === "online" ? "当前已连接，可以下线" : "";
   }
@@ -241,7 +248,7 @@ function createHarness(options = {}) {
       updatePageText();
     },
     triggerMutation(records) {
-      observers.forEach((observer) => observer.trigger(records));
+      notifyMutation(records || [{ addedNodes: [], removedNodes: [] }]);
     },
     resolveDeferred(action, response = responses[action] || { ok: true }) {
       deferredActions.delete(action);
@@ -254,6 +261,9 @@ function createHarness(options = {}) {
     },
     shouldTakeOverCalls() {
       return shouldTakeOverCalls;
+    },
+    modernRootMountCount() {
+      return modernRootMountCount;
     },
     async flush() {
       await Promise.resolve();
@@ -444,4 +454,43 @@ test("就绪观察器合并重复变更，并在接管后保留原始请求捕�
   await harness.flush();
 
   assert.ok(harness.messages.some((message) => message.action === "account:save"));
+});
+
+test("禁用现代门户时只保留原始登录捕获观察器", async () => {
+  const harness = createHarness({
+    pageState: "pending",
+    responses: {
+      "portal:config:get": {
+        ok: true,
+        portal: { enabled: false, title: "徐医校园网", appearance: {} }
+      }
+    }
+  });
+  await loadModernizer(harness);
+
+  assert.equal(harness.document.getElementById("drcom-modern-root"), null);
+  assert.equal(harness.connectedObserverCount(), 1);
+});
+
+test("接管会在注入现代根节点前断开就绪观察器", async () => {
+  const harness = createHarness({ pageState: "login" });
+  await loadModernizer(harness);
+
+  assert.equal(harness.modernRootMountCount(), 1);
+  assert.equal(harness.shouldTakeOverCalls(), 1);
+  assert.equal(harness.connectedObserverCount(), 1);
+});
+
+test("用户恢复原始页后页面状态变化不会重新挂载或重连就绪观察器", async () => {
+  const harness = createHarness({ pageState: "login" });
+  await loadModernizer(harness);
+
+  await harness.document.getElementById("drcom-restore-original").emit("click");
+  harness.setPageState("online");
+  harness.triggerMutation();
+  await harness.flush();
+
+  assert.equal(harness.document.getElementById("drcom-modern-root"), null);
+  assert.equal(harness.modernRootMountCount(), 1);
+  assert.equal(harness.connectedObserverCount(), 1);
 });

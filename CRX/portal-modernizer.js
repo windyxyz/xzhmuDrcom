@@ -20,6 +20,7 @@
       if (!ui) throw new Error("门户界面模块未加载");
       installOriginalLoginCapture();
       activePortalConfig = await loadPortalConfig();
+      if (activePortalConfig.enabled !== true) return;
       startPortalReadinessObserver();
       schedulePortalRecognition();
     } catch (error) {
