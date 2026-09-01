@@ -65,6 +65,10 @@ function bindEvents() {
     await persistAppearance();
     toast("强调色已应用");
   }));
+  $("online-detail-mode").addEventListener("change", runAsync(async () => {
+    await persistAppearance();
+    toast("在线信息显示已应用");
+  }));
   $("appearance-background").addEventListener("change", runAsync(async () => {
     syncAppearanceControls();
     applyCurrentAppearance();
@@ -250,6 +254,9 @@ function hydrateForm() {
 
 function hydrateAppearance(input) {
   const appearance = globalThis.DrcomAppearance.normalizeAppearance(input);
+  $("online-detail-mode").value = ["classic", "full", "minimal", "hidden"].includes(input?.onlineDetailMode)
+    ? input.onlineDetailMode
+    : "classic";
   $("appearance-theme").value = appearance.theme;
   $("appearance-accent").value = appearance.accent;
   $("appearance-background").value = appearance.background;
@@ -729,6 +736,7 @@ function readConfig() {
 
 function readAppearanceConfig() {
   return {
+    onlineDetailMode: $("online-detail-mode").value,
     theme: $("appearance-theme").value,
     accent: $("appearance-accent").value,
     background: $("appearance-background").value,

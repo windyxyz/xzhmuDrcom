@@ -279,6 +279,7 @@ test("设置页连接概览会把在线、待登录和错误状态转换为明�
 
 test("外观表单会保存主题、自定义背景和可读性参数", () => {
   const elements = new Map([
+    ["online-detail-mode", { value: "full" }],
     ["appearance-theme", { value: "dark" }],
     ["appearance-accent", { value: "#2563eb" }],
     ["appearance-background", { value: "custom" }],
@@ -302,6 +303,7 @@ test("外观表单会保存主题、自定义背景和可读性参数", () => {
 
   const result = JSON.parse(JSON.stringify(context.readAppearanceConfig()));
   assert.deepEqual(result, {
+    onlineDetailMode: "full",
     theme: "dark",
     accent: "#2563eb",
     background: "custom",
@@ -315,6 +317,7 @@ test("外观表单会保存主题、自定义背景和可读性参数", () => {
 test("外观图片选择后会立即持久化，不依赖页面底部的总保存按钮", async () => {
   const messages = [];
   const elements = new Map([
+    ["online-detail-mode", { value: "minimal" }],
     ["appearance-theme", { value: "dark" }],
     ["appearance-accent", { value: "#2563eb" }],
     ["appearance-background", { value: "custom" }],
@@ -349,6 +352,7 @@ test("外观图片选择后会立即持久化，不依赖页面底部的总保�
     action: "config:save",
     config: {
       ui: {
+        onlineDetailMode: "minimal",
         theme: "dark",
         accent: "#2563eb",
         background: "custom",

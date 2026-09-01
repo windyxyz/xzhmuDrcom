@@ -189,6 +189,15 @@ test("设置页采用带无障碍 SVG 图标的系统分类侧栏与连接概览
   assert.doesNotMatch(source, /class="sidebar-mark"|>XM</);
 });
 
+test("设置页提供四种固定的在线信息显示模式", () => {
+  const html = readExtensionFile("options.html");
+  const select = html.match(/<select id="online-detail-mode">([\s\S]*?)<\/select>/)?.[1] || "";
+  assert.deepEqual(
+    [...select.matchAll(/<option value="([^"]+)"/g)].map((match) => match[1]),
+    ["classic", "full", "minimal", "hidden"]
+  );
+});
+
 test("门户共享令牌和纯逻辑模块在内容脚本之前加载", () => {
   const manifest = JSON.parse(readExtensionFile("manifest.json"));
   const portalScript = manifest.content_scripts[0];
