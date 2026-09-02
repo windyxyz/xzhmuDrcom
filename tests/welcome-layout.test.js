@@ -93,6 +93,10 @@ function evaluateAtViewport(webSocketUrl, width, height, expression) {
       if (message.id !== 2) return;
       clearTimeout(timeout);
       socket.close();
+      if (message.error || !message.result) {
+        reject(new Error(message.error ? message.error.message : "浏览器返回了空结果"));
+        return;
+      }
       if (message.result.exceptionDetails) {
         reject(new Error(message.result.exceptionDetails.text));
         return;
@@ -117,7 +121,8 @@ function startPortalFixtureServer() {
     ["/CRX/portal-diagnostics-utils.js", [join(__dirname, "..", "CRX", "portal-diagnostics-utils.js"), "text/javascript; charset=utf-8"]],
     ["/CRX/background/diagnostics-service.js", [join(__dirname, "..", "CRX", "background", "diagnostics-service.js"), "text/javascript; charset=utf-8"]],
     ["/CRX/portal-diagnostics.js", [join(__dirname, "..", "CRX", "portal-diagnostics.js"), "text/javascript; charset=utf-8"]],
-    ["/CRX/portal-modernizer.js", [join(__dirname, "..", "CRX", "portal-modernizer.js"), "text/javascript; charset=utf-8"]]
+    ["/CRX/portal-modernizer.js", [join(__dirname, "..", "CRX", "portal-modernizer.js"), "text/javascript; charset=utf-8"]],
+    ["/CRX/fonts/segoe-fluent-icons.ttf", [join(__dirname, "..", "CRX", "fonts", "segoe-fluent-icons.ttf"), "font/ttf"]]
   ]);
   const server = createServer((request, response) => {
     let pathname = "";

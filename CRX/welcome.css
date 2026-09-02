@@ -195,6 +195,7 @@ body :focus-visible {
   body { padding: 0; }
   .welcome-shell { min-height: 100dvh; border-radius: 0; }
   .welcome-brand { border-radius: 0; border-left: 0; border-right: 0; border-top: 0; }
+  .welcome-content { padding: 16px; }
   .setup-steps li { padding: 10px 12px; }
   .welcome-actions button { flex: 1; }
 }
