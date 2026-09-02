@@ -360,6 +360,12 @@ test("390px 视口下设置页单列排版且没有横向溢出", { timeout: 20_
       const appearance = document.querySelector('.appearance-layout');
       const shellStyle = getComputedStyle(document.querySelector('.settings-shell'));
       const sectionRect = section.getBoundingClientRect();
+      const refreshControls = document.querySelector('.settings-refresh-controls');
+      const refreshRect = refreshControls.getBoundingClientRect();
+      const refreshItems = Array.from(refreshControls.children).map((item) => {
+        const rect = item.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, height: rect.height };
+      });
       return {
         viewportWidth: window.innerWidth,
         scrollWidth: document.documentElement.scrollWidth,
@@ -367,6 +373,9 @@ test("390px 视口下设置页单列排版且没有横向溢出", { timeout: 20_
         sectionRight: sectionRect.right,
         appearanceColumns: getComputedStyle(appearance).gridTemplateColumns,
         backgroundTuningDisplay: getComputedStyle(document.querySelector('#background-controls')).display,
+        refreshLeft: refreshRect.left,
+        refreshRight: refreshRect.right,
+        refreshItems,
         motionTiming: shellStyle.animationTimingFunction,
         motionDuration: shellStyle.animationDuration
       };
@@ -374,6 +383,8 @@ test("390px 视口下设置页单列排版且没有横向溢出", { timeout: 20_
 
     assert.equal(layout.viewportWidth, 390, `浏览器测试视口应为 390px：${JSON.stringify(layout)}`);
     assert.ok(layout.scrollWidth <= layout.viewportWidth, `设置页不应横向溢出：${JSON.stringify(layout)}`);
+    assert.ok(layout.refreshLeft >= 0 && layout.refreshRight <= layout.viewportWidth, "刷新控件应留在视口内：" + JSON.stringify(layout));
+    assert.ok(layout.refreshItems.every((item) => item.left >= 0 && item.right <= layout.viewportWidth && item.height >= 38), "刷新控件应可操作且不溢出：" + JSON.stringify(layout));
     assert.ok(layout.sectionLeft >= 0 && layout.sectionRight <= layout.viewportWidth, `设置卡片应完整留在视口内：${JSON.stringify(layout)}`);
     assert.equal(layout.appearanceColumns.split(" ").length, 1, `外观区在手机上应为单列：${JSON.stringify(layout)}`);
     assert.equal(layout.backgroundTuningDisplay, "none", `简洁底色下不应显示图片调节项：${JSON.stringify(layout)}`);
@@ -608,6 +619,7 @@ test("800px 设置页仍使用左侧纵向玻璃侧栏", { timeout: 20_000 }, as
       const workspaceRect = workspace.getBoundingClientRect();
       const style = getComputedStyle(sidebar);
       const windowStyle = getComputedStyle(settingsWindow);
+      const refreshRect = document.querySelector('.settings-refresh-controls').getBoundingClientRect();
       return {
         visiblePanels,
         sidebarLeft: sidebarRect.left,
@@ -621,6 +633,8 @@ test("800px 设置页仍使用左侧纵向玻璃侧栏", { timeout: 20_000 }, as
         workspaceGap: Math.round(workspaceRect.left - sidebarRect.right),
         windowRadius: parseFloat(windowStyle.borderTopLeftRadius),
         windowOverflow: windowStyle.overflow,
+        refreshLeft: refreshRect.left,
+        refreshRight: refreshRect.right,
         windowBackdropFilter: windowStyle.backdropFilter || windowStyle.webkitBackdropFilter || ''
       };
     })()`);
@@ -634,6 +648,7 @@ test("800px 设置页仍使用左侧纵向玻璃侧栏", { timeout: 20_000 }, as
     assert.deepEqual(layout.visiblePanels, ["connection-overview", "automation-section"]);
     assert.ok(layout.windowRadius >= 20, JSON.stringify(layout));
     assert.equal(layout.windowOverflow, "hidden");
+    assert.ok(layout.refreshLeft >= layout.workspaceLeft && layout.refreshRight <= 800, JSON.stringify(layout));
     assert.match(layout.windowBackdropFilter, /blur\(/);
   } finally {
     await cleanupBrowserProfile(child, profile);

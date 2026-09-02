@@ -31,7 +31,15 @@
         <span id="settings-title-icon" class="page-title-icon tone-blue" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 9.5a11 11 0 0 1 14 0M8 13a6 6 0 0 1 8 0M11 16.5a2 2 0 0 1 2 0"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg></span>
         <div><h1 id="settings-title">网络</h1><p id="settings-description">让校园网连接更安静、更可靠。</p></div>
       </div>
-      <div id="page-connection-status" class="page-connection-status" data-tone="neutral"><span aria-hidden="true"></span><strong id="page-status-label">等待检查</strong><small>·</small><small id="page-status-host">10.10.10.2</small></div>
+      <div class="page-intro-meta">
+        <div id="page-connection-status" class="page-connection-status" data-tone="neutral"><span aria-hidden="true"></span><strong id="page-status-label">等待检查</strong><small>·</small><small id="page-status-host">10.10.10.2</small></div>
+        <div class="settings-refresh-controls" aria-label="设置页刷新">
+          <label class="refresh-toggle"><input id="auto-refresh-settings" type="checkbox" checked><span>自动同步</span></label>
+          <button id="refresh-settings" class="secondary compact-button" type="button">立即同步</button>
+          <button id="reload-settings-page" class="secondary compact-button" type="button">重新加载页面</button>
+        </div>
+        <small id="settings-refresh-status" class="settings-refresh-status" role="status" aria-live="polite">自动同步已开启</small>
+      </div>
     </section>
 
     <section id="connection-overview" class="settings-section overview-section" data-settings-panel aria-labelledby="overview-title">

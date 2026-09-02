@@ -10,9 +10,13 @@ const BACKGROUND_IMAGE_BUDGET_BYTES = 3 * 1024 * 1024;
 const BACKGROUND_SOURCE_LIMIT_BYTES = 48 * 1024 * 1024;
 const BACKGROUND_TARGET_DIMENSIONS = [2560, 2240, 1920, 1600, 1280, 960];
 const BACKGROUND_WEBP_QUALITIES = [0.92, 0.88, 0.84];
+const SETTINGS_REFRESH_INTERVAL_MS = 15_000;
 const $ = (id) => document.getElementById(id);
 let state = null;
 let editingAccountId = "";
+let settingsFormDirty = false;
+let accountFormDirty = false;
+let settingsRefreshController = null;
 
 document.addEventListener("DOMContentLoaded", init);
 
@@ -23,12 +27,56 @@ async function init() {
   try {
     await loadState();
     await loadPortalDiagnostics();
+    settingsRefreshController.start(state.config.ui.autoRefreshSettings !== false);
   } catch (error) {
     toast(error.message || String(error));
   }
 }
 
 function bindEvents() {
+  settingsRefreshController = createSettingsRefreshController({
+    loadFull: () => loadState({ includeConnection: false }),
+    loadConnection: refreshConnectionState,
+    loadDiagnostics: loadPortalDiagnostics,
+    hasUnsavedChanges: () => settingsFormDirty || accountFormDirty,
+    setStatus: renderSettingsRefreshStatus,
+    reportManualError: (error) => toast(error.message || String(error)),
+    persistEnabled: persistAutoRefreshPreference,
+    confirmReload: confirmSettingsReload,
+    reloadPage: () => globalThis.location.reload(),
+    isVisible: () => document.visibilityState !== "hidden",
+    setIntervalFn: (callback, delay) => globalThis.setInterval(callback, delay),
+    clearIntervalFn: (interval) => globalThis.clearInterval(interval),
+    now: () => Date.now()
+  });
+
+  $("auto-refresh-settings").addEventListener("change", (event) => {
+    const input = event.currentTarget;
+    const previous = settingsRefreshController.isEnabled();
+    input.disabled = true;
+    Promise.resolve(settingsRefreshController.setEnabled(input.checked))
+      .then(() => { input.checked = settingsRefreshController.isEnabled(); })
+      .catch((error) => {
+        input.checked = previous;
+        toast(error.message || String(error));
+      })
+      .finally(() => { input.disabled = false; });
+  });
+  $("refresh-settings").addEventListener("click", () => {
+    settingsRefreshController.requestRefresh({ full: true, diagnostics: true, manual: true });
+  });
+  $("reload-settings-page").addEventListener("click", () => {
+    settingsRefreshController.reload().catch((error) => toast(error.message || String(error)));
+  });
+  $("account-form").addEventListener("input", markAccountFormDirty);
+  $("account-form").addEventListener("change", markAccountFormDirty);
+  $("settings-form").addEventListener("input", () => { settingsFormDirty = true; });
+  $("settings-form").addEventListener("change", () => { settingsFormDirty = true; });
+  chrome.storage?.onChanged?.addListener(settingsRefreshController.handleStorageChange);
+  document.addEventListener("visibilitychange", settingsRefreshController.handleVisibilityChange);
+  globalThis.addEventListener("focus", settingsRefreshController.handleFocus);
+  globalThis.addEventListener("pagehide", settingsRefreshController.destroy, { once: true });
+
   $("parse-url").addEventListener("click", parseCapturedUrl);
   $("save-parsed-account").addEventListener("click", runAsync(saveParsedAccount));
   $("settings-form").addEventListener("submit", runAsync(saveSettings));
@@ -97,7 +145,131 @@ function runAsync(fn) {
   };
 }
 
-async function loadState() {
+function markAccountFormDirty(event) {
+  if (event.target?.id !== "account-reveal") accountFormDirty = true;
+}
+
+function createSettingsRefreshController(deps) {
+  let enabled = deps.initialEnabled !== false;
+  let interval = null;
+  let refreshFlight = null;
+
+  const stopInterval = () => {
+    if (interval === null) return;
+    deps.clearIntervalFn(interval);
+    interval = null;
+  };
+
+  const ensureInterval = () => {
+    if (!enabled || !deps.isVisible() || interval !== null) return;
+    interval = deps.setIntervalFn(() => {
+      requestRefresh({ full: false, diagnostics: false }).catch(() => undefined);
+    }, SETTINGS_REFRESH_INTERVAL_MS);
+  };
+
+  const requestRefresh = (options = {}) => {
+    if (refreshFlight) return refreshFlight;
+    const full = options.full !== false;
+    const diagnostics = options.diagnostics !== false;
+    const manual = options.manual === true;
+    const protectedForm = full && deps.hasUnsavedChanges();
+    const task = (async () => {
+      deps.setStatus({ busy: true, protected: protectedForm, enabled });
+      try {
+        const loads = [deps.loadConnection()];
+        if (diagnostics) loads.push(deps.loadDiagnostics());
+        if (full && !protectedForm) loads.push(deps.loadFull());
+        await Promise.all(loads);
+        deps.setStatus({
+          busy: false,
+          protected: protectedForm,
+          enabled,
+          syncedAt: deps.now()
+        });
+        return { ok: true, protected: protectedForm };
+      } catch (error) {
+        deps.setStatus({ busy: false, protected: protectedForm, enabled, error });
+        if (manual) deps.reportManualError(error);
+        return { ok: false, error };
+      }
+    })();
+    refreshFlight = task.finally(() => {
+      refreshFlight = null;
+    });
+    return refreshFlight;
+  };
+
+  const setEnabled = async (nextValue) => {
+    const next = nextValue === true;
+    if (next !== enabled) {
+      await deps.persistEnabled(next);
+      enabled = next;
+    }
+    if (enabled) ensureInterval();
+    else stopInterval();
+    deps.setStatus({ busy: false, enabled });
+    return enabled;
+  };
+
+  const handleStorageChange = (changes, areaName) => {
+    if (!enabled || !changes || typeof changes !== "object") return Promise.resolve(false);
+    if (areaName === "local" && changes.drcomAssistantState) {
+      return requestRefresh({ full: true, diagnostics: true });
+    }
+    if (areaName === "session" && changes.drcomAssistantSession) {
+      return requestRefresh({ full: false, diagnostics: false });
+    }
+    return Promise.resolve(false);
+  };
+
+  const handleVisibilityChange = () => {
+    if (!deps.isVisible()) {
+      stopInterval();
+      return Promise.resolve(false);
+    }
+    if (!enabled) return Promise.resolve(false);
+    ensureInterval();
+    return requestRefresh({ full: true, diagnostics: true });
+  };
+
+  const handleFocus = () => {
+    if (!enabled || !deps.isVisible()) return Promise.resolve(false);
+    ensureInterval();
+    return requestRefresh({ full: true, diagnostics: true });
+  };
+
+  const reload = async () => {
+    if (deps.hasUnsavedChanges() && !(await deps.confirmReload())) return false;
+    deps.reloadPage();
+    return true;
+  };
+
+  const destroy = () => {
+    stopInterval();
+  };
+
+  const start = (initialEnabled = true) => {
+    enabled = initialEnabled !== false;
+    if (enabled) ensureInterval();
+    else stopInterval();
+    deps.setStatus({ busy: false, enabled });
+    return enabled;
+  };
+
+  return {
+    destroy,
+    handleFocus,
+    handleStorageChange,
+    handleVisibilityChange,
+    isEnabled: () => enabled,
+    reload,
+    requestRefresh,
+    setEnabled,
+    start
+  };
+}
+
+async function loadState({ includeConnection = true } = {}) {
   const response = await sendMessage({ action: "state:get" });
   state = response.state;
   hydrateForm();
@@ -105,12 +277,20 @@ async function loadState() {
   renderRequestLog();
   const selected = state.accounts.find((account) => account.id === state.selectedAccountId) || state.accounts[0] || null;
   fillAccountEditor(selected);
-  try {
-    const connection = await sendMessage({ action: "connection:get" });
-    renderConnectionOverview(connection.connection);
-  } catch (error) {
-    renderConnectionOverview(null);
+  if (includeConnection) {
+    try {
+      await refreshConnectionState();
+    } catch (error) {
+      renderConnectionOverview(null);
+    }
   }
+  return state;
+}
+
+async function refreshConnectionState() {
+  const connection = await sendMessage({ action: "connection:get" });
+  renderConnectionOverview(connection.connection);
+  return connection;
 }
 
 function portalDiagnosticsLimitBytes(diagnostics) {
@@ -243,6 +423,7 @@ function hydrateForm() {
   $("interval-seconds").value = String(interval.seconds);
   $("guard-seconds").value = config.redirect.guardSeconds;
   $("modernize-portal").checked = config.ui.modernizePortal !== false;
+  $("auto-refresh-settings").checked = config.ui.autoRefreshSettings !== false;
   hydrateAppearance(config.ui);
   const overviewHost = $("overview-gateway-host");
   if (overviewHost) overviewHost.textContent = gatewayHost(config.portalUrl);
@@ -250,6 +431,7 @@ function hydrateForm() {
   if (pageStatusHost) pageStatusHost.textContent = gatewayHost(config.portalUrl);
   syncDependentControls();
   syncIntervalControls();
+  settingsFormDirty = false;
 }
 
 function hydrateAppearance(input) {
@@ -302,6 +484,59 @@ function renderConnectionOverview(connection) {
   const pageLabel = $("page-status-label");
   if (pageStatus) pageStatus.dataset.tone = presentation.tone;
   if (pageLabel) pageLabel.textContent = presentation.label;
+}
+
+function formatSettingsRefreshTime(timestamp) {
+  return new Date(timestamp).toLocaleTimeString("zh-CN", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+}
+
+function renderSettingsRefreshStatus(status = {}) {
+  const element = $("settings-refresh-status");
+  const button = $("refresh-settings");
+  if (!element) return;
+  if (button) button.disabled = status.busy === true;
+  element.dataset.tone = status.error ? "error" : status.protected ? "warning" : "neutral";
+  if (status.busy) {
+    element.textContent = status.protected
+      ? "正在同步安全区域；未保存编辑已受保护"
+      : "正在同步设置…";
+    return;
+  }
+  if (status.error) {
+    element.textContent = "同步失败：" + (status.error.message || String(status.error));
+    return;
+  }
+  if (status.protected) {
+    element.textContent = "检测到未保存编辑；已更新连接状态和诊断摘要";
+    return;
+  }
+  if (status.syncedAt) {
+    element.textContent = "最近同步 " + formatSettingsRefreshTime(status.syncedAt);
+    return;
+  }
+  element.textContent = status.enabled === false ? "自动同步已关闭" : "自动同步已开启";
+}
+
+async function persistAutoRefreshPreference(enabled) {
+  const response = await sendMessage({
+    action: "config:save",
+    config: { ui: { autoRefreshSettings: enabled === true } }
+  });
+  if (response.state) state = response.state;
+  return response;
+}
+
+function confirmSettingsReload() {
+  return globalThis.DrcomConfirmDialog.ask({
+    title: "重新加载设置页？",
+    message: "当前有尚未保存的账号或设置。重新加载会丢弃这些编辑。",
+    confirmLabel: "放弃编辑并重新加载"
+  });
 }
 
 async function testConnection() {
@@ -524,6 +759,7 @@ function fillAccountEditor(account) {
   $("account-ipv6").value = account && account.network ? account.network.wlanUserIpv6 : "";
   $("account-ac-ip").value = account && account.network ? account.network.wlanAcIp : "";
   $("account-ac-name").value = account && account.network ? account.network.wlanAcName : "";
+  accountFormDirty = false;
 }
 
 function readEditedAccount() {
@@ -617,6 +853,7 @@ function parseCapturedUrl() {
     $("parsed-mac").value = params.get("wlan_user_mac") || "000000000000";
     $("login-method").value = params.get("login_method") || $("login-method").value || "1";
     $("js-version").value = params.get("jsVersion") || $("js-version").value || "3.3.2";
+    settingsFormDirty = true;
     toast("解析成功：" + suffixLabel(parsed.suffix));
   } catch (error) {
     toast("URL 格式不正确");
@@ -719,6 +956,7 @@ function readConfig() {
     },
     ui: {
       modernizePortal: $("modernize-portal").checked,
+      autoRefreshSettings: $("auto-refresh-settings").checked,
       title: "徐医校园网",
       ...readAppearanceConfig()
     },
@@ -758,6 +996,7 @@ function applyCurrentAppearance() {
 
 async function persistAppearance() {
   const previousAppearance = state?.config?.ui || null;
+  const dirtyBeforePersist = settingsFormDirty;
   try {
     const response = await sendMessage({
       action: "config:save",
@@ -771,6 +1010,8 @@ async function persistAppearance() {
   } catch (error) {
     if (previousAppearance) hydrateAppearance(previousAppearance);
     throw error;
+  } finally {
+    settingsFormDirty = dirtyBeforePersist;
   }
 }
 

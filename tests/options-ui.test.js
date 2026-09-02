@@ -595,3 +595,146 @@ test("设置状态尚未加载时打开认证页不会崩溃或误跳默认地�
   assert.equal(context.openConfiguredPortal(), true);
   assert.deepEqual(opened, [{ url: "https://gateway.example/login" }]);
 });
+
+function createRefreshControllerHarness(overrides = {}) {
+  const calls = [];
+  const intervals = [];
+  let dirty = false;
+  let visible = true;
+  let reloads = 0;
+  let confirmResult = true;
+  const context = vm.createContext({
+    clearTimeout,
+    console,
+    document: { addEventListener() {}, getElementById() { return null; } },
+    setTimeout
+  });
+  loadOptions(context);
+  const controller = context.createSettingsRefreshController({
+    loadFull: async () => calls.push("full"),
+    loadConnection: async () => calls.push("connection"),
+    loadDiagnostics: async () => calls.push("diagnostics"),
+    hasUnsavedChanges: () => dirty,
+    setStatus: (status) => calls.push({ status: JSON.parse(JSON.stringify(status)) }),
+    reportManualError: (error) => calls.push({ manualError: error.message }),
+    persistEnabled: async (enabled) => calls.push({ persistEnabled: enabled }),
+    confirmReload: async () => confirmResult,
+    reloadPage: () => { reloads += 1; },
+    isVisible: () => visible,
+    setIntervalFn(callback, delay) {
+      const interval = { callback, delay, cleared: false };
+      intervals.push(interval);
+      return interval;
+    },
+    clearIntervalFn(interval) { interval.cleared = true; },
+    now: () => 1_780_000_000_000,
+    ...overrides
+  });
+  return {
+    calls,
+    controller,
+    intervals,
+    setDirty(value) { dirty = value; },
+    setVisible(value) { visible = value; },
+    setConfirmResult(value) { confirmResult = value; },
+    reloadCount() { return reloads; }
+  };
+}
+
+test("设置页安全同步在编辑时只刷新非表单状态", async () => {
+  const harness = createRefreshControllerHarness();
+  harness.setDirty(true);
+
+  await harness.controller.requestRefresh({ full: true, manual: true });
+
+  assert.equal(harness.calls.includes("full"), false);
+  assert.equal(harness.calls.filter((item) => item === "connection").length, 1);
+  assert.equal(harness.calls.filter((item) => item === "diagnostics").length, 1);
+  assert.equal(harness.calls.some((item) => item.status?.protected === true), true);
+});
+
+test("设置页连续刷新请求共用一个在途任务", async () => {
+  let release;
+  let fullLoads = 0;
+  const harness = createRefreshControllerHarness({
+    loadFull() {
+      fullLoads += 1;
+      return new Promise((resolve) => { release = resolve; });
+    }
+  });
+
+  const first = harness.controller.requestRefresh({ full: true });
+  const second = harness.controller.requestRefresh({ full: true });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(fullLoads, 1);
+  release();
+  await Promise.all([first, second]);
+  assert.equal(fullLoads, 1);
+});
+
+test("设置页按存储区域路由完整同步与连接同步", async () => {
+  const harness = createRefreshControllerHarness();
+
+  await harness.controller.handleStorageChange({ drcomAssistantState: { newValue: {} } }, "local");
+  assert.equal(harness.calls.filter((item) => item === "full").length, 1);
+
+  harness.calls.length = 0;
+  await harness.controller.handleStorageChange({ drcomAssistantSession: { newValue: {} } }, "session");
+  assert.equal(harness.calls.includes("full"), false);
+  assert.equal(harness.calls.filter((item) => item === "connection").length, 1);
+});
+
+test("设置页自动同步开关管理可见页面的单一定时器", async () => {
+  const harness = createRefreshControllerHarness();
+
+  await harness.controller.setEnabled(true);
+  await harness.controller.setEnabled(true);
+  assert.equal(harness.intervals.length, 1);
+  assert.equal(harness.intervals[0].delay, 15_000);
+
+  harness.setVisible(false);
+  await harness.controller.handleVisibilityChange();
+  assert.equal(harness.intervals[0].cleared, true);
+
+  harness.setVisible(true);
+  await harness.controller.handleVisibilityChange();
+  assert.equal(harness.intervals.length, 2);
+  assert.equal(harness.calls.some((item) => item === "full"), true);
+});
+
+test("设置页重载在未保存内容存在时必须确认", async () => {
+  const harness = createRefreshControllerHarness();
+  harness.setDirty(true);
+  harness.setConfirmResult(false);
+  assert.equal(await harness.controller.reload(), false);
+  assert.equal(harness.reloadCount(), 0);
+
+  harness.setConfirmResult(true);
+  assert.equal(await harness.controller.reload(), true);
+  assert.equal(harness.reloadCount(), 1);
+});
+
+test("设置页自动同步偏好只在持久化成功后生效", async () => {
+  const harness = createRefreshControllerHarness();
+  await harness.controller.setEnabled(false);
+  assert.equal(harness.calls.some((item) => item.persistEnabled === false), true);
+  assert.equal(harness.controller.isEnabled(), false);
+
+  const failed = createRefreshControllerHarness({
+    persistEnabled: async () => { throw new Error("save failed"); }
+  });
+  await assert.rejects(() => failed.controller.setEnabled(false), /save failed/);
+  assert.equal(failed.controller.isEnabled(), true);
+});
+
+test("设置页自动同步失败静默，主动同步失败才提示", async () => {
+  const harness = createRefreshControllerHarness({
+    loadConnection: async () => { throw new Error("offline"); }
+  });
+
+  await harness.controller.requestRefresh({ full: false, diagnostics: false });
+  assert.equal(harness.calls.some((item) => item.manualError), false);
+
+  await harness.controller.requestRefresh({ full: false, diagnostics: false, manual: true });
+  assert.equal(harness.calls.some((item) => item.manualError === "offline"), true);
+});

@@ -153,6 +153,7 @@ h1, h2, h3, p { margin: 0; }
   padding: 44px 0 calc(64px + env(safe-area-inset-bottom));
 }
 .page-intro { margin-bottom: 32px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.page-intro-meta { min-width: 0; display: grid; justify-items: end; gap: 8px; }
 .page-title-group { min-width: 0; display: flex; align-items: center; gap: 14px; }
 .page-title-icon { width: 44px; height: 44px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 13px; color: var(--icon-foreground); box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.3), 0 8px 18px -13px oklch(0.12 0.02 255 / 0.62); }
 .page-title-icon svg { width: 25px; height: 25px; }
@@ -165,6 +166,12 @@ h1, h2, h3, p { margin: 0; }
 .page-connection-status[data-tone="action"] > span { background: var(--color-danger); }
 .page-connection-status[data-tone="waiting"] > span { background: var(--color-warning); }
 .page-connection-status strong { color: var(--color-text); font-weight: 620; }
+.settings-refresh-controls { max-width: 100%; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.refresh-toggle { min-height: 38px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--color-separator); border-radius: var(--radius-control); color: var(--color-text); background: var(--color-surface-secondary); font-size: 13px; font-weight: 600; cursor: pointer; }
+.refresh-toggle input { width: 18px; height: 18px; margin: 0; flex: 0 0 auto; accent-color: var(--color-accent); }
+.settings-refresh-status { max-width: 100%; color: var(--color-text-secondary); font-size: 12px; line-height: 1.4; text-align: right; }
+.settings-refresh-status[data-tone="warning"] { color: var(--color-warning); }
+.settings-refresh-status[data-tone="error"] { color: var(--color-danger); }
 
 .account-editor { display: grid; }
 .settings-form { display: contents; }
@@ -386,6 +393,10 @@ summary { cursor: pointer; }
   .sidebar-nav { width: 100%; margin-left: 0; justify-content: space-between; }
   .sidebar-nav button { min-width: 44px; padding: 0; justify-content: center; }
   .settings-shell { width: 100%; padding-top: 28px; }
+  .page-intro-meta { padding-left: 0; }
+  .settings-refresh-controls { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .settings-refresh-controls .refresh-toggle { grid-column: 1 / -1; justify-content: center; }
+  .settings-refresh-controls button { width: 100%; }
   .settings-section, .advanced-settings > summary, .advanced-content { padding-right: 16px; padding-left: 16px; }
   .account-row { align-items: start; flex-direction: column; gap: 3px; }
   .button-group, .inline-actions, .background-actions { grid-template-columns: 1fr; }
@@ -477,7 +488,10 @@ summary { cursor: pointer; }
   .settings-workspace { min-height: 0; overflow: visible; background: transparent; }
   .settings-shell { width: min(100%, 820px); padding: 24px 0 calc(116px + env(safe-area-inset-bottom)); }
   .page-intro { align-items: flex-start; flex-direction: column; gap: 14px; }
-  .page-connection-status { padding-left: 58px; }
+  .page-intro-meta { width: 100%; padding-left: 58px; justify-items: start; }
+  .page-connection-status { padding-left: 0; }
+  .settings-refresh-controls { justify-content: flex-start; }
+  .settings-refresh-status { text-align: left; }
   .settings-actions { bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
 

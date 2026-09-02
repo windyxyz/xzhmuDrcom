@@ -417,6 +417,7 @@ test("旧版本配置升级后默认启用可恢复的门户接管", () => {
   assert.equal(normalized.schemaVersion, 12);
   assert.equal(normalized.config.ui.modernizePortal, true);
   assert.equal(normalized.config.ui.onlineDetailMode, "classic");
+  assert.equal(normalized.config.ui.autoRefreshSettings, true);
   assert.equal("hideOriginalPortal" in normalized.config.ui, false);
   assert.equal("subtitle" in normalized.config.ui, false);
   assert.equal("density" in normalized.config.ui, false);
@@ -431,6 +432,12 @@ test("旧版本配置升级后默认启用可恢复的门户接管", () => {
     config: { ui: { onlineDetailMode: "unsupported" } }
   });
   assert.equal(invalidMode.config.ui.onlineDetailMode, "classic");
+
+  const disabledRefresh = background.normalizeState({
+    schemaVersion: 12,
+    config: { ui: { autoRefreshSettings: false } }
+  });
+  assert.equal(disabledRefresh.config.ui.autoRefreshSettings, false);
 });
 
 test("schema 12 会清理历史无效账号与 UI 字段并幂等写回", async () => {

@@ -39,6 +39,7 @@ const DEFAULT_STATE = {
     ui: {
       modernizePortal: true,
       onlineDetailMode: "classic",
+      autoRefreshSettings: true,
       title: "徐医校园网",
       accent: "#007aff",
       theme: "system",
@@ -164,6 +165,7 @@ function normalizeState(input) {
   state.config.ui.onlineDetailMode = ["classic", "full", "minimal", "hidden"].includes(state.config.ui.onlineDetailMode)
     ? state.config.ui.onlineDetailMode
     : DEFAULT_STATE.config.ui.onlineDetailMode;
+  state.config.ui.autoRefreshSettings = state.config.ui.autoRefreshSettings !== false;
   if (previousSchemaVersion < 11 && state.config.ui.background === "paper") state.config.ui.theme = "light";
   if (previousSchemaVersion < 11 && state.config.ui.background === "night") state.config.ui.theme = "dark";
   state.config.ui.background = state.config.ui.background === "custom" ? "custom" : DEFAULT_STATE.config.ui.background;

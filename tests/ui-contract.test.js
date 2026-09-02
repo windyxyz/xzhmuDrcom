@@ -198,6 +198,14 @@ test("设置页提供四种固定的在线信息显示模式", () => {
   );
 });
 
+test("设置页提供自动同步、立即同步和安全重载控件", () => {
+  const source = readExtensionFile("options.html");
+  assert.match(source, /id="auto-refresh-settings"[^>]*type="checkbox"[^>]*checked/);
+  assert.match(source, /id="refresh-settings"[^>]*>立即同步</);
+  assert.match(source, /id="reload-settings-page"[^>]*>重新加载页面</);
+  assert.match(source, /id="settings-refresh-status"[^>]*role="status"[^>]*aria-live="polite"/);
+});
+
 test("门户共享令牌和纯逻辑模块在内容脚本之前加载", () => {
   const manifest = JSON.parse(readExtensionFile("manifest.json"));
   const portalScript = manifest.content_scripts[0];
