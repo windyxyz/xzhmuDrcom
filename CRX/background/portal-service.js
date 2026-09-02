@@ -157,19 +157,32 @@ function isWebPageSender(sender) {
   return Boolean(sender && typeof sender.url === "string" && /^https?:/i.test(sender.url));
 }
 
+async function trustedPortalOrigins() {
+  // 默认门户始终可信；用户显式配置的自定义网关只有在保存时逐来源授权后，
+  // 内容脚本才会注册到那里，因此这里的配置来源与注入范围保持一致。
+  const origins = new Set(["http://10.10.10.2"]);
+  try {
+    const configured = new URL(stringValue((await getState()).config.portalUrl));
+    if (configured.protocol === "http:" || configured.protocol === "https:") {
+      origins.add(configured.origin);
+    }
+  } catch (error) {}
+  return origins;
+}
+
 async function validatePortalSender(sender) {
-  const trustedOrigin = "http://10.10.10.2";
   if (!sender || sender.id !== chrome.runtime.id) {
     throw new Error("拒绝非本扩展发起的网页消息");
   }
   if (sender.frameId !== 0) {
     throw new Error("网页消息只允许来自门户顶层 frame");
   }
-  if (sender.origin !== trustedOrigin) {
+  const trustedOrigins = await trustedPortalOrigins();
+  if (!trustedOrigins.has(sender.origin)) {
     throw new Error("网页消息来源不是受信任门户");
   }
   try {
-    if (new URL(sender.url).origin !== trustedOrigin) {
+    if (!trustedOrigins.has(new URL(sender.url).origin)) {
       throw new Error("网页消息 URL 不是受信任门户");
     }
   } catch (error) {
@@ -186,7 +199,7 @@ async function validatePortalSender(sender) {
     throw new Error("无法确认网页消息标签页");
   }
   try {
-    if (!currentTab || new URL(currentTab.url || "").origin !== trustedOrigin) {
+    if (!currentTab || !trustedOrigins.has(new URL(currentTab.url || "").origin)) {
       throw new Error("标签页已经离开受信任门户");
     }
   } catch (error) {

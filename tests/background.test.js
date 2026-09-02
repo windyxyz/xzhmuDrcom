@@ -327,6 +327,40 @@ test('portal:status:get 拒绝 iframe、伪造来源和已经离开门户的标�
   }
 });
 
+test('已配置门户的来源与默认门户共享网页消息信任边界', async () => {
+  const background = loadBackground({
+    localStore: {
+      drcomAssistantState: {
+        schemaVersion: 12,
+        config: { portalUrl: 'http://portal.example.com/' }
+      }
+    },
+    currentTabs: { 1: { id: 1, url: 'http://portal.example.com/' } }
+  });
+  const sender = portalSender({
+    origin: 'http://portal.example.com',
+    url: 'http://portal.example.com/',
+    tab: { url: 'http://portal.example.com/' }
+  });
+
+  const result = await background.handleMessage({ action: 'portal:config:get' }, sender);
+  assert.equal(result.ok, true);
+  assert.equal(result.portal.portalUrl, 'http://portal.example.com/');
+});
+
+test('未配置门户时其他来源仍被拒绝', async () => {
+  const background = loadBackground({
+    currentTabs: { 1: { id: 1, url: 'http://portal.example.com/' } }
+  });
+  await assert.rejects(
+    background.handleMessage(
+      { action: 'portal:config:get' },
+      portalSender({ origin: 'http://portal.example.com', url: 'http://portal.example.com/', tab: { url: 'http://portal.example.com/' } })
+    ),
+    /门户/
+  );
+});
+
 test("首次安装会打开欢迎页，扩展更新不会重复打开", async () => {
   const background = loadBackground();
   const [onInstalled] = background.__listeners.installed;

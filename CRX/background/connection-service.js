@@ -12,22 +12,21 @@ async function loginSelectedAccount(reason, options = {}) {
 }
 
 async function loginAccount(accountId, transientAccount, options = {}) {
+  const automatic = options.automatic === true;
+  // 自动登录在单通道外先检查冷却与暂停：被拦截时直接返回，不并入进行中的登录，
+  // 避免并发的手动登录入口拿到“自动跳过”结果。
+  if (automatic) {
+    const precheck = await getConnectionState();
+    if (!canAttemptAutomaticLogin(precheck)) {
+      return automaticLoginSkipped(precheck);
+    }
+  }
+
   const key = "drcom-login";
   return runLoginSingleFlight(key, async () => {
-    const automatic = options.automatic === true;
     const runtime = await getConnectionState();
     if (automatic && !canAttemptAutomaticLogin(runtime)) {
-      return {
-        ok: false,
-        success: false,
-        online: false,
-        skipped: true,
-        phase: runtime.phase,
-        retryAt: runtime.nextRetryAt,
-        message: runtime.blocked
-          ? runtime.message || "自动登录已暂停，请检查账号配置。"
-          : "仍在等待下一次自动重试。"
-      };
+      return automaticLoginSkipped(runtime);
     }
 
     if (!automatic) {
@@ -138,6 +137,20 @@ function mergeRuntimeLoginNetwork(account, config, runtimeNetwork) {
     wlanAcName: stringValue(fresh.wlanAcName || accountNetwork.wlanAcName || configNetwork.wlanAcName).trim()
   };
 }
+function automaticLoginSkipped(runtime) {
+  return {
+    ok: false,
+    success: false,
+    online: false,
+    skipped: true,
+    phase: runtime.phase,
+    retryAt: runtime.nextRetryAt,
+    message: runtime.blocked
+      ? runtime.message || "自动登录已暂停，请检查账号配置。"
+      : "仍在等待下一次自动重试。"
+  };
+}
+
 function runLoginSingleFlight(key, task) {
   const normalizedKey = stringValue(key) || "default";
   const existing = loginFlights.get(normalizedKey);
