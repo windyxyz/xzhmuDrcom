@@ -162,8 +162,9 @@ test("portal diagnostics card exposes live status, privacy warning, and keyboard
   assert.match(styles, /diagnostics-card/);
   assert.match(styles, /diagnostics-actions button[^}]*min-height: 44px/);
   assert.match(styles, /\.switch\s*\{[^}]*min-height:\s*44px/);
-  assert.match(styles, /\.switch input\s*\{[^}]*min-height:\s*44px/);
-  assert.match(styles, /\.switch > span:not\(\.sr-only\)\s*\{[^}]*height:\s*28px[^}]*top:\s*8px/);
+  assert.match(styles, /\.switch input\[type="checkbox"\]\s*\{[^}]*width:\s*40px/);
+  assert.match(styles, /\.switch input\[type="checkbox"\]\s*\{[^}]*height:\s*20px/);
+  assert.match(styles, /border-radius:\s*10px/);
   assert.match(styles, /prefers-reduced-motion/);
 });
 
@@ -177,16 +178,19 @@ test("正式界面使用功能性玻璃层并提供降级与减弱透明度支�
   assert.doesNotMatch(options, /traffic-light|window-controls|window-dot/);
 });
 
-test("设置页采用带无障碍 SVG 图标的系统分类侧栏与连接概览", () => {
+test("设置页采用带无障碍字形图标的系统分类侧栏与连接概览", () => {
   const source = readExtensionFile("options.html");
   assert.match(source, /id="connection-overview"/);
   assert.match(source, /id="test-connection"/);
   assert.match(source, /id="settings-connection-status"[^>]*aria-live="polite"/);
   const sidebar = source.match(/<nav class="sidebar-nav"[\s\S]*?<\/nav>/)?.[0] || "";
-  assert.equal((sidebar.match(/<button type="button" data-settings-target=/g) || []).length, 5);
-  assert.equal((sidebar.match(/<svg[^>]*aria-hidden="true"/g) || []).length, 5);
+  assert.equal((sidebar.match(/<button type="button" class="win-nav-item" data-settings-target=/g) || []).length, 5);
+  assert.equal((sidebar.match(/data-glyph="/g) || []).length, 5);
+  assert.equal((sidebar.match(/class="nav-icon win-glyph"/g) || []).length, 5);
   assert.doesNotMatch(sidebar, /[●↻◐⋯]/);
   assert.doesNotMatch(source, /class="sidebar-mark"|>XM</);
+  assert.doesNotMatch(source, /class="[^"]*tone-/);
+  assert.doesNotMatch(source, /<svg/);
 });
 
 test("设置页提供四种固定的在线信息显示模式", () => {

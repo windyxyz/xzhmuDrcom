@@ -6,6 +6,12 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  const BACKGROUND_POSITIONS = [
+    "left top", "center top", "right top",
+    "left center", "center", "right center",
+    "left bottom", "center bottom", "right bottom"
+  ];
+
   const DEFAULTS = Object.freeze({
     theme: "system",
     accent: "#007aff",
@@ -13,7 +19,8 @@
     backgroundImage: "",
     backgroundBlur: 14,
     backgroundDim: 0.42,
-    backgroundScale: 1.04
+    backgroundScale: 1.04,
+    backgroundPosition: "center"
   });
 
   function clamp(value, min, max, fallback) {
@@ -33,11 +40,33 @@
     }
   }
 
+  function normalizePosition(value) {
+    return BACKGROUND_POSITIONS.includes(value) ? value : DEFAULTS.backgroundPosition;
+  }
+
+  function relativeLuminance(hexColor) {
+    const match = /^#([0-9a-f]{6})$/i.exec(String(hexColor || "").trim());
+    if (!match) return 0;
+    const channels = [0, 2, 4].map((offset) => {
+      const raw = Number.parseInt(match[1].slice(offset, offset + 2), 16) / 255;
+      return raw <= 0.03928 ? raw / 12.92 : Math.pow((raw + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  }
+
+  function onAccentColor(accent) {
+    return relativeLuminance(accent) > 0.45 ? "#000000" : "#ffffff";
+  }
+
   function normalizeAppearance(input = {}) {
     const theme = ["system", "light", "dark"].includes(input.theme) ? input.theme : DEFAULTS.theme;
     const accent = /^#[0-9a-f]{6}$/i.test(String(input.accent || "")) ? String(input.accent) : DEFAULTS.accent;
     const backgroundImage = normalizeImage(input.backgroundImage);
-    const background = input.background === "custom" && backgroundImage ? "custom" : "fresh";
+    const background = input.background === "custom" && backgroundImage
+      ? "custom"
+      : input.background === "daily"
+        ? "daily"
+        : "fresh";
     return {
       theme,
       accent,
@@ -45,7 +74,8 @@
       backgroundImage: background === "custom" ? backgroundImage : "",
       backgroundBlur: clamp(input.backgroundBlur, 0, 32, DEFAULTS.backgroundBlur),
       backgroundDim: clamp(input.backgroundDim, 0.2, 0.72, DEFAULTS.backgroundDim),
-      backgroundScale: clamp(input.backgroundScale, 1, 1.15, DEFAULTS.backgroundScale)
+      backgroundScale: clamp(input.backgroundScale, 1, 1.15, DEFAULTS.backgroundScale),
+      backgroundPosition: normalizePosition(input.backgroundPosition)
     };
   }
 
@@ -53,7 +83,7 @@
     const normalized = normalizeAppearance(input);
     const effectiveTheme = normalized.theme;
     if (!rootElement || !rootElement.dataset || !rootElement.style) {
-      return { ...normalized, effectiveTheme };
+      return { ...normalized, effectiveTheme, onAccent: onAccentColor(normalized.accent) };
     }
 
     if (effectiveTheme === "system") delete rootElement.dataset.theme;
@@ -61,11 +91,13 @@
     rootElement.dataset.appearanceBackground = normalized.background;
     rootElement.style.setProperty("color-scheme", effectiveTheme === "system" ? "light dark" : effectiveTheme);
     rootElement.style.setProperty("--appearance-accent", normalized.accent);
+    rootElement.style.setProperty("--appearance-on-accent", onAccentColor(normalized.accent));
     rootElement.style.setProperty("--appearance-image", normalized.backgroundImage ? `url("${normalized.backgroundImage}")` : "none");
     rootElement.style.setProperty("--appearance-blur", `${normalized.backgroundBlur}px`);
     rootElement.style.setProperty("--appearance-dim", String(normalized.backgroundDim));
     rootElement.style.setProperty("--appearance-scale", String(normalized.backgroundScale));
-    return { ...normalized, effectiveTheme };
+    rootElement.style.setProperty("--appearance-position", normalized.backgroundPosition);
+    return { ...normalized, effectiveTheme, onAccent: onAccentColor(normalized.accent) };
   }
 
   return { DEFAULTS, normalizeAppearance, applyToRoot };

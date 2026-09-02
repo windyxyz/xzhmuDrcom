@@ -581,7 +581,7 @@ test("设置页在窄屏使用底部分类栏并且一次只显示一个设置�
   }
 });
 
-test("800px 设置页仍使用左侧纵向玻璃侧栏", { timeout: 20_000 }, async (t) => {
+test("800px 设置页使用左侧纵向 WinUI 导航窗格", { timeout: 20_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
     t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
     return;
@@ -613,13 +613,13 @@ test("800px 设置页仍使用左侧纵向玻璃侧栏", { timeout: 20_000 }, as
       await new Promise((resolve) => setTimeout(resolve, 100));
       const sidebar = document.querySelector('.settings-sidebar');
       const workspace = document.querySelector('.settings-workspace');
-      const settingsWindow = document.querySelector('.settings-window');
       const visiblePanels = Array.from(document.querySelectorAll('[data-settings-panel]:not([hidden])')).map((item) => item.id);
       const sidebarRect = sidebar.getBoundingClientRect();
       const workspaceRect = workspace.getBoundingClientRect();
       const style = getComputedStyle(sidebar);
-      const windowStyle = getComputedStyle(settingsWindow);
       const refreshRect = document.querySelector('.settings-refresh-controls').getBoundingClientRect();
+      const currentItem = document.querySelector('.sidebar-nav .win-nav-item[aria-current="page"]');
+      const indicator = currentItem ? getComputedStyle(currentItem, '::before') : null;
       return {
         visiblePanels,
         sidebarLeft: sidebarRect.left,
@@ -629,27 +629,22 @@ test("800px 设置页仍使用左侧纵向玻璃侧栏", { timeout: 20_000 }, as
         workspaceLeft: workspaceRect.left,
         flexDirection: style.flexDirection,
         position: style.position,
-        backdropFilter: style.backdropFilter || style.webkitBackdropFilter || '',
-        workspaceGap: Math.round(workspaceRect.left - sidebarRect.right),
-        windowRadius: parseFloat(windowStyle.borderTopLeftRadius),
-        windowOverflow: windowStyle.overflow,
         refreshLeft: refreshRect.left,
         refreshRight: refreshRect.right,
-        windowBackdropFilter: windowStyle.backdropFilter || windowStyle.webkitBackdropFilter || ''
+        indicatorWidth: indicator ? parseFloat(indicator.width) : 0,
+        indicatorHeight: indicator ? parseFloat(indicator.height) : 0
       };
     })()`);
 
     assert.equal(layout.flexDirection, "column");
     assert.ok(["relative", "sticky"].includes(layout.position), JSON.stringify(layout));
-    assert.ok(layout.sidebarWidth >= 210 && layout.sidebarWidth <= 260, JSON.stringify(layout));
+    assert.ok(layout.sidebarWidth >= 230 && layout.sidebarWidth <= 300, JSON.stringify(layout));
     assert.ok(layout.sidebarHeight > layout.sidebarWidth * 2, JSON.stringify(layout));
-    assert.ok(layout.workspaceGap >= -20 && layout.workspaceGap <= 1, JSON.stringify(layout));
-    assert.match(layout.backdropFilter, /blur\(/);
+    assert.ok(layout.workspaceLeft >= layout.sidebarRight, "工作区应位于导航窗格右侧：" + JSON.stringify(layout));
     assert.deepEqual(layout.visiblePanels, ["connection-overview", "automation-section"]);
-    assert.ok(layout.windowRadius >= 8, JSON.stringify(layout));
-    assert.equal(layout.windowOverflow, "hidden");
     assert.ok(layout.refreshLeft >= layout.workspaceLeft && layout.refreshRight <= 800, JSON.stringify(layout));
-    assert.match(layout.windowBackdropFilter, /blur\(/);
+    assert.ok(Math.abs(layout.indicatorWidth - 3) < 1.5 && Math.abs(layout.indicatorHeight - 16) < 1.5,
+      "选中项应有 3×16 的强调色指示条：" + JSON.stringify(layout));
   } finally {
     await cleanupBrowserProfile(child, profile);
   }

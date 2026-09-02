@@ -108,8 +108,35 @@ function bindEvents() {
     await persistAppearance();
     toast("显示模式已应用");
   }));
-  $("appearance-accent").addEventListener("input", applyCurrentAppearance);
+  document.querySelectorAll(".accent-swatch").forEach((swatch) => {
+    swatch.addEventListener("click", runAsync(async () => {
+      $("appearance-accent").value = swatch.dataset.color;
+      syncAccentControls();
+      applyCurrentAppearance();
+      await persistAppearance();
+      toast("强调色已应用");
+    }));
+  });
+  $("appearance-accent").addEventListener("input", () => {
+    syncAccentControls();
+    applyCurrentAppearance();
+  });
   $("appearance-accent").addEventListener("change", runAsync(async () => {
+    syncAccentControls();
+    applyCurrentAppearance();
+    await persistAppearance();
+    toast("强调色已应用");
+  }));
+  $("appearance-accent-hex").addEventListener("change", runAsync(async () => {
+    const hex = normalizeAccentHex($("appearance-accent-hex").value);
+    if (!hex) {
+      syncAccentControls();
+      toast("色值格式应为 #RRGGBB");
+      return;
+    }
+    $("appearance-accent").value = hex;
+    syncAccentControls();
+    applyCurrentAppearance();
     await persistAppearance();
     toast("强调色已应用");
   }));
@@ -133,6 +160,15 @@ function bindEvents() {
     $(id).addEventListener("change", runAsync(async () => {
       await persistAppearance();
       toast("背景参数已应用");
+    }));
+  });
+  document.querySelectorAll(".position-cell").forEach((cell) => {
+    cell.addEventListener("click", runAsync(async () => {
+      $("background-position").value = cell.dataset.position;
+      syncAppearanceControls();
+      applyCurrentAppearance();
+      await persistAppearance();
+      toast("背景焦点已应用");
     }));
   });
 }
@@ -434,6 +470,43 @@ function hydrateForm() {
   settingsFormDirty = false;
 }
 
+const BACKGROUND_POSITIONS = new Set([
+  "left top", "center top", "right top",
+  "left center", "center", "right center",
+  "left bottom", "center bottom", "right bottom"
+]);
+const POSITION_LABELS = new Map([
+  ["left top", "左上"], ["center top", "上"], ["right top", "右上"],
+  ["left center", "左"], ["center", "居中"], ["right center", "右"],
+  ["left bottom", "左下"], ["center bottom", "下"], ["right bottom", "右下"]
+]);
+
+function normalizeAccentHex(value) {
+  const raw = String(value || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(raw) ? raw.toLowerCase() : "";
+}
+
+function syncAccentControls() {
+  const accent = normalizeAccentHex($("appearance-accent").value) || "#007aff";
+  const hexInput = $("appearance-accent-hex");
+  if (hexInput && document.activeElement !== hexInput) hexInput.value = accent;
+  if (typeof document.querySelectorAll !== "function") return;
+  document.querySelectorAll(".accent-swatch").forEach((swatch) => {
+    if (swatch.dataset.color.toLowerCase() === accent) swatch.setAttribute("aria-pressed", "true");
+    else swatch.removeAttribute("aria-pressed");
+  });
+}
+
+function syncSliderProgress(id) {
+  const input = $(id);
+  if (!input || !input.style) return;
+  const min = Number(input.min) || 0;
+  const max = Number(input.max) || 100;
+  const value = Number(input.value) || 0;
+  const ratio = max > min ? (value - min) / (max - min) : 0;
+  input.style.setProperty("--win-slider-progress", `${Math.round(ratio * 100)}%`);
+}
+
 function hydrateAppearance(input) {
   const appearance = globalThis.DrcomAppearance.normalizeAppearance(input);
   $("online-detail-mode").value = ["classic", "full", "minimal", "hidden"].includes(input?.onlineDetailMode)
@@ -446,6 +519,10 @@ function hydrateAppearance(input) {
   $("background-blur").value = appearance.backgroundBlur;
   $("background-dim").value = appearance.backgroundDim;
   $("background-scale").value = appearance.backgroundScale;
+  $("background-position").value = BACKGROUND_POSITIONS.has(input?.backgroundPosition)
+    ? input.backgroundPosition
+    : "center";
+  syncAccentControls();
   syncAppearanceControls();
   applyCurrentAppearance();
 }
@@ -591,12 +668,8 @@ function setupSettingsNavigation() {
     $("settings-title").textContent = button.dataset.settingsTitle || button.textContent.trim();
     $("settings-description").textContent = button.dataset.settingsDescription || "";
     const titleIcon = $("settings-title-icon");
-    const sourceIcon = button.querySelector?.(".nav-icon");
-    if (titleIcon && sourceIcon) {
-      const tone = Array.from(sourceIcon.classList).find((name) => name.startsWith("tone-"));
-      titleIcon.className = `page-title-icon ${tone || "tone-blue"}`;
-      const svg = sourceIcon.querySelector("svg");
-      if (svg) titleIcon.replaceChildren(svg.cloneNode(true));
+    if (titleIcon) {
+      titleIcon.textContent = button.dataset.glyph || titleIcon.textContent;
     }
     const actions = $("settings-actions");
     if (actions) actions.hidden = !["connection-overview", "advanced-settings"].includes(targetId);
@@ -973,6 +1046,7 @@ function readConfig() {
 }
 
 function readAppearanceConfig() {
+  const position = $("background-position")?.value;
   return {
     onlineDetailMode: $("online-detail-mode").value,
     theme: $("appearance-theme").value,
@@ -981,7 +1055,8 @@ function readAppearanceConfig() {
     backgroundImage: $("background-image-data").value,
     backgroundBlur: Number($("background-blur").value),
     backgroundDim: Number($("background-dim").value),
-    backgroundScale: Number($("background-scale").value)
+    backgroundScale: Number($("background-scale").value),
+    backgroundPosition: BACKGROUND_POSITIONS.has(position) ? position : "center"
   };
 }
 
@@ -991,6 +1066,7 @@ function applyCurrentAppearance() {
   const preview = $("background-preview");
   preview.style.setProperty("--preview-accent", appearance.accent);
   preview.style.backgroundImage = appearance.backgroundImage ? `url("${appearance.backgroundImage}")` : "none";
+  preview.style.setProperty("--preview-position", appearance.backgroundPosition || "center");
   preview.dataset.hasImage = appearance.backgroundImage ? "true" : "false";
 }
 
@@ -1016,19 +1092,37 @@ async function persistAppearance() {
 }
 
 function syncAppearanceControls() {
-  const custom = $("appearance-background").value === "custom";
+  const source = $("appearance-background").value;
+  const custom = source === "custom";
+  const daily = source === "daily";
   const imageData = $("background-image-data").value;
   const hasImage = Boolean(imageData);
   $("background-controls").hidden = !custom;
   $("clear-background").disabled = !hasImage;
+  const fileInput = $("background-file");
+  if (fileInput) fileInput.disabled = !custom;
   $("background-blur-value").value = `${Number($("background-blur").value)} px`;
   $("background-dim-value").value = `${Math.round(Number($("background-dim").value) * 100)}%`;
   $("background-scale-value").value = `${Math.round(Number($("background-scale").value) * 100)}%`;
+  const positionValue = $("background-position")?.value || "center";
+  const positionOutput = $("background-position-value");
+  if (positionOutput) positionOutput.textContent = POSITION_LABELS.get(positionValue) || "居中";
+  if (typeof document.querySelectorAll === "function") {
+    document.querySelectorAll(".position-cell").forEach((cell) => {
+      if (cell.dataset.position === positionValue) cell.setAttribute("aria-pressed", "true");
+      else cell.removeAttribute("aria-pressed");
+    });
+  }
+  ["background-blur", "background-dim", "background-scale"].forEach(syncSliderProgress);
   const storageNote = $("background-storage-note");
   if (storageNote) {
-    storageNote.textContent = hasImage
-      ? `当前约 ${formatStorageSize(imageData.length)}，保存上限 3 MB`
-      : "选择后立即保存并应用；超过 3 MB 时自动高质量压缩";
+    storageNote.textContent = daily
+      ? "每日壁纸由后台从必应获取并缓存；首次保存时需要允许访问必应"
+      : custom
+        ? hasImage
+          ? `当前约 ${formatStorageSize(imageData.length)}，保存上限 3 MB`
+          : "选择后立即保存并应用；超过 3 MB 时自动高质量压缩"
+        : "使用当前主题底色，不加载任何图片";
   }
 }
 
