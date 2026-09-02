@@ -136,7 +136,11 @@ function normalizeImageUrl(value) {
 function publicAppearance(input) {
   const ui = input && typeof input === "object" ? input : {};
   const backgroundImage = normalizeImageUrl(ui.backgroundImage);
-  const background = ui.background === "custom" && backgroundImage ? "custom" : "fresh";
+  const background = ui.background === "custom" && backgroundImage
+    ? "custom"
+    : ui.background === "daily"
+      ? "daily"
+      : "fresh";
   return {
     theme: ["system", "light", "dark"].includes(ui.theme) ? ui.theme : DEFAULT_STATE.config.ui.theme,
     accent: normalizeAccent(ui.accent),
@@ -144,7 +148,10 @@ function publicAppearance(input) {
     backgroundImage: background === "custom" ? backgroundImage : "",
     backgroundBlur: clampNumber(ui.backgroundBlur, 0, 32, DEFAULT_STATE.config.ui.backgroundBlur),
     backgroundDim: clampNumber(ui.backgroundDim, 0.2, 0.72, DEFAULT_STATE.config.ui.backgroundDim),
-    backgroundScale: clampNumber(ui.backgroundScale, 1, 1.15, DEFAULT_STATE.config.ui.backgroundScale)
+    backgroundScale: clampNumber(ui.backgroundScale, 1, 1.15, DEFAULT_STATE.config.ui.backgroundScale),
+    backgroundPosition: ["left top", "center top", "right top", "left center", "center", "right center", "left bottom", "center bottom", "right bottom"].includes(ui.backgroundPosition)
+      ? ui.backgroundPosition
+      : "center"
   };
 }
 

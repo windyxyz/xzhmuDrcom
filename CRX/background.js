@@ -10,6 +10,7 @@ importScripts(
   "background/drcom-client.js",
   "background/account-service.js",
   "background/connection-service.js",
+  "background/wallpaper-service.js",
   "background/portal-service.js",
   "background/message-router.js"
 );

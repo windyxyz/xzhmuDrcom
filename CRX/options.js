@@ -144,10 +144,17 @@ function bindEvents() {
     await persistAppearance();
     toast("在线信息显示已应用");
   }));
-  $("appearance-background").addEventListener("change", runAsync(async () => {
+  $("appearance-background").addEventListener("change", runAsync(async (event) => {
+    if (event.target.value === "daily" && !await ensureWallpaperPermission()) {
+      event.target.value = "fresh";
+      syncAppearanceControls();
+      toast("未授予必应访问权限，已保持简洁底色");
+      return;
+    }
     syncAppearanceControls();
     applyCurrentAppearance();
     await persistAppearance();
+    refreshDailyWallpaper();
     toast("背景设置已应用");
   }));
   $("background-file").addEventListener("change", runAsync(handleBackgroundFile));
@@ -475,11 +482,43 @@ const BACKGROUND_POSITIONS = new Set([
   "left center", "center", "right center",
   "left bottom", "center bottom", "right bottom"
 ]);
+const WALLPAPER_ORIGINS = ["https://cn.bing.com/*"];
 const POSITION_LABELS = new Map([
   ["left top", "左上"], ["center top", "上"], ["right top", "右上"],
   ["left center", "左"], ["center", "居中"], ["right center", "右"],
   ["left bottom", "左下"], ["center bottom", "下"], ["right bottom", "右下"]
 ]);
+let resolvedWallpaper = { day: "", dataUrl: "" };
+
+function effectiveAppearanceConfig() {
+  const config = readAppearanceConfig();
+  if (config.background !== "daily") return config;
+  if (resolvedWallpaper.dataUrl) {
+    return { ...config, background: "custom", backgroundImage: resolvedWallpaper.dataUrl };
+  }
+  return { ...config, background: "fresh", backgroundImage: "" };
+}
+
+function refreshDailyWallpaper() {
+  if (!$("appearance-background") || $("appearance-background").value !== "daily") return;
+  sendMessage({ action: "wallpaper:get" }).then((response) => {
+    const wallpaper = response && response.wallpaper;
+    if (wallpaper && wallpaper.ok && wallpaper.dataUrl) {
+      resolvedWallpaper = { day: wallpaper.day || "", dataUrl: wallpaper.dataUrl };
+      applyCurrentAppearance();
+    }
+  }).catch(() => {});
+}
+
+async function ensureWallpaperPermission() {
+  if (!globalThis.chrome?.permissions?.request) return true;
+  try {
+    if (await chrome.permissions.contains({ origins: WALLPAPER_ORIGINS })) return true;
+    return await chrome.permissions.request({ origins: WALLPAPER_ORIGINS });
+  } catch (error) {
+    return false;
+  }
+}
 
 function normalizeAccentHex(value) {
   const raw = String(value || "").trim();
@@ -525,6 +564,7 @@ function hydrateAppearance(input) {
   syncAccentControls();
   syncAppearanceControls();
   applyCurrentAppearance();
+  refreshDailyWallpaper();
 }
 
 function connectionSummary(connection) {
@@ -968,6 +1008,9 @@ async function saveSettings(event) {
   event.preventDefault();
   const config = readConfig();
   await requestGatewayAccess(config);
+  if (config.ui.background === "daily" && !await ensureWallpaperPermission()) {
+    throw new Error("需要允许访问必应，才能使用每日壁纸背景");
+  }
   const response = await sendMessage({ action: "config:save", config });
   state = response.state;
   hydrateForm();
@@ -1061,8 +1104,7 @@ function readAppearanceConfig() {
 }
 
 function applyCurrentAppearance() {
-  const config = readAppearanceConfig();
-  const appearance = globalThis.DrcomAppearance.applyToRoot(document.documentElement, config);
+  const appearance = globalThis.DrcomAppearance.applyToRoot(document.documentElement, effectiveAppearanceConfig());
   const preview = $("background-preview");
   preview.style.setProperty("--preview-accent", appearance.accent);
   preview.style.backgroundImage = appearance.backgroundImage ? `url("${appearance.backgroundImage}")` : "none";

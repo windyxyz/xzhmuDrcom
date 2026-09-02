@@ -79,8 +79,22 @@ async function handleMessage(message, sender) {
 
     case "portal:appearance:get": {
       const state = await getState();
-      return { ok: true, appearance: publicAppearance(state.config.ui) };
+      const appearance = publicAppearance(state.config.ui);
+      if (state.config.ui.background === "daily") {
+        const wallpaper = await requestDailyWallpaper();
+        if (wallpaper && wallpaper.ok && wallpaper.dataUrl) {
+          appearance.background = "custom";
+          appearance.backgroundImage = wallpaper.dataUrl;
+        } else {
+          appearance.background = "fresh";
+          appearance.backgroundImage = "";
+        }
+      }
+      return { ok: true, appearance };
     }
+
+    case "wallpaper:get":
+      return { ok: true, wallpaper: await requestDailyWallpaper() };
 
     case "portal:status:get": {
       const result = await checkStatus();

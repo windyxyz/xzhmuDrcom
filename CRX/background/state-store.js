@@ -47,7 +47,8 @@ const DEFAULT_STATE = {
       backgroundImage: "",
       backgroundBlur: 14,
       backgroundDim: 0.42,
-      backgroundScale: 1.04
+      backgroundScale: 1.04,
+      backgroundPosition: "center"
     },
     redirect: {
       // 只保留登录后的短时间防重定向；不再做长期外站/主机名单拦截。
@@ -168,11 +169,20 @@ function normalizeState(input) {
   state.config.ui.autoRefreshSettings = state.config.ui.autoRefreshSettings !== false;
   if (previousSchemaVersion < 11 && state.config.ui.background === "paper") state.config.ui.theme = "light";
   if (previousSchemaVersion < 11 && state.config.ui.background === "night") state.config.ui.theme = "dark";
-  state.config.ui.background = state.config.ui.background === "custom" ? "custom" : DEFAULT_STATE.config.ui.background;
+  state.config.ui.background = state.config.ui.background === "custom" || state.config.ui.background === "daily"
+    ? state.config.ui.background
+    : DEFAULT_STATE.config.ui.background;
   state.config.ui.backgroundImage = normalizeImageUrl(state.config.ui.backgroundImage);
   if (state.config.ui.background === "custom" && !state.config.ui.backgroundImage) {
     state.config.ui.background = DEFAULT_STATE.config.ui.background;
   }
+  state.config.ui.backgroundPosition = [
+    "left top", "center top", "right top",
+    "left center", "center", "right center",
+    "left bottom", "center bottom", "right bottom"
+  ].includes(state.config.ui.backgroundPosition)
+    ? state.config.ui.backgroundPosition
+    : "center";
   state.config.ui.backgroundBlur = clampNumber(state.config.ui.backgroundBlur, 0, 32, DEFAULT_STATE.config.ui.backgroundBlur);
   state.config.ui.backgroundDim = clampNumber(state.config.ui.backgroundDim, 0.2, 0.72, DEFAULT_STATE.config.ui.backgroundDim);
   state.config.ui.backgroundScale = clampNumber(state.config.ui.backgroundScale, 1, 1.15, DEFAULT_STATE.config.ui.backgroundScale);

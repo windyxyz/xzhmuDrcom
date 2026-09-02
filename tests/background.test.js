@@ -214,6 +214,7 @@ test("后台入口只负责依赖加载和事件注册", () => {
     "background/drcom-client.js",
     "background/account-service.js",
     "background/connection-service.js",
+    "background/wallpaper-service.js",
     "background/portal-service.js",
     "background/message-router.js"
   ];
@@ -428,7 +429,8 @@ test("门户安全配置不携带背景数据且专用外观接口单独返回�
       backgroundImage: "data:image/webp;base64,AAAA",
         backgroundBlur: 18,
         backgroundDim: 0.46,
-        backgroundScale: 1.06
+        backgroundScale: 1.06,
+        backgroundPosition: "center"
     }
   });
   assert.doesNotMatch(JSON.stringify(plain), /accounts|password|apiUrl|wlanUserIp/);

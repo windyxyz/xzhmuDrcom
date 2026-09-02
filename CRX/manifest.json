@@ -22,7 +22,8 @@
   ],
   "optional_host_permissions": [
     "http://*/*",
-    "https://*/*"
+    "https://*/*",
+    "https://cn.bing.com/*"
   ],
   "host_permissions": [
     "http://10.10.10.2/*",
