@@ -126,6 +126,21 @@ flowchart LR
 4. 门户页面轻 DOM、宿主属性和 CSS 变量不能获得自定义背景 Data URL。
 5. 密码只在登录所需的可信路径中使用，不进入界面状态、日志或导出。
 
+门户内容脚本必须按依赖顺序加载：
+
+~~~text
+account-utils.js
+  -> portal-session.js
+  -> appearance.js
+  -> portal-ui.js
+  -> confirm-dialog.js
+  -> portal-diagnostics-utils.js
+  -> portal-diagnostics.js
+  -> portal-modernizer.js
+~~~
+
+`portal-ui.js` 在浏览器中依赖前两个共享模块，在 CommonJS 测试中则通过 `require()` 加载；`portal-modernizer.js` 最后执行，负责组合界面、确认对话框、诊断和后台消息。该顺序同时维护在 `manifest.json`、`background/portal-service.js` 的自定义门户注册列表、浏览器 fixture 和打包白名单中，修改任一入口时必须同步更新对应合约测试。
+
 ## 5. 扩展生命周期
 
 ### 5.1 安装与更新
@@ -381,6 +396,21 @@ DrCOM 响应固定按以下优先级处理：
 
 检测到 `input[name="captcha"]` 时，现代界面不接管页面，学校原验证码和操作控件保持可见，并显示非阻断提示。二维码登录和移动端验证码不复刻；用户应切回或继续使用学校原页面。
 
+原门户能力与实现位置如下：
+
+| 原门户能力 | 现代界面行为 | 实现与后台调用 |
+| --- | --- | --- |
+| 四种运营商 | 校园网、联通、电信、移动固定排序 | `portal-ui.js` 生成表单，`account-utils.js` 规范化后缀 |
+| 保存密码 | 勾选后先 `account:save`，再用 `accountId` 登录 | `portal-modernizer.js` → `message-router.js` → `account-service.js` |
+| 临时登录 | 不写入 `storage.local`，只在本次消息中携带账号 | `drcom:login` 的临时 `account` 分支 |
+| 重置 | 清空账号和密码，恢复校园网及保存选项 | `portal-modernizer.js` 本地处理，不发后台消息 |
+| 在线状态 | 首次挂载和手动刷新读取脱敏结构化摘要 | `portal:status:get` → `/drcom/chkstatus` |
+| 自助服务 | 新窗口打开学校自助服务 | 官方外链，不读取目标页面 |
+| 注销并解绑 | 确认后发送一次 `drcom:logout` | 活动身份 → `unbind_mac` → 必要时 `Portal/logout` → 状态复核 |
+| 验证码/扫码 | 不接管，保留学校原控件 | `portal-modernizer.js` 安全降级 |
+
+辅助入口由 `portal-ui.js` 的固定白名单生成：自助服务 `http://self.xzhmu.edu.cn`、使用说明 `http://self.xzhmu.edu.cn/guide.htm`、账号激活和找回密码位于 `https://authserver.xzhmu.edu.cn/retrieve-password/`。所有链接都新开窗口并隔离 `window.opener`；扩展不向这些系统转发账号、密码或状态摘要。
+
 ### 8.2 背景与个性化
 
 portal:config:get 只返回启用状态、标题、门户地址、主题、强调色和 `onlineDetailMode`，不返回 backgroundImage。完整外观通过 portal:appearance:get 单独获取。
@@ -410,6 +440,24 @@ portal-modernizer 会观察原表单提交和动态登录/下线脚本，读取 
 
 挂载、配置读取或后台通信出错时会移除覆盖层，原页面继续可用。用户点击“使用原始登录页”会停止就绪观察器、移除覆盖层，并在本次内容脚本生命周期内保持为终止状态，不会再次自动接管。在线视图的下线只在用户点击下线控件后发送 `drcom:logout`；失败时仍停留在线视图并显示错误。
 
+页面识别与在线刷新采用以下状态转换：
+
+~~~text
+初始空壳
+  -> MutationObserver 等待学校脚本渲染
+  -> 检测验证码：停止接管观察，只显示原页提示
+  -> 检测密码框：挂载现代登录页
+  -> 检测在线标记：先挂载在线页，再异步 portal:status:get
+
+portal:status:get
+  -> online：用脱敏 session 重绘在线页
+  -> offline：切换回现代登录页
+  -> unknown：保留在线页并显示“无法确认”，不伪造离线
+  -> 消息异常：保留当前 DOM，在状态区显示可恢复错误
+~~~
+
+重绘在线页会重新绑定刷新、注销、恢复原页和个性化事件，但不会重新启动页面就绪观察器。用户已经恢复原页面时，迟到的状态响应会被丢弃，避免覆盖用户选择。
+
 ### 8.6 在线状态字段与脱敏链路
 
 在线界面不读取学校页面轻 DOM 中的账号或网络值。`portal-modernizer.js` 向后台发送 `portal:status:get`，`message-router.js` 先复用顶层门户 sender 校验，再由 `connection-service.js` 调用 `queryPortalSessionStatus()` 请求同源 `/drcom/chkstatus`。后台只返回 `state`、`phase`、`message`、`checkedAt` 和已经规范化的 `session`，不返回原始 JSONP、Cookie、门户正文或完整标识。
@@ -427,6 +475,37 @@ portal-modernizer 会观察原表单提交和动态登录/下线脚本，读取 
 | VLAN、AC 名称 | `network` 文本 | 只读取白名单字段；模板输出前仍执行 HTML 转义。 |
 
 手动刷新与首次在线挂载使用同一条消息链路。`offline` 会切回登录视图；`unknown` 保留在线视图并显示无法确认的状态，避免把临时网络故障当成已经离线。
+
+门户可见的返回结构固定为：
+
+~~~js
+{
+  state: "online | offline | unknown",
+  phase: "online | offline | checking | ...",
+  message: "可展示的状态说明",
+  checkedAt: 0,
+  session: {
+    account: "de***42",
+    usedMinutes: 125,
+    totalKilobytes: 1234567,
+    uploadKilobytes: 500000,
+    downloadKilobytes: 734567,
+    balanceYuan: 12.34,
+    loginAt: 1769990400000,
+    externalIp: "198.***.***.202",
+    network: {
+      ipv4: "192.***.***.3",
+      ipv6: "2001:***::***:1",
+      mac: "02:00:00:**:**:**",
+      vlan: "example-vlan",
+      acIp: "192.***.***.2",
+      acName: "example-ac"
+    }
+  }
+}
+~~~
+
+示例只使用演示账号和 RFC 文档网段。`session` 仅在明确在线且存在合法字段时生成，字段可能部分缺失；调用方必须按可选字段处理，不能依赖固定完整对象。返回值禁止增加原始响应、诊断对象、状态 URL、Cookie、完整账号或完整网络标识。
 
 ### 8.7 门户诊断模式
 
