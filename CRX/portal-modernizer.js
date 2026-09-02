@@ -8,6 +8,7 @@
   let portalReadinessObserver = null;
   let recognitionQueued = false;
   let userRestoredOriginal = false;
+  let moodTimer = 0;
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => void boot(), { once: true });
@@ -110,6 +111,7 @@
       document.body.append(root);
       document.documentElement.classList.add("drcom-modern-active");
       bindPortalEvents(root, online);
+      bindCharacterMood(root);
       if (!online) prefillFromOriginalPage(root);
       if (online && !statusResult) void refreshPortalStatus(root);
     } catch (error) {
@@ -174,6 +176,65 @@
     userRestoredOriginal = true;
     stopPortalReadinessObserver();
     removeModernPortal();
+  }
+
+  function setCharacterMood(root, mood, revertMs = 0) {
+    const characters = root.querySelector(".drcom-characters");
+    if (!characters) return;
+    if (moodTimer) {
+      clearTimeout(moodTimer);
+      moodTimer = 0;
+    }
+    characters.dataset.mood = mood;
+    if (revertMs > 0) {
+      moodTimer = setTimeout(() => {
+        moodTimer = 0;
+        characters.dataset.mood = "idle";
+      }, revertMs);
+    }
+  }
+
+  function bindCharacterMood(root) {
+    const characters = root.querySelector(".drcom-characters");
+    if (!characters) return;
+    root.addEventListener("pointermove", (event) => {
+      const rect = root.getBoundingClientRect();
+      const px = ((event.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1;
+      const py = ((event.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1;
+      characters.style.setProperty("--px", Math.max(-1, Math.min(1, px)).toFixed(3));
+      characters.style.setProperty("--py", Math.max(-1, Math.min(1, py)).toFixed(3));
+    }, { passive: true });
+
+    const username = root.querySelector("#drcom-username");
+    const password = root.querySelector("#drcom-password");
+    username?.addEventListener("focus", () => setCharacterMood(root, "typing"));
+    username?.addEventListener("input", () => setCharacterMood(root, "typing"));
+    password?.addEventListener("focus", () => setCharacterMood(root, "covering"));
+    const idle = () => setCharacterMood(root, "idle");
+    username?.addEventListener("blur", idle);
+    password?.addEventListener("blur", idle);
+    root.querySelector("#drcom-reset")?.addEventListener("click", idle);
+  }
+
+  const CONFETTI_COLORS = ["#6c3ff5", "#ff9b6b", "#e8d754", "#4cc2ff", "#6ccb5f", "#ff99a4"];
+
+  function spawnConfetti(root) {
+    if (root.querySelector(".drcom-confetti")) return;
+    if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const container = document.createElement("div");
+    container.className = "drcom-confetti";
+    container.setAttribute("aria-hidden", "true");
+    for (let index = 0; index < 40; index += 1) {
+      const piece = document.createElement("span");
+      piece.style.setProperty("--cx", `${Math.round(Math.random() * 100)}vw`);
+      piece.style.setProperty("--cd", `${(Math.random() * 0.9).toFixed(2)}s`);
+      piece.style.setProperty("--ct", `${(1.4 + Math.random() * 1.1).toFixed(2)}s`);
+      piece.style.setProperty("--cr", `${Math.round(360 + Math.random() * 720)}deg`);
+      piece.style.setProperty("--cc", CONFETTI_COLORS[index % CONFETTI_COLORS.length]);
+      container.append(piece);
+    }
+    root.append(container);
+    setTimeout(() => container.remove(), 2800);
   }
 
   function bindPortalEvents(root, online) {
@@ -272,8 +333,16 @@
 
       if (result.online || result.success) {
         mountPortal(activePortalConfig || {}, true);
+        const mountedRoot = document.getElementById("drcom-modern-root");
+        setCharacterMood(mountedRoot, "happy");
+        try {
+          spawnConfetti(mountedRoot);
+        } catch (error) {
+          // 撒花是纯装饰，绝不能影响登录结果展示。
+        }
         return;
       }
+      setCharacterMood(root, "sad", 2400);
       setPortalStatus(root, result.message || "认证未通过，请检查账号和密码", "error");
     } catch (error) {
       setPortalStatus(root, error.message || String(error), "error");

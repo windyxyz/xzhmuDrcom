@@ -1,3 +1,5 @@
+/* 门户现代认证页 — WinUI 控件 + 动画角色品牌面板 */
+
 html.drcom-modern-active, html.drcom-modern-active body { min-height: 100% !important; min-height: 100dvh !important; margin: 0 !important; overflow: auto !important; color-scheme: light dark; background: var(--color-canvas) !important; }
 html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appearance):not(.confirm-dialog) { display: none !important; }
 #drcom-private-appearance { position: fixed; z-index: 2147483646; inset: 0; display: block !important; overflow: hidden; pointer-events: none; }
@@ -9,8 +11,8 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   min-width: 0;
   min-height: 100dvh;
   overflow: auto;
-  color: var(--color-text);
-  background: var(--color-canvas);
+  color: var(--text-primary);
+  background: var(--solid-bg-base);
   font-family: var(--font-ui);
   line-height: 1.5;
   text-align: left;
@@ -18,94 +20,685 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   isolation: isolate;
 }
 #drcom-modern-root[data-appearance-background="custom"] { background: transparent; }
-#drcom-modern-root > .drcom-page { position: relative; z-index: 1; }
-#drcom-modern-root button, #drcom-modern-root input, #drcom-modern-root select { font: inherit; }
-#drcom-modern-root button { cursor: pointer; }
-#drcom-modern-root button:disabled, #drcom-modern-root input:disabled, #drcom-modern-root select:disabled { cursor: wait; opacity: 0.58; }
 
-.drcom-page { width: min(1080px, calc(100% - 32px)); min-width: 0; min-height: 100vh; min-height: 100dvh; margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) env(safe-area-inset-right) max(16px, env(safe-area-inset-bottom)) env(safe-area-inset-left); display: grid; grid-template-rows: auto 1fr auto; gap: 16px; }
-.drcom-header { position: sticky; z-index: 4; top: max(16px, env(safe-area-inset-top)); min-height: 58px; padding: 0 12px 0 14px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; border-radius: 20px; }
-.drcom-brand-mark { width: 30px; height: 30px; border-radius: 10px; background: var(--color-accent); }
-.drcom-header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
-.drcom-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
-#drcom-open-options { min-width: 44px; min-height: 44px; display: inline-grid; place-items: center; border: 0; border-radius: 12px; padding: 0; color: var(--color-text-secondary); background: transparent; }
-#drcom-open-options:hover { color: var(--color-accent); background: var(--color-surface-hover); }
-#drcom-open-options svg { width: 21px; height: 21px; fill: currentColor; }
-#drcom-restore-original { min-height: 40px; border: 0; padding: 0 8px; color: var(--color-accent); background: transparent; font-size: 14px; font-weight: 650; }
+/* ---------- 页面骨架 ---------- */
 
-.drcom-surface { width: min(440px, 100%); min-width: 0; align-self: center; justify-self: center; margin: 34px 0; padding: 32px; border: 1px solid var(--color-separator); border-radius: var(--radius-surface); background: var(--color-surface-raised); }
-#drcom-modern-root[data-appearance-background="custom"] .drcom-surface { background: color-mix(in oklch, var(--color-surface-raised) 91%, transparent); }
-.drcom-intro { margin-bottom: 26px; }
-.drcom-host { margin: 0 0 10px; color: var(--color-accent); font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-#drcom-modern-root h1, #drcom-modern-root p { margin: 0; }
-#drcom-modern-root h1 { max-width: 100%; overflow-wrap: anywhere; font-size: 31px; line-height: 1.12; letter-spacing: -0.035em; }
-.drcom-intro h1 + p, .drcom-state-view h1 + p { margin-top: 12px !important; color: var(--color-text-secondary); }
-.drcom-login-form { display: grid; gap: 16px; }
-.drcom-login-form label:not(.drcom-remember) { display: grid; gap: 7px; }
-.drcom-login-form label > span { color: var(--color-text-secondary); font-size: 13px; font-weight: 620; }
-.drcom-login-form input, .drcom-login-form select { width: 100%; min-width: 0; min-height: 46px; border: 1px solid var(--color-separator-strong); border-radius: var(--radius-control); padding: 9px 12px; outline: none; color: var(--color-text); background: var(--color-surface); }
-.drcom-login-form input:focus-visible, .drcom-login-form select:focus-visible, #drcom-modern-root button:focus-visible { outline: none; border-color: var(--color-accent); box-shadow: var(--focus-ring); }
-.drcom-remember { display: flex; align-items: center; gap: 8px; }
-.drcom-remember input { width: 18px; min-height: 18px; accent-color: var(--color-accent); }
-.drcom-primary-button, .drcom-secondary-button { min-height: 48px; border-radius: 14px; padding: 0 16px; font-weight: 660; }
-.drcom-primary-button { border: 1px solid var(--color-accent); color: var(--color-on-accent); background: var(--color-accent); }
-.drcom-primary-button:hover { filter: brightness(1.04); }
-.drcom-secondary-button { margin-top: 24px; border: 1px solid var(--color-separator-strong); color: var(--color-text); background: var(--color-surface); }
-.drcom-secondary-button:hover { background: var(--color-surface-hover); }
-.drcom-login-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
-.drcom-login-actions .drcom-secondary-button { min-width: 88px; margin-top: 0; }
-.drcom-support-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.drcom-support-links a, .drcom-online-tools a, .drcom-online-tools button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--color-separator); border-radius: 12px; padding: 8px 10px; color: var(--color-accent); background: var(--color-surface); text-decoration: none; font-size: 13px; font-weight: 650; }
-.drcom-support-links a:hover, .drcom-online-tools a:hover, .drcom-online-tools button:hover { background: var(--color-surface-hover); }
-.drcom-original-capabilities { color: var(--color-text-secondary); font-size: 12px; text-align: center; }
-.drcom-form-status { min-height: 20px; color: var(--color-text-secondary); font-size: 13px; }
-.drcom-form-status[data-state="error"] { color: var(--color-danger); }
-.drcom-state-view { text-align: center; }
-/* deslop-ignore-next-line 19 -- compact binary status indicator */
-.drcom-status-mark { width: 13px; height: 13px; margin: 0 auto 22px; display: block; border-radius: 50%; background: var(--color-success); }
-.drcom-session-summary { margin-top: 24px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; text-align: left; }
-.drcom-session-summary > div { min-width: 0; padding: 14px; border: 1px solid var(--color-separator); border-radius: 14px; background: var(--color-surface); }
-.drcom-session-summary span { display: block; color: var(--color-text-secondary); font-size: 12px; }
-.drcom-session-summary strong { display: block; margin-top: 4px; overflow-wrap: anywhere; font-size: 18px; font-variant-numeric: tabular-nums; }
-#drcom-session-details { margin-top: 14px; border: 1px solid var(--color-separator); border-radius: 14px; padding: 0 14px; background: var(--color-surface); text-align: left; }
-#drcom-session-details summary { min-height: 46px; display: flex; align-items: center; color: var(--color-accent); cursor: pointer; font-size: 13px; font-weight: 650; }
-.drcom-session-list { margin: 0 0 14px; display: grid; gap: 0; }
-.drcom-session-list > div { min-width: 0; display: grid; grid-template-columns: minmax(92px, 0.7fr) minmax(0, 1.3fr); gap: 12px; padding: 9px 0; border-top: 1px solid var(--color-separator); }
-.drcom-session-list dt { color: var(--color-text-secondary); font-size: 12px; }
-.drcom-session-list dd { min-width: 0; margin: 0; overflow-wrap: anywhere; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
-.drcom-online-tools { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.drcom-online-tools button { width: 100%; color: var(--color-text); cursor: pointer; }
-.drcom-checked-at { margin-top: 8px !important; color: var(--color-text-secondary); font-size: 12px; }
-.drcom-state-view .drcom-secondary-button { width: 100%; }
-.drcom-page > footer { padding: 14px 0 4px; color: var(--color-text-secondary); font-size: 12px; text-align: center; }
+.drcom-page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
 
-#drcom-captcha-hint { position: fixed; z-index: 2147483647; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); left: 16px; width: min(560px, calc(100% - 32px)); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; border: 1px solid var(--color-separator-strong); border-radius: 16px; padding: 14px 16px; color: var(--color-text); background: var(--color-surface-raised); box-shadow: var(--shadow-popover); font-family: var(--font-ui); }
-#drcom-captcha-hint strong, #drcom-captcha-hint span { min-width: 0; }
-#drcom-captcha-hint span { grid-column: 1; color: var(--color-text-secondary); font-size: 13px; }
-#drcom-captcha-hint button { grid-column: 2; grid-row: 1 / span 2; min-width: 44px; min-height: 44px; border: 0; border-radius: 12px; color: var(--color-accent); background: transparent; font: inherit; font-weight: 650; cursor: pointer; }
-.confirm-dialog { z-index: 2147483647; }
+.drcom-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px clamp(12px, 4vw, 24px);
+  font-size: 14px;
+}
+.drcom-brand-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--accent-fill-default);
+}
+.drcom-header strong { font-weight: 600; }
+.drcom-header-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#drcom-open-options {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+#drcom-open-options .win-glyph { font-size: 18px; }
+#drcom-open-options:hover { background: var(--subtle-fill-hover); }
+#drcom-open-options:active { background: var(--subtle-fill-pressed); }
+
+#drcom-restore-original {
+  min-height: 32px;
+  padding: 5px 12px 6px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--ctrl-fill-default);
+  border: 1px solid var(--stroke-default);
+  border-bottom-color: var(--stroke-secondary);
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  transition: background-color var(--fast-duration) var(--fast-out-slow-in), color var(--fast-duration) var(--fast-out-slow-in);
+}
+#drcom-restore-original:hover { background: var(--ctrl-fill-secondary); }
+#drcom-restore-original:active { background: var(--ctrl-fill-tertiary); color: var(--text-secondary); }
+
+.drcom-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  align-items: center;
+  gap: clamp(16px, 4vw, 48px);
+  width: min(1080px, 100%);
+  margin: 0 auto;
+  padding: clamp(12px, 3vh, 32px) clamp(12px, 4vw, 32px);
+}
+
+/* ---------- 角色品牌面板 ---------- */
+
+.drcom-brand-panel {
+  position: relative;
+  display: none;
+  min-height: 420px;
+  border: 1px solid var(--card-stroke);
+  border-radius: var(--overlay-radius);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(160deg, #4338ca 0%, #312e81 48%, #1e1b4b 100%);
+  background-size: 22px 22px, 22px 22px, auto;
+  overflow: hidden;
+}
+
+.drcom-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+.drcom-blob-a { width: 300px; height: 300px; top: -80px; right: -60px; background: rgba(167, 139, 250, 0.55); }
+.drcom-blob-b { width: 260px; height: 260px; bottom: -70px; left: -60px; background: rgba(129, 140, 248, 0.5); }
+
+.drcom-brand-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: inherit;
+  padding: clamp(20px, 5vw, 44px);
+}
+
+.drcom-brand-copy { margin-top: 28px; }
+.drcom-brand-copy strong {
+  display: block;
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 600;
+  color: #ffffff;
+}
+.drcom-brand-copy span { display: block; margin-top: 4px; color: rgba(255, 255, 255, 0.72); font-size: 13px; }
+
+/* ---------- 动画角色 ---------- */
+
+.drcom-characters {
+  --px: 0;
+  --py: 0;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(8px, 2vw, 18px);
+  height: 190px;
+}
+
+.drcom-char {
+  position: relative;
+  transition: transform 0.7s var(--pointed), opacity 0.45s var(--fast-out-slow-in);
+  animation: char-idle-sway 4.4s ease-in-out infinite;
+}
+.drcom-char:nth-child(2) { animation-delay: 0.6s; }
+.drcom-char:nth-child(3) { animation-delay: 1.2s; }
+.drcom-char:nth-child(4) { animation-delay: 1.8s; }
+
+@keyframes char-idle-sway {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.char-purple { width: 66px; height: 108px; background: #6c3ff5; border-radius: 14px; }
+.char-black  { width: 60px; height: 86px;  background: #2d2d2d; border-radius: 14px; }
+.char-orange { width: 78px; height: 62px;  background: #ff9b6b; border-radius: 40px 40px 8px 8px; }
+.char-yellow { width: 86px; height: 70px;  background: #e8d754; border-radius: 20px; }
+
+.char-eyes {
+  position: absolute;
+  top: 22px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+.char-orange .char-eyes { top: 14px; }
+.char-yellow .char-eyes { top: 18px; }
+
+.char-eye {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #ffffff;
+  overflow: hidden;
+  transition: height 0.25s var(--fast-out-slow-in), opacity 0.25s var(--fast-out-slow-in);
+}
+.char-pupil {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #17171f;
+  transform: translate(calc(var(--px) * 3px), calc(var(--py) * 3px));
+  transition: transform 0.12s linear;
+}
+
+/* 眨眼 */
+.char-eye { animation: char-blink 5.2s infinite; }
+.char-eye:nth-child(2) { animation-delay: 0.08s; }
+@keyframes char-blink {
+  0%, 94%, 100% { height: 15px; }
+  96% { height: 2px; }
+}
+
+.char-mouth {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 2px solid rgba(23, 23, 31, 0.85);
+  border-color: rgba(23, 23, 31, 0.85) transparent transparent transparent;
+  transform: translateX(-50%);
+  transition: all 0.3s var(--fast-out-slow-in);
+}
+.char-orange .char-mouth, .char-yellow .char-mouth { bottom: 16px; }
+
+/* 心情状态 */
+.drcom-characters[data-mood="typing"] .char-purple { transform: skewX(-4deg) translateY(-4px); }
+.drcom-characters[data-mood="typing"] .char-black { transform: rotate(4deg); }
+.drcom-characters[data-mood="typing"] .char-eye { height: 10px; align-items: flex-end; }
+
+.drcom-characters[data-mood="covering"] .char-eye { opacity: 0; }
+.drcom-characters[data-mood="covering"] .char-mouth { opacity: 0.25; }
+.drcom-characters[data-mood="covering"] .char-purple { transform: rotate(-3deg) translateY(2px); }
+.drcom-characters[data-mood="covering"] .char-black { transform: rotate(3deg) translateY(2px); }
+
+.drcom-characters[data-mood="sad"] .drcom-char { animation: char-shake 0.8s var(--fast-out-slow-in) 1; }
+.drcom-characters[data-mood="sad"] .char-eye { height: 8px; align-items: flex-end; }
+.drcom-characters[data-mood="sad"] .char-mouth {
+  width: 14px;
+  height: 8px;
+  border: 0;
+  border-bottom: 2.5px solid rgba(23, 23, 31, 0.85);
+  border-radius: 0 0 10px 10px;
+}
+
+.drcom-characters[data-mood="happy"] .drcom-char { animation: char-bounce 0.9s var(--decelerate) 1; }
+.drcom-characters[data-mood="happy"] .char-eye { height: 6px; align-items: center; }
+.drcom-characters[data-mood="happy"] .char-mouth {
+  width: 16px;
+  height: 8px;
+  border: 0;
+  border-top: 2.5px solid rgba(23, 23, 31, 0.85);
+  border-radius: 10px 10px 0 0;
+}
+
+@keyframes char-shake {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(-6deg); }
+  45% { transform: rotate(5deg); }
+  70% { transform: rotate(-3deg); }
+}
+@keyframes char-bounce {
+  0%, 100% { transform: translateY(0); }
+  35% { transform: translateY(-14px); }
+  60% { transform: translateY(-4px); }
+}
+
+/* 在线页迷你角色 */
+.drcom-characters--mini {
+  height: 64px;
+  gap: 10px;
+  justify-content: flex-start;
+  margin: 0 0 10px;
+  transform-origin: left bottom;
+  transform: scale(0.62);
+  transform: scale(0.62) translateX(-16px);
+}
+
+/* ---------- 登录/在线卡片 ---------- */
+
+.drcom-surface {
+  width: min(440px, 100%);
+  justify-self: center;
+  padding: clamp(22px, 4vw, 34px);
+  border: 1px solid var(--card-stroke);
+  border-radius: var(--overlay-radius);
+  background: var(--card-bg);
+  box-shadow: var(--shadow-flyout);
+}
+
+.drcom-intro { margin: 0 0 18px; }
+.drcom-intro h1 {
+  margin: 0;
+  font-size: clamp(22px, 3.4vw, 26px);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+.drcom-intro .drcom-host {
+  margin: 4px 0 0;
+  color: var(--accent-fill-default);
+  font-size: 13px;
+  font-family: var(--font-mono);
+}
+.drcom-intro p:last-child { margin: 6px 0 0; color: var(--text-secondary); font-size: 13px; }
+
+.drcom-login-form { display: flex; flex-direction: column; gap: 14px; }
+.drcom-login-form label { display: flex; flex-direction: column; gap: 6px; }
+.drcom-login-form label > span { color: var(--text-secondary); font-size: 12px; }
+
+#drcom-modern-root input:not([type="checkbox"]),
+#drcom-modern-root select {
+  min-height: 32px;
+  padding: 5px 9px 7px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--ctrl-fill-default);
+  border: 1px solid var(--stroke-default);
+  border-bottom-color: var(--stroke-secondary);
+  border-radius: var(--control-radius);
+  outline: none;
+}
+#drcom-modern-root select {
+  appearance: none;
+  cursor: pointer;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8.098 4.598'%3E%3Cpath fill='%23666666' d='M.195.195C.39 0 .708 0 .903.195L4.049 3.342 7.195.195C7.39 0 7.708 0 7.903.195C8.098.39 8.098.708 7.903.903L4.403 4.403C4.208 4.598 3.89 4.598 3.695 4.403L.195.903C0 .708 0 .39 .195.195Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px;
+}
+#drcom-modern-root input:not([type="checkbox"]):hover,
+#drcom-modern-root select:hover { background: var(--ctrl-fill-secondary); }
+#drcom-modern-root input:not([type="checkbox"]):focus,
+#drcom-modern-root select:focus {
+  background: var(--ctrl-fill-input-active);
+  border-color: transparent;
+  box-shadow:
+    inset 0 0 0 1px var(--stroke-secondary),
+    inset 0 -2px 0 0 var(--accent-fill-default);
+}
+
+.drcom-remember {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+  cursor: pointer;
+}
+.drcom-remember input {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 20px;
+  margin: 0;
+  border: 1px solid var(--stroke-secondary);
+  border-radius: 10px;
+  background: var(--subtle-fill-hover);
+  cursor: pointer;
+  transition: background-color var(--fast-duration) var(--fast-out-slow-in), border-color var(--fast-duration) var(--fast-out-slow-in);
+}
+.drcom-remember input::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--text-secondary);
+  transform: translateY(-50%);
+  transition: left var(--fast-duration) var(--fast-out-slow-in), width var(--fast-duration) var(--fast-out-slow-in), background-color var(--fast-duration) var(--fast-out-slow-in);
+}
+.drcom-remember input:hover::before { width: 14px; height: 14px; }
+.drcom-remember input:checked { background: var(--accent-fill-default); border-color: transparent; }
+.drcom-remember input:checked::before { left: calc(100% - 16px); background: var(--accent-text); }
+.drcom-remember input:focus-visible { outline: 2px solid var(--focus-stroke-outer); outline-offset: 2px; }
+.drcom-remember span { color: var(--text-secondary) !important; font-size: 12px !important; }
+
+.drcom-form-status {
+  margin: 0;
+  min-height: 18px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.drcom-form-status[data-state="error"] { color: var(--sys-critical); }
+.drcom-form-status[data-state="progress"] { color: var(--accent-fill-default); }
+
+.drcom-login-actions {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 8px;
+}
+
+#drcom-modern-root .drcom-primary-button,
+#drcom-modern-root .drcom-secondary-button {
+  min-height: 36px;
+  padding: 6px 12px 7px;
+  font: inherit;
+  font-size: 14px;
+  border-radius: var(--control-radius);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color var(--fast-duration) var(--fast-out-slow-in), color var(--fast-duration) var(--fast-out-slow-in);
+}
+#drcom-modern-root .drcom-primary-button {
+  background: var(--accent-fill-default);
+  color: var(--accent-text);
+}
+#drcom-modern-root .drcom-primary-button:hover { background: var(--accent-fill-hover); }
+#drcom-modern-root .drcom-primary-button:active { background: var(--accent-fill-pressed); color: var(--accent-text-secondary); }
+#drcom-modern-root .drcom-primary-button:disabled,
+#drcom-modern-root .drcom-secondary-button:disabled {
+  background: var(--ctrl-fill-disabled);
+  color: var(--text-disabled);
+  cursor: default;
+}
+#drcom-modern-root .drcom-secondary-button {
+  background: var(--ctrl-fill-default);
+  color: var(--text-primary);
+  border-color: var(--stroke-default);
+  border-bottom-color: var(--stroke-secondary);
+}
+#drcom-modern-root .drcom-secondary-button:hover { background: var(--ctrl-fill-secondary); }
+#drcom-modern-root .drcom-secondary-button:active { background: var(--ctrl-fill-tertiary); color: var(--text-secondary); }
+
+#drcom-modern-root .drcom-support-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  margin: 4px 0 0;
+}
+#drcom-modern-root .drcom-support-links a {
+  color: var(--accent-fill-default);
+  font-size: 13px;
+  text-decoration: none;
+  border-radius: var(--control-radius);
+  padding: 4px 2px;
+}
+#drcom-modern-root .drcom-support-links a:hover { text-decoration: underline; }
+
+.drcom-original-capabilities { margin: 10px 0 0; color: var(--text-tertiary); font-size: 12px; }
+
+/* ---------- 在线视图 ---------- */
+
+.drcom-state-view { display: flex; flex-direction: column; }
+.drcom-status-mark {
+  width: 34px;
+  height: 34px;
+  margin: 2px 0 12px;
+  border-radius: 50%;
+  background: var(--sys-success-bg);
+  position: relative;
+}
+.drcom-status-mark::after {
+  content: "\uE73E";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Segoe Fluent Icons";
+  font-size: 14px;
+  color: var(--sys-success);
+}
+.drcom-state-view h1 {
+  margin: 0;
+  font-size: clamp(22px, 3.4vw, 26px);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.drcom-state-view > p { margin: 6px 0 0; color: var(--text-secondary); font-size: 13px; }
+
+.drcom-session-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 0 0;
+}
+.drcom-session-summary > div {
+  padding: 12px 14px;
+  border: 1px solid var(--card-stroke);
+  border-radius: var(--control-radius);
+  background: var(--card-bg-secondary);
+}
+.drcom-session-summary span { display: block; color: var(--text-secondary); font-size: 12px; }
+.drcom-session-summary strong { display: block; margin-top: 2px; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+#drcom-session-details {
+  margin: 8px 0 0;
+  border: 1px solid var(--card-stroke);
+  border-radius: var(--control-radius);
+  background: var(--card-bg-secondary);
+}
+#drcom-session-details summary {
+  padding: 10px 14px;
+  cursor: pointer;
+  color: var(--accent-fill-default);
+  font-size: 13px;
+  list-style: none;
+}
+#drcom-session-details summary::-webkit-details-marker { display: none; }
+.drcom-session-list {
+  margin: 0;
+  padding: 4px 14px 12px;
+  display: grid;
+  gap: 2px;
+}
+.drcom-session-list > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--divider-stroke);
+}
+.drcom-session-list > div:last-child { border-bottom: 0; }
+.drcom-session-list dt { color: var(--text-secondary); font-size: 12px; }
+.drcom-session-list dd {
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  word-break: break-all;
+}
+
+.drcom-online-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+#drcom-modern-root .drcom-online-tools button {
+  min-height: 32px;
+  padding: 5px 12px 6px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--ctrl-fill-default);
+  border: 1px solid var(--stroke-default);
+  border-bottom-color: var(--stroke-secondary);
+  border-radius: var(--control-radius);
+  cursor: pointer;
+}
+#drcom-modern-root .drcom-online-tools button:hover { background: var(--ctrl-fill-secondary); }
+#drcom-modern-root .drcom-online-tools a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 5px 12px 6px;
+  color: var(--accent-fill-default);
+  font-size: 13px;
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: var(--control-radius);
+}
+#drcom-modern-root .drcom-online-tools a:hover { background: var(--subtle-fill-hover); }
+
+.drcom-checked-at { margin: 10px 0 0; color: var(--text-tertiary); font-size: 12px; }
+
+#drcom-modern-root .drcom-state-view #drcom-logout { margin: 16px 0 0; }
+
+/* ---------- 验证码提示（InfoBar） ---------- */
+
+#drcom-captcha-hint {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 2147483646;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: min(560px, calc(100vw - 24px));
+  padding: 10px 8px 10px 14px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--control-radius);
+  background: var(--sys-caution-bg);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  box-shadow: var(--shadow-flyout);
+}
+#drcom-captcha-hint::before {
+  content: "\uE7BA";
+  font-family: "Segoe Fluent Icons";
+  font-size: 16px;
+  color: var(--sys-caution);
+}
+#drcom-captcha-hint strong { display: block; font-size: 13px; }
+#drcom-captcha-hint span { display: block; color: var(--text-secondary); font-size: 12px; }
+#drcom-captcha-dismiss {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+#drcom-captcha-dismiss:hover { background: var(--subtle-fill-hover); }
+
+/* ---------- 撒花 ---------- */
+
+.drcom-confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  overflow: hidden;
+  pointer-events: none;
+}
+.drcom-confetti span {
+  position: absolute;
+  top: -4vh;
+  left: var(--cx);
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--cc);
+  opacity: 0.95;
+  animation: confetti-fall var(--ct) linear var(--cd) both;
+}
+@keyframes confetti-fall {
+  0% { transform: translateY(-4vh) rotate(0) ; opacity: 0.95; }
+  85% { opacity: 0.95; }
+  100% { transform: translateY(108vh) rotate(var(--cr)); opacity: 0; }
+}
+
+/* ---------- 页脚 ---------- */
+
+.drcom-page > footer {
+  padding: 12px clamp(12px, 4vw, 24px) calc(12px + env(safe-area-inset-bottom, 0px));
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ---------- 焦点 ---------- */
+
+#drcom-modern-root :focus-visible {
+  outline: 2px solid var(--focus-stroke-outer);
+  outline-offset: 1px;
+  box-shadow: inset 0 0 0 1px var(--focus-stroke-inner);
+}
+
+/* ---------- 响应式 ---------- */
+
+@media (min-width: 900px) {
+  .drcom-brand-panel { display: block; }
+}
+
+@media (max-width: 899px) {
+  .drcom-stage { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 560px) {
-  .drcom-page { width: min(100% - 20px, 1080px); gap: 10px; }
-  .drcom-header { top: max(10px, env(safe-area-inset-top)); min-height: 54px; border-radius: 17px; }
-  .drcom-surface { margin: 22px 0; padding: 26px 22px; border-radius: 22px; }
+  .drcom-surface { border: 0; background: transparent; box-shadow: none; padding: 4px 0 0; }
+  .drcom-login-actions { grid-template-columns: 1fr; }
+  .drcom-session-summary { grid-template-columns: 1fr; }
 }
-@media (max-width: 380px) {
-  .drcom-page { width: 100%; padding-right: 8px; padding-left: 8px; }
-  .drcom-header { padding-right: 7px; padding-left: 9px; }
-  .drcom-brand-mark { width: 28px; height: 28px; border-radius: 9px; }
-  .drcom-header strong { font-size: 14px; }
-  #drcom-restore-original { padding: 0 4px; font-size: 12px; }
-  .drcom-surface { margin: 12px 0; padding: 24px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left)); border-radius: 20px; }
-  #drcom-modern-root h1 { font-size: 27px; }
-  .drcom-login-form input, .drcom-login-form select { font-size: 16px; }
-  .drcom-login-actions, .drcom-support-links, .drcom-online-tools, .drcom-session-summary { grid-template-columns: 1fr; }
-  .drcom-login-actions .drcom-secondary-button { width: 100%; }
-  .drcom-session-list > div { grid-template-columns: 1fr; gap: 3px; }
-  .drcom-session-list dd { text-align: left; }
+
+@media (max-height: 540px) and (orientation: landscape) {
+  .drcom-stage { align-items: flex-start; }
+  .drcom-surface { max-height: none; }
 }
-@media (max-width: 260px) { .drcom-header strong { display: none; } .drcom-header { grid-template-columns: auto 1fr; } .drcom-header-actions { justify-self: end; } #drcom-restore-original { display: none; } .drcom-surface { padding-right: 12px; padding-left: 12px; } }
-@media (max-height: 540px) and (orientation: landscape) { .drcom-surface { margin: 12px 0; } }
-@media (pointer: coarse) { #drcom-modern-root button, #drcom-modern-root input, #drcom-modern-root select { min-height: 44px; touch-action: manipulation; } }
-@media (prefers-reduced-transparency: reduce) { #drcom-modern-root[data-appearance-background="custom"] .drcom-surface { background: var(--color-surface-raised); } }
-@media (forced-colors: active) { .drcom-status-mark { background: Highlight; } }
+
+@media (pointer: coarse) {
+  #drcom-modern-root input:not([type="checkbox"]),
+  #drcom-modern-root select,
+  #drcom-modern-root .drcom-primary-button,
+  #drcom-modern-root .drcom-secondary-button,
+  #drcom-modern-root .drcom-online-tools button,
+  #drcom-modern-root .drcom-online-tools a,
+  #drcom-restore-original { min-height: 44px; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .drcom-header { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--ctrl-solid-fill); }
+  .drcom-surface { background: var(--ctrl-solid-fill); }
+}
+
+@media (prefers-contrast: more) {
+  .drcom-surface, .drcom-session-summary > div, #drcom-session-details { border-color: var(--text-primary); }
+}
+
+@media (forced-colors: active) {
+  .drcom-surface { border: 1px solid CanvasText; background: Canvas; }
+  #drcom-modern-root .drcom-primary-button { border: 1px solid ButtonText; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drcom-char, .char-eye, .char-pupil, .char-mouth { animation: none !important; transition: none !important; }
+  .drcom-confetti { display: none !important; }
+  .app-themed-page .drcom-surface, #drcom-modern-root .drcom-surface { animation-duration: 0.01ms !important; }
+}

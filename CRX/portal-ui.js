@@ -60,6 +60,33 @@
       .join("")}</nav>`;
   }
 
+  function renderCharacters(mood = "idle", mini = false) {
+    const kinds = ["purple", "black", "orange", "yellow"];
+    return `<div class="drcom-characters${mini ? " drcom-characters--mini" : ""}" data-mood="${escapeHtml(mood)}" aria-hidden="true">${kinds
+      .map((kind) => `
+        <div class="drcom-char char-${kind}">
+          <span class="char-eyes"><span class="char-eye"><span class="char-pupil"></span></span><span class="char-eye"><span class="char-pupil"></span></span></span>
+          <span class="char-mouth"></span>
+        </div>`)
+      .join("")}</div>`;
+  }
+
+  function renderBrandPanel(safeTitle, safeHost) {
+    return `
+      <section class="drcom-brand-panel" aria-hidden="true">
+        <span class="drcom-blob drcom-blob-a"></span>
+        <span class="drcom-blob drcom-blob-b"></span>
+        <div class="drcom-brand-stage">
+          ${renderCharacters("idle")}
+          <div class="drcom-brand-copy">
+            <strong>${safeTitle}</strong>
+            <span>校园网认证 · ${safeHost}</span>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
   function renderSessionRows(session = {}) {
     const network = session.network && typeof session.network === "object" ? session.network : {};
     const rows = [
@@ -109,6 +136,7 @@
 
     return `
       <section class="drcom-state-view" aria-labelledby="drcom-state-title">
+        ${renderCharacters("happy", true)}
         <span class="drcom-status-mark" aria-hidden="true"></span>
         <h1 id="drcom-state-title">已经连接校园网</h1>
         <p>当前设备已通过 ${title} 认证，可以正常访问网络。</p>
@@ -147,9 +175,9 @@
       : `
         <section aria-labelledby="drcom-login-title">
           <div class="drcom-intro">
-            <p class="drcom-host">${safeHost}</p>
             <h1 id="drcom-login-title">${safeTitle}</h1>
-            <p>输入校园网账号并登录。登录请求会直接发送到学校认证接口。</p>
+            <p class="drcom-host">${safeHost}</p>
+            <p>输入校园网账号并登录，认证请求会直接发送到学校接口。</p>
           </div>
           <form id="drcom-login-form" class="drcom-login-form">
             <label>
@@ -191,12 +219,15 @@
           <strong>校园网助手</strong>
           <div class="drcom-header-actions">
             <button id="drcom-open-options" type="button" aria-label="个性化" title="个性化">
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9 4a7.8 7.8 0 0 0-.1-1l2-1.5-2-3.5-2.4 1a8 8 0 0 0-1.7-1L15.5 3h-4L11 5.9a8 8 0 0 0-1.7 1L7 6 5 9.5 7.1 11a7.8 7.8 0 0 0 0 2L5 14.5 7 18l2.4-1a8 8 0 0 0 1.7 1l.5 3h4l.5-3a8 8 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5a7.8 7.8 0 0 0 .1-1Z"/></svg>
+              <span class="win-glyph" aria-hidden="true">&#xE713;</span>
             </button>
             <button id="drcom-restore-original" type="button">使用原始登录页</button>
           </div>
         </header>
-        <main class="drcom-surface">${content}</main>
+        <main class="drcom-stage">
+          ${renderBrandPanel(safeTitle, safeHost)}
+          <div class="drcom-surface">${content}</div>
+        </main>
         <footer>账号数据只保存在这台设备的浏览器中。</footer>
       </div>
     `;
