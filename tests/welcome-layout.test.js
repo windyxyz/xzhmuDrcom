@@ -430,7 +430,7 @@ test("扩展弹窗在标准任务宽度内完整显示且不横向溢出", { tim
       const shell = document.querySelector('.shell');
       const accountPanel = document.querySelector('.account-panel');
       for (let attempt = 0; attempt < 50; attempt += 1) {
-        if (getComputedStyle(accountPanel).display === 'grid' && getComputedStyle(title).fontSize === '19px') break;
+        if (getComputedStyle(accountPanel).display === 'grid' && getComputedStyle(title).fontSize === '16px') break;
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
       return {
