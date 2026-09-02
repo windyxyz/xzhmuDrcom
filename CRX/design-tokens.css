@@ -1,107 +1,295 @@
+/* ============================================================
+   DrCOM 徐医校园网助手 — WinUI 3 设计系统
+   令牌基准：microsoft-ui-xaml Common_themeresources / WinUIonWeb theme.css
+   结构：字体与图标 → 主题令牌（浅/深） → 旧名兼容 → 背景层 → 共享控件 → 降级
+   ============================================================ */
+
+/* ---------- 1. 字体与图标 ---------- */
+
+@font-face {
+  font-family: "Segoe Fluent Icons";
+  src: local("Segoe Fluent Icons"), local("Segoe MDL2 Assets"),
+    url("fonts/segoe-fluent-icons.ttf") format("truetype");
+  font-display: block;
+}
+
+.win-glyph {
+  font-family: "Segoe Fluent Icons";
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  display: inline-block;
+  text-transform: none;
+  letter-spacing: normal;
+  word-wrap: normal;
+  white-space: nowrap;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+.win-glyph--12 { font-size: 12px; }
+.win-glyph--16 { font-size: 16px; }
+.win-glyph--20 { font-size: 20px; }
+
+/* ---------- 2. 动效令牌 ---------- */
+
 :root {
-  --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --faster-duration: 0.083s;
+  --fast-duration: 0.167s;
+  --normal-duration: 0.25s;
+  --slow-duration: 0.3s;
+  --entrance-duration: 0.45s;
+  --fast-out-slow-in: cubic-bezier(0, 0, 0, 1);
+  --decelerate: cubic-bezier(0.1, 0.9, 0.2, 1);
+  --accelerate: cubic-bezier(0.7, 0, 1, 0.5);
+  --pointed: cubic-bezier(0.55, 0.55, 0, 1);
+}
+
+/* 注册核心颜色令牌，使主题切换可平滑过渡 */
+@property --solid-bg-base { syntax: "<color>"; inherits: true; initial-value: #f3f3f3; }
+@property --card-bg { syntax: "<color>"; inherits: true; initial-value: rgba(255, 255, 255, 0.7); }
+@property --layer-fill-default { syntax: "<color>"; inherits: true; initial-value: rgba(255, 255, 255, 0.5); }
+@property --flyout-bg { syntax: "<color>"; inherits: true; initial-value: rgba(252, 252, 252, 0.92); }
+@property --dialog-bg { syntax: "<color>"; inherits: true; initial-value: #fcfcfc; }
+@property --text-primary { syntax: "<color>"; inherits: true; initial-value: rgba(0, 0, 0, 0.894); }
+@property --ctrl-fill-default { syntax: "<color>"; inherits: true; initial-value: rgba(255, 255, 255, 0.7); }
+@property --accent-fill-default { syntax: "<color>"; inherits: true; initial-value: #007aff; }
+
+/* ---------- 3. 圆角与阴影 ---------- */
+
+:root {
+  --control-radius: 4px;
+  --overlay-radius: 8px;
+  --item-radius: 3px;
+  --pill-radius: 2px;
+  --shadow-flyout: 0 5px 15px rgba(0, 0, 0, 0.2);
+  --shadow-dialog: 0 32px 64px rgba(0, 0, 0, 0.28);
+}
+
+/* ---------- 4. 浅色主题令牌（官方值） ---------- */
+
+:root {
+  --font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
   /* deslop-ignore-next-line 34 -- monospace is reserved for diagnostic request payloads */
-  --font-mono: "SFMono-Regular", "SF Mono", ui-monospace, monospace;
+  --font-mono: "SFMono-Regular", "SF Mono", ui-monospace, Consolas, monospace;
 
   --appearance-accent: #007aff;
+  --appearance-on-accent: #ffffff;
   --appearance-image: none;
   --appearance-blur: 14px;
   --appearance-dim: 0.42;
   --appearance-scale: 1.04;
+  --appearance-position: center;
 
-  --color-canvas: oklch(0.958 0.009 250);
-  --color-surface: oklch(0.987 0.004 250 / 0.97);
-  --color-surface-raised: oklch(0.995 0.002 250 / 0.985);
-  --color-surface-secondary: oklch(0.935 0.009 250 / 0.94);
-  --color-surface-hover: oklch(0.91 0.028 250 / 0.92);
-  --color-text: oklch(0.22 0.012 255);
-  --color-text-secondary: oklch(0.48 0.018 255);
-  --color-separator: oklch(0.36 0.014 255 / 0.16);
-  --color-separator-strong: oklch(0.36 0.014 255 / 0.28);
-  --color-accent: var(--appearance-accent);
-  --color-accent-hover: color-mix(in oklch, var(--color-accent) 84%, var(--color-text));
-  --color-accent-soft: color-mix(in oklch, var(--color-accent) 12%, var(--color-surface));
-  --color-success: oklch(0.56 0.16 145);
-  --color-warning: oklch(0.68 0.16 78);
-  --color-danger: oklch(0.55 0.2 27);
-  --color-on-accent: oklch(0.985 0.003 250);
+  /* 文本 */
+  --text-primary: rgba(0, 0, 0, 0.894);
+  --text-secondary: rgba(0, 0, 0, 0.62);
+  --text-tertiary: rgba(0, 0, 0, 0.447);
+  --text-disabled: rgba(0, 0, 0, 0.361);
 
-  --glass-fill: oklch(0.99 0.004 250 / 0.72);
-  --glass-fill-strong: oklch(0.99 0.004 250 / 0.84);
-  --glass-border: oklch(1 0 0 / 0.68);
-  --glass-rim: linear-gradient(135deg, oklch(1 0 0 / 0.76), oklch(1 0 0 / 0.12) 44%, oklch(0.69 0.12 245 / 0.18));
-  --glass-shadow: 0 18px 44px -28px oklch(0.21 0.035 255 / 0.42), inset 0 1px 0 oklch(1 0 0 / 0.52), inset 0 -1px 0 oklch(0.4 0.02 255 / 0.08);
-  --glass-blur: 18px;
+  /* 背景 */
+  --solid-bg-base: #f3f3f3;
+  --solid-bg-secondary: #eeeeee;
+  --layer-fill-default: rgba(255, 255, 255, 0.5);
+  --layer-fill-mica: color-mix(in srgb, var(--solid-bg-base) 64%, transparent);
+  --card-bg: rgba(255, 255, 255, 0.7);
+  --card-bg-secondary: rgba(246, 246, 246, 0.5);
+  --dialog-bg: #fcfcfc;
+  --flyout-bg: rgba(252, 252, 252, 0.92);
+  --flyout-backdrop-filter: blur(30px) saturate(160%) brightness(1.02);
 
-  --radius-control: 12px;
-  --radius-surface: 20px;
-  --radius-window: 28px;
-  --shadow-raised: 0 1px 2px oklch(0.15 0.01 255 / 0.05), 0 16px 44px -32px oklch(0.15 0.025 255 / 0.34);
-  --shadow-overlay: 0 24px 64px -30px oklch(0.1 0.02 255 / 0.48);
-  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--color-accent) 28%, transparent);
-  --motion-fast: 160ms;
-  --motion-enter: 240ms;
-  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --motion-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  /* 控件填充 */
+  --ctrl-fill-default: rgba(255, 255, 255, 0.7);
+  --ctrl-fill-secondary: rgba(249, 249, 249, 0.5);
+  --ctrl-fill-tertiary: rgba(249, 249, 249, 0.3);
+  --ctrl-fill-disabled: rgba(249, 249, 249, 0.3);
+  --ctrl-fill-input-active: #ffffff;
+  --ctrl-strong-fill: rgba(0, 0, 0, 0.447);
+  --ctrl-solid-fill: #ffffff;
+  --subtle-fill-hover: rgba(0, 0, 0, 0.0373);
+  --subtle-fill-pressed: rgba(0, 0, 0, 0.0241);
 
-  --accent: var(--color-accent);
-  --ink: var(--color-text);
-  --muted: var(--color-text-secondary);
-  --line: var(--color-separator);
-  --paper: var(--color-surface);
-  --canvas: var(--color-canvas);
+  /* 描边 */
+  --stroke-default: rgba(0, 0, 0, 0.06);
+  --stroke-secondary: rgba(0, 0, 0, 0.16);
+  --card-stroke: rgba(0, 0, 0, 0.06);
+  --divider-stroke: rgba(0, 0, 0, 0.06);
+  --focus-stroke-outer: rgba(0, 0, 0, 0.894);
+  --focus-stroke-inner: rgba(255, 255, 255, 0.7);
+
+  /* 强调色 */
+  --accent-fill-default: var(--appearance-accent);
+  --accent-fill-hover: color-mix(in srgb, var(--appearance-accent) 90%, transparent);
+  --accent-fill-pressed: color-mix(in srgb, var(--appearance-accent) 80%, transparent);
+  --accent-fill-disabled: rgba(0, 0, 0, 0.2169);
+  --accent-text: var(--appearance-on-accent, #ffffff);
+  --accent-text-secondary: color-mix(in srgb, var(--accent-text, #ffffff) 70%, transparent);
+
+  /* 系统语义色 */
+  --sys-success: #0f7b0f;
+  --sys-caution: #9d5d00;
+  --sys-critical: #c42b1c;
+  --sys-success-bg: #dff6dd;
+  --sys-caution-bg: #fff4ce;
+  --sys-critical-bg: #fde7e9;
+
+  color-scheme: light dark;
 }
+
+/* ---------- 5. 深色主题令牌 ---------- */
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]),
   #drcom-modern-root:not([data-theme="light"]) {
-    --color-canvas: oklch(0.165 0.012 255);
-    --color-surface: oklch(0.215 0.012 255 / 0.97);
-    --color-surface-raised: oklch(0.245 0.012 255 / 0.98);
-    --color-surface-secondary: oklch(0.28 0.014 255 / 0.94);
-    --color-surface-hover: oklch(0.33 0.035 250 / 0.94);
-    --color-text: oklch(0.965 0.005 250);
-    --color-text-secondary: oklch(0.75 0.012 250);
-    --color-separator: oklch(0.91 0.008 250 / 0.15);
-    --color-separator-strong: oklch(0.91 0.008 250 / 0.27);
-    --color-accent-soft: color-mix(in oklch, var(--color-accent) 25%, transparent);
-    --color-success: oklch(0.72 0.16 145);
-    --color-warning: oklch(0.78 0.14 80);
-    --color-danger: oklch(0.72 0.18 25);
-    --glass-fill: oklch(0.25 0.014 255 / 0.68);
-    --glass-fill-strong: oklch(0.25 0.014 255 / 0.82);
-    --glass-border: oklch(0.96 0.006 250 / 0.18);
-    --glass-rim: linear-gradient(135deg, oklch(1 0 0 / 0.25), oklch(1 0 0 / 0.035) 45%, oklch(0.69 0.12 245 / 0.18));
-    --glass-shadow: 0 24px 60px -32px oklch(0.04 0.01 255 / 0.78), inset 0 1px 0 oklch(1 0 0 / 0.16), inset 0 -1px 0 oklch(0 0 0 / 0.2);
-    --shadow-raised: 0 18px 46px -34px oklch(0.03 0.008 255 / 0.78);
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.78);
+    --text-tertiary: rgba(255, 255, 255, 0.53);
+    --text-disabled: rgba(255, 255, 255, 0.36);
+
+    --solid-bg-base: #202020;
+    --solid-bg-secondary: #1c1c1c;
+    --layer-fill-default: rgba(58, 58, 58, 0.3);
+    --layer-fill-mica: color-mix(in srgb, var(--solid-bg-base) 56%, transparent);
+    --card-bg: rgba(255, 255, 255, 0.0512);
+    --card-bg-secondary: rgba(255, 255, 255, 0.0326);
+    --dialog-bg: #2c2c2c;
+    --flyout-bg: rgba(44, 44, 44, 0.86);
+    --flyout-backdrop-filter: blur(44px) saturate(190%) brightness(1.22) contrast(1.05);
+
+    --ctrl-fill-default: rgba(255, 255, 255, 0.0605);
+    --ctrl-fill-secondary: rgba(255, 255, 255, 0.0837);
+    --ctrl-fill-tertiary: rgba(255, 255, 255, 0.0326);
+    --ctrl-fill-disabled: rgba(255, 255, 255, 0.0419);
+    --ctrl-fill-input-active: rgba(30, 30, 30, 0.7);
+    --ctrl-strong-fill: rgba(255, 255, 255, 0.545);
+    --ctrl-solid-fill: #454545;
+    --subtle-fill-hover: rgba(255, 255, 255, 0.0605);
+    --subtle-fill-pressed: rgba(255, 255, 255, 0.0419);
+
+    --stroke-default: rgba(255, 255, 255, 0.0706);
+    --stroke-secondary: rgba(255, 255, 255, 0.0941);
+    --card-stroke: rgba(0, 0, 0, 0.1);
+    --divider-stroke: rgba(255, 255, 255, 0.08);
+    --focus-stroke-outer: #ffffff;
+    --focus-stroke-inner: rgba(0, 0, 0, 0.7);
+
+    --accent-fill-disabled: rgba(255, 255, 255, 0.1569);
+
+    --sys-success: #6ccb5f;
+    --sys-caution: #fce100;
+    --sys-critical: #ff99a4;
+    --sys-success-bg: #393d1b;
+    --sys-caution-bg: #433519;
+    --sys-critical-bg: #442726;
   }
 }
 
 :root[data-theme="dark"],
 #drcom-modern-root[data-theme="dark"] {
-  --color-canvas: oklch(0.165 0.012 255);
-  --color-surface: oklch(0.215 0.012 255 / 0.97);
-  --color-surface-raised: oklch(0.245 0.012 255 / 0.98);
-  --color-surface-secondary: oklch(0.28 0.014 255 / 0.94);
-  --color-surface-hover: oklch(0.33 0.035 250 / 0.94);
-  --color-text: oklch(0.965 0.005 250);
-  --color-text-secondary: oklch(0.75 0.012 250);
-  --color-separator: oklch(0.91 0.008 250 / 0.15);
-  --color-separator-strong: oklch(0.91 0.008 250 / 0.27);
-  --color-accent-soft: color-mix(in oklch, var(--color-accent) 25%, transparent);
-  --color-success: oklch(0.72 0.16 145);
-  --color-warning: oklch(0.78 0.14 80);
-  --color-danger: oklch(0.72 0.18 25);
-  --glass-fill: oklch(0.25 0.014 255 / 0.68);
-  --glass-fill-strong: oklch(0.25 0.014 255 / 0.82);
-  --glass-border: oklch(0.96 0.006 250 / 0.18);
-  --glass-rim: linear-gradient(135deg, oklch(1 0 0 / 0.25), oklch(1 0 0 / 0.035) 45%, oklch(0.69 0.12 245 / 0.18));
-  --glass-shadow: 0 24px 60px -32px oklch(0.04 0.01 255 / 0.78), inset 0 1px 0 oklch(1 0 0 / 0.16), inset 0 -1px 0 oklch(0 0 0 / 0.2);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.78);
+  --text-tertiary: rgba(255, 255, 255, 0.53);
+  --text-disabled: rgba(255, 255, 255, 0.36);
+
+  --solid-bg-base: #202020;
+  --solid-bg-secondary: #1c1c1c;
+  --layer-fill-default: rgba(58, 58, 58, 0.3);
+  --layer-fill-mica: color-mix(in srgb, var(--solid-bg-base) 56%, transparent);
+  --card-bg: rgba(255, 255, 255, 0.0512);
+  --card-bg-secondary: rgba(255, 255, 255, 0.0326);
+  --dialog-bg: #2c2c2c;
+  --flyout-bg: rgba(44, 44, 44, 0.86);
+  --flyout-backdrop-filter: blur(44px) saturate(190%) brightness(1.22) contrast(1.05);
+
+  --ctrl-fill-default: rgba(255, 255, 255, 0.0605);
+  --ctrl-fill-secondary: rgba(255, 255, 255, 0.0837);
+  --ctrl-fill-tertiary: rgba(255, 255, 255, 0.0326);
+  --ctrl-fill-disabled: rgba(255, 255, 255, 0.0419);
+  --ctrl-fill-input-active: rgba(30, 30, 30, 0.7);
+  --ctrl-strong-fill: rgba(255, 255, 255, 0.545);
+  --ctrl-solid-fill: #454545;
+  --subtle-fill-hover: rgba(255, 255, 255, 0.0605);
+  --subtle-fill-pressed: rgba(255, 255, 255, 0.0419);
+
+  --stroke-default: rgba(255, 255, 255, 0.0706);
+  --stroke-secondary: rgba(255, 255, 255, 0.0941);
+  --card-stroke: rgba(0, 0, 0, 0.1);
+  --divider-stroke: rgba(255, 255, 255, 0.08);
+  --focus-stroke-outer: #ffffff;
+  --focus-stroke-inner: rgba(0, 0, 0, 0.7);
+
+  --accent-fill-disabled: rgba(255, 255, 255, 0.1569);
+
+  --sys-success: #6ccb5f;
+  --sys-caution: #fce100;
+  --sys-critical: #ff99a4;
+  --sys-success-bg: #393d1b;
+  --sys-caution-bg: #433519;
+  --sys-critical-bg: #442726;
 }
+
+/* ---------- 6. 旧名兼容（页面样式迁移期别名） ---------- */
+
+:root {
+  --color-canvas: var(--solid-bg-base);
+  --color-surface: var(--card-bg);
+  --color-surface-raised: var(--ctrl-solid-fill);
+  --color-surface-secondary: var(--card-bg-secondary);
+  --color-surface-hover: var(--subtle-fill-hover);
+  --color-text: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-separator: var(--divider-stroke);
+  --color-separator-strong: var(--stroke-secondary);
+  --color-accent: var(--accent-fill-default);
+  --color-accent-hover: var(--accent-fill-hover);
+  --color-accent-soft: color-mix(in srgb, var(--accent-fill-default) 12%, transparent);
+  --color-success: var(--sys-success);
+  --color-warning: var(--sys-caution);
+  --color-danger: var(--sys-critical);
+  --color-on-accent: var(--accent-text);
+
+  --glass-fill: var(--layer-fill-default);
+  --glass-fill-strong: var(--flyout-bg);
+  --glass-border: var(--stroke-default);
+  --glass-rim: transparent;
+  --glass-shadow: var(--shadow-flyout);
+  --glass-blur: 30px;
+
+  --radius-control: var(--control-radius);
+  --radius-surface: var(--overlay-radius);
+  --radius-window: var(--overlay-radius);
+  --shadow-raised: var(--shadow-flyout);
+  --shadow-overlay: var(--shadow-dialog);
+  --focus-ring: 0 0 0 2px var(--focus-stroke-outer);
+  --motion-fast: var(--fast-duration);
+  --motion-enter: var(--entrance-duration);
+  --motion-ease: var(--decelerate);
+  --motion-spring: var(--fast-out-slow-in);
+
+  --accent: var(--accent-fill-default);
+  --ink: var(--text-primary);
+  --muted: var(--text-secondary);
+  --line: var(--divider-stroke);
+  --paper: var(--card-bg);
+  --canvas: var(--solid-bg-base);
+}
+
+/* 主题切换时颜色平滑过渡（WinUIonWeb 手法） */
+:root,
+#drcom-modern-root {
+  transition:
+    --solid-bg-base var(--normal-duration) var(--fast-out-slow-in),
+    --card-bg var(--normal-duration) var(--fast-out-slow-in),
+    --text-primary var(--normal-duration) var(--fast-out-slow-in),
+    --accent-fill-default var(--normal-duration) var(--fast-out-slow-in);
+}
+
+/* ---------- 7. 自定义背景层 ---------- */
 
 body.app-themed-page {
   position: relative;
   isolation: isolate;
+  background: var(--solid-bg-base);
 }
 
 :root[data-appearance-background="custom"] body.app-themed-page::before,
@@ -115,23 +303,23 @@ body.app-themed-page {
 
 :root[data-appearance-background="custom"] body.app-themed-page::before {
   background-image: var(--appearance-image);
-  background-position: center;
+  background-position: var(--appearance-position, center);
   background-size: cover;
   filter: blur(var(--appearance-blur));
   transform: scale(var(--appearance-scale));
 }
 
 :root[data-appearance-background="custom"] body.app-themed-page::after {
-  background: oklch(0.94 0.006 250 / calc(var(--appearance-dim) * 0.7));
+  background: rgba(246, 246, 246, calc(var(--appearance-dim) * 0.7));
 }
 
 :root[data-theme="dark"][data-appearance-background="custom"] body.app-themed-page::after {
-  background: oklch(0.07 0.01 255 / var(--appearance-dim));
+  background: rgba(24, 24, 24, var(--appearance-dim));
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"])[data-appearance-background="custom"] body.app-themed-page::after {
-    background: oklch(0.07 0.01 255 / var(--appearance-dim));
+    background: rgba(24, 24, 24, var(--appearance-dim));
   }
 }
 
@@ -140,60 +328,44 @@ body.app-themed-page > :not(.skip-link) {
   z-index: 1;
 }
 
+/* ---------- 8. 导航/头部材质 ---------- */
+
 .glass-chrome {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--glass-border);
-  background: var(--glass-fill);
-  box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: saturate(135%) blur(var(--glass-blur));
-  backdrop-filter: saturate(135%) blur(var(--glass-blur));
+  background: var(--layer-fill-default);
+  border-bottom: 1px solid var(--divider-stroke);
+  -webkit-backdrop-filter: var(--flyout-backdrop-filter);
+  backdrop-filter: var(--flyout-backdrop-filter);
 }
 
-.glass-chrome::before {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--glass-rim);
-  opacity: 0.68;
-  pointer-events: none;
-  -webkit-mask: linear-gradient(oklch(0 0 0) 0 0) content-box, linear-gradient(oklch(0 0 0) 0 0);
-  mask: linear-gradient(oklch(0 0 0) 0 0) content-box, linear-gradient(oklch(0 0 0) 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  padding: 1px;
-}
-
-.glass-chrome > * {
-  position: relative;
-  z-index: 1;
-}
-
-/* deslop-ignore-next-line 19 -- solid fallback for the user-selected navigation material */
-/* deslop-ignore-next-line 19 -- solid fallback for the user-selected navigation material */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass-chrome {
-    background: var(--color-surface-raised);
-  }
-}
+/* ---------- 9. 页面入场（WinUI Entrance 转场） ---------- */
 
 @keyframes drcom-content-enter {
-  from { opacity: 0; transform: translateY(5px); }
+  from { opacity: 0; transform: translateY(140px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes drcom-surface-enter {
+  from { opacity: 0; transform: translateY(24px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .app-themed-page .welcome-shell,
 .app-themed-page .settings-shell,
-.app-themed-page .shell,
-#drcom-modern-root .drcom-surface {
-  animation: drcom-content-enter var(--motion-enter) var(--motion-ease) both;
+.app-themed-page .shell {
+  animation: drcom-content-enter var(--entrance-duration) var(--decelerate) both;
 }
+
+#drcom-modern-root .drcom-surface {
+  animation: drcom-surface-enter var(--entrance-duration) var(--decelerate) both;
+}
+
+/* ---------- 10. 全局交互 ---------- */
 
 .app-themed-page button,
 #drcom-modern-root button {
-  transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), transform 120ms var(--motion-spring);
+  transition: color var(--fast-duration) var(--fast-out-slow-in),
+    background-color var(--fast-duration) var(--fast-out-slow-in),
+    border-color var(--fast-duration) var(--fast-out-slow-in);
 }
 
 .app-themed-page input,
@@ -201,21 +373,35 @@ body.app-themed-page > :not(.skip-link) {
 .app-themed-page textarea,
 #drcom-modern-root input,
 #drcom-modern-root select {
-  transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease);
+  transition: background-color var(--fast-duration) var(--fast-out-slow-in),
+    border-color var(--fast-duration) var(--fast-out-slow-in),
+    box-shadow var(--fast-duration) var(--fast-out-slow-in);
 }
 
-.app-themed-page button:active,
-#drcom-modern-root button:active {
-  transform: scale(0.975);
-}
-
+/* WinUI 双色焦点框：2px 外描边 + 1px 内描边 */
 :where(.app-themed-page, #drcom-modern-root) :focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
+  outline: 2px solid var(--focus-stroke-outer);
+  outline-offset: 1px;
+  box-shadow: inset 0 0 0 1px var(--focus-stroke-inner);
 }
+
+::selection {
+  background: color-mix(in srgb, var(--accent-fill-default) 30%, transparent);
+}
+
+* { scrollbar-width: thin; scrollbar-color: var(--ctrl-strong-fill) transparent; }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-thumb {
+  background: var(--ctrl-strong-fill);
+  border-radius: 6px;
+  border: 4px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { border-width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
 
 @media (max-width: 640px), (pointer: coarse) {
-  :root { --glass-blur: 8px; }
+  :root { --glass-blur: 16px; }
   .app-themed-page button,
   .app-themed-page input,
   .app-themed-page select,
@@ -224,18 +410,584 @@ body.app-themed-page > :not(.skip-link) {
   #drcom-modern-root select { min-height: 44px; }
 }
 
+/* ---------- 11. 共享控件：Button ---------- */
+
+.win-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 5px 11px 6px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--ctrl-fill-default);
+  border: 1px solid var(--stroke-default);
+  border-bottom-color: var(--stroke-secondary);
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color var(--fast-duration) var(--fast-out-slow-in),
+    background-color var(--fast-duration) var(--fast-out-slow-in),
+    border-color var(--fast-duration) var(--fast-out-slow-in);
+}
+.win-btn:hover { background: var(--ctrl-fill-secondary); color: var(--text-primary); }
+.win-btn:active { background: var(--ctrl-fill-tertiary); color: var(--text-secondary); border-bottom-color: var(--stroke-secondary); }
+.win-btn:disabled {
+  background: var(--ctrl-fill-disabled);
+  color: var(--text-disabled);
+  border-color: transparent;
+  cursor: default;
+}
+
+.win-btn--accent {
+  background: var(--accent-fill-default);
+  color: var(--accent-text);
+  border-color: transparent;
+}
+.win-btn--accent:hover { background: var(--accent-fill-hover); color: var(--accent-text); }
+.win-btn--accent:active { background: var(--accent-fill-pressed); color: var(--accent-text-secondary); }
+
+.win-btn--subtle {
+  background: transparent;
+  border-color: transparent;
+}
+.win-btn--subtle:hover { background: var(--subtle-fill-hover); }
+.win-btn--subtle:active { background: var(--subtle-fill-pressed); }
+
+.win-btn--danger {
+  background: var(--sys-critical);
+  color: #ffffff;
+  border-color: transparent;
+}
+.win-btn--danger:hover { background: color-mix(in srgb, var(--sys-critical) 90%, transparent); }
+.win-btn--danger:active { background: color-mix(in srgb, var(--sys-critical) 80%, transparent); }
+
+/* ---------- 12. 共享控件：ToggleSwitch（40×20 规范） ---------- */
+
+.win-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  width: 40px;
+  height: 20px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.win-switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.win-switch .win-switch-track {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--stroke-secondary);
+  border-radius: 10px;
+  background: var(--subtle-fill-hover);
+  transition: background-color var(--fast-duration) var(--fast-out-slow-in),
+    border-color var(--fast-duration) var(--fast-out-slow-in);
+  pointer-events: none;
+}
+
+.win-switch .win-switch-knob {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--text-secondary);
+  transform: translateY(-50%);
+  transition: left var(--fast-duration) var(--fast-out-slow-in),
+    width var(--fast-duration) var(--fast-out-slow-in),
+    height var(--fast-duration) var(--fast-out-slow-in),
+    border-radius var(--fast-duration) var(--fast-out-slow-in),
+    background-color var(--fast-duration) var(--fast-out-slow-in);
+  pointer-events: none;
+}
+
+.win-switch:hover .win-switch-knob {
+  width: 14px;
+  height: 14px;
+  border-radius: 7px;
+}
+.win-switch:active .win-switch-knob,
+.win-switch input:checked:active + .win-switch-track + .win-switch-knob {
+  width: 17px;
+  height: 14px;
+  border-radius: 7px;
+}
+
+.win-switch input:checked ~ .win-switch-track {
+  background: var(--accent-fill-default);
+  border-color: transparent;
+}
+.win-switch input:checked ~ .win-switch-knob {
+  left: 24px;
+  background: var(--accent-text);
+}
+.win-switch input:checked:active ~ .win-switch-knob { left: 22.5px; }
+.win-switch:not(:has(input:checked)):active .win-switch-knob { left: 5.5px; }
+.win-switch input:disabled ~ .win-switch-track { background: var(--ctrl-fill-disabled); }
+.win-switch input:disabled ~ .win-switch-knob { background: var(--text-disabled); }
+.win-switch input:focus-visible ~ .win-switch-track {
+  outline: 2px solid var(--focus-stroke-outer);
+  outline-offset: 2px;
+}
+
+/* ---------- 13. 共享控件：TextBox ---------- */
+
+.win-textbox {
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 5px 9px 7px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--ctrl-fill-default);
+  border: 1px solid var(--stroke-default);
+  border-bottom-color: var(--stroke-secondary);
+  border-radius: var(--control-radius);
+  outline: none;
+}
+.win-textbox::placeholder { color: var(--text-tertiary); }
+.win-textbox:hover { background: var(--ctrl-fill-secondary); }
+.win-textbox:focus {
+  background: var(--ctrl-fill-input-active);
+  border-color: transparent;
+  box-shadow:
+    inset 0 0 0 1px var(--stroke-secondary),
+    inset 0 -2px 0 0 var(--accent-fill-default);
+}
+.win-textbox:disabled {
+  background: var(--ctrl-fill-disabled);
+  color: var(--text-disabled);
+}
+
+/* ---------- 14. 共享控件：CheckBox ---------- */
+
+.win-checkbox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+.win-checkbox input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.win-checkbox .win-checkbox-box {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--stroke-secondary);
+  border-radius: var(--control-radius);
+  background: var(--ctrl-fill-default);
+  color: var(--accent-text);
+  font-size: 12px;
+  pointer-events: none;
+  transition: background-color var(--fast-duration) var(--fast-out-slow-in),
+    border-color var(--fast-duration) var(--fast-out-slow-in);
+}
+.win-checkbox .win-checkbox-box .win-glyph { opacity: 0; transform: scale(0.4); }
+.win-checkbox:hover .win-checkbox-box { background: var(--ctrl-fill-secondary); }
+.win-checkbox:active .win-checkbox-box { background: var(--ctrl-fill-tertiary); }
+.win-checkbox input:checked ~ .win-checkbox-box {
+  background: var(--accent-fill-default);
+  border-color: var(--accent-fill-default);
+}
+.win-checkbox input:checked ~ .win-checkbox-box .win-glyph {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity var(--fast-duration) var(--fast-out-slow-in),
+    transform var(--fast-duration) var(--fast-out-slow-in);
+}
+.win-checkbox input:disabled ~ .win-checkbox-box { background: var(--ctrl-fill-disabled); color: var(--text-disabled); }
+.win-checkbox input:focus-visible ~ .win-checkbox-box {
+  outline: 2px solid var(--focus-stroke-outer);
+  outline-offset: 2px;
+}
+
+/* ---------- 15. 共享控件：Select（ComboBox 闭合态） ---------- */
+
+.win-select {
+  appearance: none;
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 5px 30px 6px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--ctrl-fill-default);
+  border: 1px solid var(--stroke-default);
+  border-bottom-color: var(--stroke-secondary);
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8.098 4.598'%3E%3Cpath fill='%23666666' d='M.195.195C.39 0 .708 0 .903.195L4.049 3.342 7.195.195C7.39 0 7.708 0 7.903.195C8.098.39 8.098.708 7.903.903L4.403 4.403C4.208 4.598 3.89 4.598 3.695 4.403L.195.903C0 .708 0 .39 .195.195Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px;
+}
+.win-select:hover { background-color: var(--ctrl-fill-secondary); }
+.win-select:focus {
+  background-color: var(--ctrl-fill-input-active);
+  border-color: transparent;
+  box-shadow:
+    inset 0 0 0 1px var(--stroke-secondary),
+    inset 0 -2px 0 0 var(--accent-fill-default);
+  outline: none;
+}
+
+/* ---------- 16. 共享控件：Slider ---------- */
+
+.win-slider {
+  appearance: none;
+  width: 100%;
+  min-height: 20px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.win-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background:
+    linear-gradient(var(--accent-fill-default), var(--accent-fill-default)) 0 / var(--win-slider-progress, 50%) 100% no-repeat,
+    var(--ctrl-strong-fill);
+}
+.win-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: var(--accent-fill-default);
+  border: 4px solid var(--ctrl-solid-fill);
+  box-shadow: 0 0 0 1px var(--stroke-secondary);
+  transition: border-width var(--fast-duration) var(--fast-out-slow-in);
+}
+.win-slider:active::-webkit-slider-thumb { border-width: 5px; }
+.win-slider::-moz-range-track { height: 4px; border-radius: 2px; background: var(--ctrl-strong-fill); }
+.win-slider::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--accent-fill-default); }
+.win-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-fill-default);
+  border: 4px solid var(--ctrl-solid-fill);
+}
+
+/* ---------- 17. 共享控件：SettingsCard ---------- */
+
+.win-card {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 68px;
+  padding: 16px;
+  border: 1px solid var(--card-stroke);
+  border-radius: var(--control-radius);
+  background: var(--card-bg);
+  margin: 0 0 4px;
+}
+.win-card--clickable { cursor: pointer; }
+.win-card--clickable:hover { background: var(--ctrl-fill-secondary); border-bottom-color: var(--stroke-secondary); }
+.win-card--clickable:active { background: var(--ctrl-fill-tertiary); color: var(--text-secondary); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .win-card--clickable:hover,
+  #drcom-modern-root:not([data-theme="light"]) .win-card--clickable:hover {
+    border-bottom-color: var(--card-stroke);
+    border-top-color: var(--stroke-secondary);
+  }
+}
+:root[data-theme="dark"] .win-card--clickable:hover,
+#drcom-modern-root[data-theme="dark"] .win-card--clickable:hover {
+  border-bottom-color: var(--card-stroke);
+  border-top-color: var(--stroke-secondary);
+}
+
+.win-card-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-primary);
+}
+.win-card-body { flex: 1; min-width: 0; }
+.win-card-title { margin: 0; font-size: 14px; font-weight: 600; line-height: 20px; color: var(--text-primary); }
+.win-card-description { margin: 2px 0 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+.win-card-action { flex: none; display: inline-flex; align-items: center; gap: 8px; }
+.win-card-chevron { color: var(--text-tertiary); }
+
+/* ---------- 18. 共享控件：InfoBar ---------- */
+
+.win-infobar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 12px 8px 16px;
+  border: 1px solid var(--card-stroke);
+  border-radius: var(--control-radius);
+  background: var(--card-bg-secondary);
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.win-infobar .win-infobar-icon { color: var(--accent-fill-default); }
+.win-infobar[data-severity="success"] { background: var(--sys-success-bg); }
+.win-infobar[data-severity="success"] .win-infobar-icon { color: var(--sys-success); }
+.win-infobar[data-severity="warning"] { background: var(--sys-caution-bg); }
+.win-infobar[data-severity="warning"] .win-infobar-icon { color: var(--sys-caution); }
+.win-infobar[data-severity="error"] { background: var(--sys-critical-bg); }
+.win-infobar[data-severity="error"] .win-infobar-icon { color: var(--sys-critical); }
+.win-infobar p { margin: 0; }
+.win-infobar-close {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.win-infobar-close:hover { background: var(--subtle-fill-hover); }
+
+/* ---------- 19. 共享控件：ContentDialog（危险操作确认） ---------- */
+
+.confirm-dialog {
+  width: min(548px, calc(100vw - 32px));
+  min-width: 320px;
+  min-height: 184px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--overlay-radius);
+  background: var(--dialog-bg);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-dialog);
+  padding: 0;
+  animation: win-dialog-enter var(--normal-duration) var(--fast-out-slow-in) both;
+}
+
+@keyframes win-dialog-enter {
+  from { opacity: 0; transform: scale(1.05); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.confirm-dialog[open] { animation: win-dialog-enter var(--normal-duration) var(--fast-out-slow-in) both; }
+.confirm-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.3);
+  animation: win-dialog-backdrop-enter var(--faster-duration) linear both;
+}
+
+@keyframes win-dialog-backdrop-enter { from { opacity: 0; } to { opacity: 1; } }
+
+.confirm-dialog-surface {
+  display: flex;
+  flex-direction: column;
+  min-height: 184px;
+  padding: 24px;
+}
+
+.confirm-dialog h2 { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.4; }
+.confirm-dialog p { margin: 12px 0 0; color: var(--text-secondary); font-size: 14px; line-height: 1.55; white-space: pre-line; flex: 1; }
+.confirm-dialog-actions {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.confirm-dialog-actions button {
+  min-height: 32px;
+  padding: 5px 11px 6px;
+  font: inherit;
+  font-size: 14px;
+  border-radius: var(--control-radius);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color var(--fast-duration) var(--fast-out-slow-in), color var(--fast-duration) var(--fast-out-slow-in);
+}
+.confirm-dialog-cancel {
+  background: var(--ctrl-fill-default);
+  color: var(--text-primary);
+  border-bottom-color: var(--stroke-secondary);
+}
+.confirm-dialog-cancel:hover { background: var(--ctrl-fill-secondary); }
+.confirm-dialog-danger { background: var(--sys-critical); color: #ffffff; }
+.confirm-dialog-danger:hover { background: color-mix(in srgb, var(--sys-critical) 90%, transparent); }
+.confirm-dialog-actions button:focus-visible {
+  outline: 2px solid var(--focus-stroke-outer);
+  outline-offset: 1px;
+  box-shadow: inset 0 0 0 1px var(--focus-stroke-inner);
+}
+
+@media (max-width: 420px), (pointer: coarse) {
+  .confirm-dialog-actions { grid-template-columns: 1fr; }
+  .confirm-dialog-actions button { min-height: 44px; }
+}
+
+/* ---------- 20. 共享控件：ProgressRing ---------- */
+
+.win-ring {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 4px solid transparent;
+  border-top-color: var(--accent-fill-default);
+  border-right-color: var(--accent-fill-default);
+  animation: win-ring-spin 1.4s cubic-bezier(0.45, 0.15, 0.55, 0.85) infinite;
+}
+
+@keyframes win-ring-spin {
+  from { transform: rotate(0turn); }
+  to { transform: rotate(1turn); }
+}
+
+/* ---------- 21. 共享控件：NavigationView ---------- */
+
+.win-nav-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  background: var(--layer-fill-mica);
+}
+
+.win-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 36px;
+  margin: 0 4px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--fast-duration) var(--fast-out-slow-in);
+}
+.win-nav-item .win-glyph { flex: none; font-size: 16px; }
+.win-nav-item:hover { background: var(--subtle-fill-hover); }
+.win-nav-item:active { background: var(--subtle-fill-pressed); }
+.win-nav-item[aria-current="page"] { background: var(--subtle-fill-hover); }
+.win-nav-item[aria-current="page"]:hover { background: var(--subtle-fill-pressed); }
+.win-nav-item[aria-current="page"]:active { background: var(--subtle-fill-hover); }
+
+.win-nav-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: var(--pill-radius);
+  background: var(--accent-fill-default);
+  transform: translateY(-50%);
+  transition: height var(--normal-duration) var(--fast-out-slow-in);
+}
+.win-nav-item[aria-current="page"]::before { height: 16px; }
+.win-nav-item[aria-current="page"]:active::before { height: 10px; }
+
+/* ---------- 22. 共享控件：Flyout / Tooltip / Toast ---------- */
+
+.win-flyout {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--overlay-radius);
+  background: transparent !important;
+  box-shadow: var(--shadow-flyout);
+  -webkit-backdrop-filter: var(--flyout-backdrop-filter);
+  backdrop-filter: var(--flyout-backdrop-filter);
+}
+.win-flyout::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--flyout-bg);
+}
+
+.win-tooltip {
+  position: absolute;
+  z-index: 1000;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  border-radius: var(--control-radius);
+  pointer-events: none;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: min(90vw, 420px);
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--text-primary);
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--overlay-radius);
+  box-shadow: var(--shadow-flyout);
+  -webkit-backdrop-filter: var(--flyout-backdrop-filter);
+  backdrop-filter: var(--flyout-backdrop-filter);
+}
+
+/* ---------- 23. 无障碍降级 ---------- */
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-chrome { background: var(--ctrl-solid-fill); }
+  .win-flyout { background: var(--flyout-bg) !important; }
+  .win-flyout::before { display: none; }
+}
+
 @media (prefers-reduced-transparency: reduce) {
-  :root { --glass-fill: var(--color-surface-raised); --glass-fill-strong: var(--color-surface-raised); }
-  .glass-chrome { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .glass-chrome { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--ctrl-solid-fill); }
+  .win-flyout { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .win-flyout::before { background: var(--ctrl-solid-fill); }
+  :root { --card-bg: var(--ctrl-solid-fill); --layer-fill-default: var(--ctrl-solid-fill); --flyout-bg: var(--ctrl-solid-fill); }
 }
 
 @media (prefers-contrast: more) {
   :root {
-    --glass-fill: var(--color-surface-raised);
-    --glass-fill-strong: var(--color-surface-raised);
-    --glass-border: var(--color-separator-strong);
+    --stroke-default: var(--text-primary);
+    --card-stroke: var(--text-primary);
+    --divider-stroke: var(--text-primary);
   }
-  .glass-chrome { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .glass-chrome { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--ctrl-solid-fill); }
+  .win-flyout { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .win-flyout::before { background: var(--ctrl-solid-fill); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -247,37 +999,15 @@ body.app-themed-page > :not(.skip-link) {
   }
 }
 
-.confirm-dialog {
-  width: min(420px, calc(100vw - 24px));
-  max-width: none;
-  border: 0;
-  padding: 0;
-  color: var(--color-text);
-  background: transparent;
-}
-.confirm-dialog::backdrop { background: oklch(0.12 0.01 255 / 0.52); backdrop-filter: blur(4px); }
-.confirm-dialog-surface {
-  padding: 22px;
-  border: 1px solid var(--glass-border);
-  border-radius: 20px;
-  background: var(--glass-fill-strong);
-  box-shadow: var(--shadow-overlay);
-}
-.confirm-dialog h2 { margin: 0; font-size: 20px; line-height: 1.25; }
-.confirm-dialog p { margin: 10px 0 0; color: var(--color-text-secondary); line-height: 1.55; white-space: pre-line; }
-.confirm-dialog-actions { margin-top: 22px; display: flex; justify-content: flex-end; gap: 10px; }
-.confirm-dialog-actions button { min-height: 44px; border-radius: var(--radius-control); padding: 0 18px; font: inherit; font-weight: 650; }
-.confirm-dialog-cancel { border: 1px solid var(--color-separator-strong); color: var(--color-text); background: var(--color-surface-raised); }
-.confirm-dialog-danger { border: 1px solid var(--color-danger); color: white; background: var(--color-danger); }
-.confirm-dialog-actions button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-
-@media (max-width: 420px) {
-  .confirm-dialog-actions { flex-direction: column; }
-  .confirm-dialog-actions button { width: 100%; }
-}
-
 @media (forced-colors: active) {
-  :root { --color-separator: CanvasText; --color-separator-strong: CanvasText; --focus-ring: 0 0 0 3px Highlight; }
+  :root {
+    --stroke-default: CanvasText;
+    --stroke-secondary: CanvasText;
+    --card-stroke: CanvasText;
+    --divider-stroke: CanvasText;
+    --focus-stroke-outer: Highlight;
+  }
   .glass-chrome { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
-  .glass-chrome::before { display: none; }
+  .win-btn { border: 1px solid ButtonText; }
+  .win-flyout { border: 1px solid CanvasText; }
 }

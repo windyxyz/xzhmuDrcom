@@ -314,8 +314,8 @@ test("375px 视口下步骤编号留在第一列且标题保持横排", { timeou
     assert.ok(layout.titleWidth >= 100, `标题不应被压成竖排：${JSON.stringify(layout)}`);
     assert.ok(layout.titleHeight <= 30, `标题应保持单行：${JSON.stringify(layout)}`);
     assert.ok(layout.welcomeTitleHeight <= 70, `欢迎主标题不应留下单字孤行：${JSON.stringify(layout)}`);
-    assert.equal(layout.motionTiming, "cubic-bezier(0.2, 0.8, 0.2, 1)");
-    assert.equal(layout.motionDuration, "0.24s");
+    assert.equal(layout.motionTiming, "cubic-bezier(0.1, 0.9, 0.2, 1)");
+    assert.equal(layout.motionDuration, "0.45s");
   } finally {
     await cleanupBrowserProfile(child, profile);
   }
@@ -388,8 +388,8 @@ test("390px 视口下设置页单列排版且没有横向溢出", { timeout: 20_
     assert.ok(layout.sectionLeft >= 0 && layout.sectionRight <= layout.viewportWidth, `设置卡片应完整留在视口内：${JSON.stringify(layout)}`);
     assert.equal(layout.appearanceColumns.split(" ").length, 1, `外观区在手机上应为单列：${JSON.stringify(layout)}`);
     assert.equal(layout.backgroundTuningDisplay, "none", `简洁底色下不应显示图片调节项：${JSON.stringify(layout)}`);
-    assert.equal(layout.motionTiming, "cubic-bezier(0.2, 0.8, 0.2, 1)");
-    assert.equal(layout.motionDuration, "0.24s");
+    assert.equal(layout.motionTiming, "cubic-bezier(0.1, 0.9, 0.2, 1)");
+    assert.equal(layout.motionDuration, "0.45s");
   } finally {
     await cleanupBrowserProfile(child, profile);
   }
@@ -646,7 +646,7 @@ test("800px 设置页仍使用左侧纵向玻璃侧栏", { timeout: 20_000 }, as
     assert.ok(layout.workspaceGap >= -20 && layout.workspaceGap <= 1, JSON.stringify(layout));
     assert.match(layout.backdropFilter, /blur\(/);
     assert.deepEqual(layout.visiblePanels, ["connection-overview", "automation-section"]);
-    assert.ok(layout.windowRadius >= 20, JSON.stringify(layout));
+    assert.ok(layout.windowRadius >= 8, JSON.stringify(layout));
     assert.equal(layout.windowOverflow, "hidden");
     assert.ok(layout.refreshLeft >= layout.workspaceLeft && layout.refreshRight <= 800, JSON.stringify(layout));
     assert.match(layout.windowBackdropFilter, /blur\(/);
