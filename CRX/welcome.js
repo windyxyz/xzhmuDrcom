@@ -28,6 +28,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("open-options").addEventListener("click", () => {
     chrome.runtime.openOptionsPage();
   });
+
+  if (typeof document.querySelector === "function") {
+    const characters = document.querySelector(".welcome-characters");
+    if (characters) {
+      document.addEventListener("pointermove", (event) => {
+        characters.style.setProperty("--px", (event.clientX / window.innerWidth * 2 - 1).toFixed(3));
+        characters.style.setProperty("--py", (event.clientY / window.innerHeight * 2 - 1).toFixed(3));
+      }, { passive: true });
+    }
+  }
 });
 
 function gatewayHost(value) {

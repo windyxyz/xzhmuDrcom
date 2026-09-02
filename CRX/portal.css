@@ -142,143 +142,20 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
 }
 .drcom-brand-copy span { display: block; margin-top: 4px; color: rgba(255, 255, 255, 0.72); font-size: 13px; }
 
-/* ---------- 动画角色 ---------- */
+/* ---------- 动画角色（共享组件见 design-tokens.css，此处仅尺寸） ---------- */
 
 .drcom-characters {
-  --px: 0;
-  --py: 0;
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: clamp(8px, 2vw, 18px);
   height: 190px;
-}
-
-.drcom-char {
-  position: relative;
-  transition: transform 0.7s var(--pointed), opacity 0.45s var(--fast-out-slow-in);
-  animation: char-idle-sway 4.4s ease-in-out infinite;
-}
-.drcom-char:nth-child(2) { animation-delay: 0.6s; }
-.drcom-char:nth-child(3) { animation-delay: 1.2s; }
-.drcom-char:nth-child(4) { animation-delay: 1.8s; }
-
-@keyframes char-idle-sway {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
-}
-
-.char-purple { width: 66px; height: 108px; background: #6c3ff5; border-radius: 14px; }
-.char-black  { width: 60px; height: 86px;  background: #2d2d2d; border-radius: 14px; }
-.char-orange { width: 78px; height: 62px;  background: #ff9b6b; border-radius: 40px 40px 8px 8px; }
-.char-yellow { width: 86px; height: 70px;  background: #e8d754; border-radius: 20px; }
-
-.char-eyes {
-  position: absolute;
-  top: 22px;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-}
-.char-orange .char-eyes { top: 14px; }
-.char-yellow .char-eyes { top: 18px; }
-
-.char-eye {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: #ffffff;
-  overflow: hidden;
-  transition: height 0.25s var(--fast-out-slow-in), opacity 0.25s var(--fast-out-slow-in);
-}
-.char-pupil {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #17171f;
-  transform: translate(calc(var(--px) * 3px), calc(var(--py) * 3px));
-  transition: transform 0.12s linear;
-}
-
-/* 眨眼 */
-.char-eye { animation: char-blink 5.2s infinite; }
-.char-eye:nth-child(2) { animation-delay: 0.08s; }
-@keyframes char-blink {
-  0%, 94%, 100% { height: 15px; }
-  96% { height: 2px; }
-}
-
-.char-mouth {
-  position: absolute;
-  left: 50%;
-  bottom: 26px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  border: 2px solid rgba(23, 23, 31, 0.85);
-  border-color: rgba(23, 23, 31, 0.85) transparent transparent transparent;
-  transform: translateX(-50%);
-  transition: all 0.3s var(--fast-out-slow-in);
-}
-.char-orange .char-mouth, .char-yellow .char-mouth { bottom: 16px; }
-
-/* 心情状态 */
-.drcom-characters[data-mood="typing"] .char-purple { transform: skewX(-4deg) translateY(-4px); }
-.drcom-characters[data-mood="typing"] .char-black { transform: rotate(4deg); }
-.drcom-characters[data-mood="typing"] .char-eye { height: 10px; align-items: flex-end; }
-
-.drcom-characters[data-mood="covering"] .char-eye { opacity: 0; }
-.drcom-characters[data-mood="covering"] .char-mouth { opacity: 0.25; }
-.drcom-characters[data-mood="covering"] .char-purple { transform: rotate(-3deg) translateY(2px); }
-.drcom-characters[data-mood="covering"] .char-black { transform: rotate(3deg) translateY(2px); }
-
-.drcom-characters[data-mood="sad"] .drcom-char { animation: char-shake 0.8s var(--fast-out-slow-in) 1; }
-.drcom-characters[data-mood="sad"] .char-eye { height: 8px; align-items: flex-end; }
-.drcom-characters[data-mood="sad"] .char-mouth {
-  width: 14px;
-  height: 8px;
-  border: 0;
-  border-bottom: 2.5px solid rgba(23, 23, 31, 0.85);
-  border-radius: 0 0 10px 10px;
-}
-
-.drcom-characters[data-mood="happy"] .drcom-char { animation: char-bounce 0.9s var(--decelerate) 1; }
-.drcom-characters[data-mood="happy"] .char-eye { height: 6px; align-items: center; }
-.drcom-characters[data-mood="happy"] .char-mouth {
-  width: 16px;
-  height: 8px;
-  border: 0;
-  border-top: 2.5px solid rgba(23, 23, 31, 0.85);
-  border-radius: 10px 10px 0 0;
-}
-
-@keyframes char-shake {
-  0%, 100% { transform: rotate(0); }
-  20% { transform: rotate(-6deg); }
-  45% { transform: rotate(5deg); }
-  70% { transform: rotate(-3deg); }
-}
-@keyframes char-bounce {
-  0%, 100% { transform: translateY(0); }
-  35% { transform: translateY(-14px); }
-  60% { transform: translateY(-4px); }
+  gap: clamp(8px, 2vw, 18px);
 }
 
 /* 在线页迷你角色 */
 .drcom-characters--mini {
   height: 64px;
-  gap: 10px;
   justify-content: flex-start;
   margin: 0 0 10px;
-  transform-origin: left bottom;
-  transform: scale(0.62);
   transform: scale(0.62) translateX(-16px);
+  transform-origin: left bottom;
 }
 
 /* ---------- 登录/在线卡片 ---------- */

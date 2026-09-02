@@ -9,11 +9,24 @@
 </head>
 <body class="app-themed-page">
   <main class="welcome-shell">
-    <section class="welcome-copy" aria-labelledby="welcome-title">
-      <header class="product-lockup">
-        <strong>徐医校园网助手</strong>
-      </header>
+    <section class="welcome-brand" aria-hidden="true">
+      <span class="welcome-blob welcome-blob-a"></span>
+      <span class="welcome-blob welcome-blob-b"></span>
+      <div class="welcome-brand-stage">
+        <div class="drcom-characters welcome-characters" aria-hidden="true">
+          <div class="drcom-char char-purple"><span class="char-eyes"><span class="char-eye"><span class="char-pupil"></span></span><span class="char-eye"><span class="char-pupil"></span></span></span><span class="char-mouth"></span></div>
+          <div class="drcom-char char-black"><span class="char-eyes"><span class="char-eye"><span class="char-pupil"></span></span><span class="char-eye"><span class="char-pupil"></span></span></span><span class="char-mouth"></span></div>
+          <div class="drcom-char char-orange"><span class="char-eyes"><span class="char-eye"><span class="char-pupil"></span></span><span class="char-eye"><span class="char-pupil"></span></span></span><span class="char-mouth"></span></div>
+          <div class="drcom-char char-yellow"><span class="char-eyes"><span class="char-eye"><span class="char-pupil"></span></span><span class="char-eye"><span class="char-pupil"></span></span></span><span class="char-mouth"></span></div>
+        </div>
+        <div class="welcome-lockup">
+          <strong>徐医校园网助手</strong>
+          <span>连接校园网，从这里开始</span>
+        </div>
+      </div>
+    </section>
 
+    <section class="welcome-content" aria-labelledby="welcome-title">
       <div class="intro">
         <h1 id="welcome-title">先登录校园网</h1>
         <p>第一次使用只需要完成一次网页登录。助手会识别登录请求并保存必要参数，以后可以快速连接。</p>
@@ -37,20 +50,20 @@
         </li>
       </ol>
 
+      <aside class="portal-panel" aria-labelledby="portal-title">
+        <div class="portal-panel-copy">
+          <p class="panel-label">校园网认证地址</p>
+          <h2 id="portal-title">10.10.10.2</h2>
+          <p>请确保设备已经连接学校有线网络或校园 Wi-Fi。</p>
+        </div>
+        <div class="welcome-actions">
+          <button id="open-portal" class="primary-action" type="button">打开 10.10.10.2 并登录</button>
+          <button id="open-options" class="secondary-action" type="button">先查看设置</button>
+        </div>
+      </aside>
+
       <p class="privacy-note">账号数据只保存在这台设备的浏览器中。</p>
     </section>
-
-    <aside class="portal-panel glass-chrome" aria-labelledby="portal-title">
-      <div>
-        <p class="panel-label">校园网认证地址</p>
-        <h2 id="portal-title">10.10.10.2</h2>
-        <p>请确保设备已经连接学校有线网络或校园 Wi-Fi。</p>
-      </div>
-      <div class="welcome-actions">
-        <button id="open-portal" class="primary-action" type="button">打开 10.10.10.2 并登录</button>
-        <button id="open-options" class="secondary-action" type="button">先查看设置</button>
-      </div>
-    </aside>
   </main>
   <script src="appearance.js"></script>
   <script src="welcome.js"></script>
