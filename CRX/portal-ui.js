@@ -209,7 +209,7 @@
       <div class="drcom-page">
         <header class="drcom-header glass-chrome">
           <span class="drcom-brand-mark" aria-hidden="true"></span>
-          <strong>校园网助手</strong>
+          <strong>徐医网络tools</strong>
           <div class="drcom-header-actions">
             <button id="drcom-open-options" type="button" aria-label="个性化" title="个性化">
               <span class="win-glyph" aria-hidden="true">&#xE713;</span>

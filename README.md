@@ -1,8 +1,8 @@
 # 徐医校园网助手
 
-这是一个 Chrome Manifest V3 扩展，用于徐州医科大学 DrCOM 校园网网关。扩展默认仅访问 `10.10.10.2`，提供首次安装引导、可恢复的现代认证页、多账号管理、登录/下线、原认证请求捕获、浏览器启动自动登录、定时保活、短时防跳转和脱敏请求日志。1.0.1 完成全部界面的 WinUI 3 重构与个性化体系：连接状态机、全局单通道登录、智能退避重试、后台重启恢复、强调色取色器、材质与遮罩调节、必应每日壁纸和动画角色登录页。1.0.1 起，门户登录/在线页表面的遮罩与文字颜色始终跟随整体浅/深主题，不再按背景图片亮度自动判定。欢迎页、弹窗、设置页与认证页均适配窄屏、横屏、触控操作和带安全区的移动设备，并共享跟随系统、浅色、深色和自定义背景外观。
+这是一个 Chrome Manifest V3 扩展，用于徐州医科大学 DrCOM 校园网网关。扩展默认仅访问 `10.10.10.2`，提供首次安装引导、可恢复的现代认证页、多账号管理、登录/下线、原认证请求捕获、浏览器启动自动登录、定时保活、短时防跳转和脱敏请求日志。1.0.2 完成全部界面的 WinUI 3 重构与个性化体系：连接状态机、全局单通道登录、智能退避重试、后台重启恢复、强调色取色器、材质与遮罩调节、必应每日壁纸和动画角色登录页。1.0.2 起，门户登录/在线页表面的遮罩与文字颜色始终跟随整体浅/深主题，不再按背景图片亮度自动判定。欢迎页、弹窗、设置页与认证页均适配窄屏、横屏、触控操作和带安全区的移动设备，并共享跟随系统、浅色、深色和自定义背景外观。
 
-当前仓库只维护 `CRX` 中的稳定版 1.0.1。完整功能、架构、数据结构、消息流、测试和发布方式见 [`docs/development-guide.md`](docs/development-guide.md)，产品体验约束见 [`docs/product-design.md`](docs/product-design.md)。贡献前请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，整改与版本变化见 [`CHANGELOG.md`](CHANGELOG.md)。
+当前仓库只维护 `CRX` 中的稳定版 1.0.2。完整功能、架构、数据结构、消息流、测试和发布方式见 [`docs/development-guide.md`](docs/development-guide.md)，产品体验约束见 [`docs/product-design.md`](docs/product-design.md)。贡献前请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，整改与版本变化见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 安装与使用
 
@@ -88,16 +88,16 @@ npm run verify
 
 ## 发布
 
-先执行 `npm run verify`，再运行 `npm run package`。产物为 `dist/drcom-xuzhou-medical-1.0.1.zip` 和对应 SHA-256 文件；ZIP 根目录直接包含 `manifest.json` 与 `LICENSE`。该包面向本地加载与自托管分发，manifest 保留开发用 `key` 以维持稳定扩展 ID。
+先执行 `npm run verify`，再运行 `npm run package`。产物为 `dist/drcom-xuzhou-medical-1.0.2.zip` 和对应 SHA-256 文件；ZIP 根目录直接包含 `manifest.json` 与 `LICENSE`。该包面向本地加载与自托管分发，manifest 保留开发用 `key` 以维持稳定扩展 ID。
 
-**上架 Chrome Web Store** 使用 `npm run package:cws`，产出 `dist/drcom-xuzhou-medical-cws-1.0.1.zip`——商店校验不允许 manifest 含 `key`（商店会为扩展分配自己的 key 与 ID），该包从主清单派生并自动删除 `key`，其余内容与普通 Chrome 包一致。
+**上架 Chrome Web Store** 使用 `npm run package:cws`，产出 `dist/drcom-xuzhou-medical-cws-1.0.2.zip`——商店校验不允许 manifest 含 `key`（商店会为扩展分配自己的 key 与 ID），该包从主清单派生并自动删除 `key`，其余内容与普通 Chrome 包一致。
 
-Firefox 使用 MV3 兼容构建：`npm run package:firefox` 产出 `dist/drcom-xuzhou-medical-firefox-1.0.1.zip`。它基于同一份 `CRX/` 源码与白名单，仅替换 manifest：移除 Chrome 的 `key`、`options_page` 改用 `options_ui`、加入 `browser_specific_settings.gecko` 元数据（要求 Firefox 118+，因连接状态使用 `storage.session`）。代码中 Chrome 专有 API（如 `storage.local.setAccessLevel`）均做了能力检测，不支持时自动跳过。
+Firefox 使用 MV3 兼容构建：`npm run package:firefox` 产出 `dist/drcom-xuzhou-medical-firefox-1.0.2.zip`。它基于同一份 `CRX/` 源码与白名单，仅替换 manifest：移除 Chrome 的 `key`、`options_page` 改用 `options_ui`、加入 `browser_specific_settings.gecko` 元数据（要求 Firefox 118+，因连接状态使用 `storage.session`）。代码中 Chrome 专有 API（如 `storage.local.setAccessLevel`）均做了能力检测，不支持时自动跳过。
 
 创建本地标签或未来接入标签工作流前运行：
 
 ```powershell
-npm run verify:release -- v1.0.1
+npm run verify:release -- v1.0.2
 ```
 
 ## 许可证

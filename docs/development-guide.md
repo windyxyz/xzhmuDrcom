@@ -2,7 +2,7 @@
 
 ## 1. 项目定位
 
-DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩展。当前稳定版本为 1.0.1，源码位于 CRX/，使用原生 HTML、CSS 和 JavaScript，不依赖第三方 npm 包。
+DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩展。当前稳定版本为 1.0.2，源码位于 CRX/，使用原生 HTML、CSS 和 JavaScript，不依赖第三方 npm 包。
 
 项目解决以下问题：
 
@@ -760,15 +760,15 @@ npm run package
 
 输出：
 
-- dist/drcom-xuzhou-medical-1.0.1.zip
-- dist/drcom-xuzhou-medical-1.0.1.sha256
+- dist/drcom-xuzhou-medical-1.0.2.zip
+- dist/drcom-xuzhou-medical-1.0.2.sha256
 
 ZIP 根目录直接包含 manifest.json 和 LICENSE。打包器使用显式白名单、固定顺序、1980-01-01 DOS 时间和 STORE 方法。tests/、docs/、portal-preview.*、截图和本地状态不会进入发布包。dist/ 已加入 .gitignore。
 
 ### 14.2 标签校验
 
 ~~~powershell
-npm run verify:release -- v1.0.1
+npm run verify:release -- v1.0.2
 ~~~
 
 脚本要求标签精确等于 v + Manifest 版本，同时检查 package.json 版本，并从 CHANGELOG.md 提取当前版本到 dist/release-notes.md。

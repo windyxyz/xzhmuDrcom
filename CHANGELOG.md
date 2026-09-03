@@ -2,6 +2,16 @@
 
 本文件记录 DrCom徐医的重要变化，格式参考 Keep a Changelog，版本遵循扩展 Manifest 版本。
 
+## [1.0.2] - 2026-09-03
+
+### 变更
+
+- 扩展更名为“徐医网络tools”：Manifest 名称与工具提示、设置/弹窗/欢迎页/门户页头与关于页的品牌文案统一更新。
+
+### 修复
+
+- 修复 Firefox 打包产物通过 AMO 常规校验：后台从 `service_worker` 迁移到 `background.scripts` event page（`background.js` 按环境自适应加载依赖），`strict_min_version` 提升到 128.0 并补齐 `data_collection_permissions` 声明。
+
 ## [1.0.1] - 2026-09-03
 
 ### 变更
