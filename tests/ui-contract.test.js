@@ -171,7 +171,7 @@ test("portal diagnostics card exposes live status, privacy warning, and keyboard
 test("正式界面使用功能性玻璃层并提供降级与减弱透明度支持", () => {
   const tokens = readExtensionFile("design-tokens.css");
   const options = readExtensionFile("options.html");
-  assert.match(tokens, /--glass-fill:/);
+  assert.match(tokens, /--flyout-bg:/);
   assert.match(tokens, /@supports not\s*\(/);
   assert.match(tokens, /prefers-reduced-transparency/);
   assert.match(options, /class="[^"]*settings-sidebar/);

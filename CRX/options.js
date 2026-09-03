@@ -471,13 +471,11 @@ async function exportPortalDiagnostics() {
 }
 
 async function clearPortalDiagnostics() {
-  const confirmer = globalThis.DrcomConfirm?.confirm || globalThis.DrcomConfirmDialog?.ask;
-  if (typeof confirmer !== "function") throw new Error("确认对话框不可用");
-  const controller = globalThis.DrcomConfirm || globalThis.DrcomConfirmDialog;
-  const confirmed = await confirmer.call(controller, {
+  const confirmer = globalThis.DrcomConfirmDialog;
+  if (!confirmer || typeof confirmer.ask !== "function") throw new Error("确认对话框不可用");
+  const confirmed = await confirmer.ask({
     title: "清空门户诊断记录？",
     message: "将删除本机保存的全部门户诊断会话，诊断开关保持不变。此操作无法撤销。",
-    confirmText: "清空记录",
     confirmLabel: "清空记录",
     danger: true
   });

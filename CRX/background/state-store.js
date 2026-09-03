@@ -93,6 +93,8 @@ for (const action of PORTAL_DIAGNOSTIC_WEB_ACTIONS) WEB_PAGE_ACTIONS.add(action)
 
 let stateMutationQueue = Promise.resolve();
 let sessionMutationQueue = Promise.resolve();
+/* 最近一次由 setState 持久化的序列化结果；getState 用它跳过稳态下重复的整状态比较 */
+let persistedStateSerialized = null;
 const DEFAULT_CONNECTION_STATE = {
   phase: "idle",
   attempt: 0,
@@ -124,10 +126,13 @@ async function getState() {
   }
 
   const normalized = normalizeState(state || DEFAULT_STATE);
+  const storedSerialized = storedState ? JSON.stringify(storedState) : "";
   const needsWrite = !storedState
     || storedState.schemaVersion !== SCHEMA_VERSION
     || hasLegacyCredentials
-    || JSON.stringify(storedState) !== JSON.stringify(normalized);
+    || (persistedStateSerialized === null
+      ? storedSerialized !== JSON.stringify(normalized)
+      : storedSerialized !== persistedStateSerialized);
   if (needsWrite) {
     await setState(normalized);
   }
@@ -141,6 +146,7 @@ async function getState() {
 async function setState(state) {
   const normalized = normalizeState(state);
   assertStateStorageBudget(normalized);
+  persistedStateSerialized = JSON.stringify(normalized);
   await chrome.storage.local.set({ [STORAGE_KEY]: normalized });
   return normalized;
 }

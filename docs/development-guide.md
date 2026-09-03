@@ -32,7 +32,7 @@ DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩
 | 现代门户 | 覆盖层不删除原 DOM，可以立即恢复学校原页面 | portal-ui.js、portal-modernizer.js |
 | 在线详情 | 读取状态、换算时间/流量/余额并只展示脱敏字段 | portal-session.js、drcom-client.js |
 | 原请求捕获 | 读取原表单和动态脚本中的账号、密码与网络参数 | portal-modernizer.js |
-| 外观 | 系统/浅色/深色、强调色、自定义背景、压缩和可读性参数 | appearance.js、design-tokens.css |
+| 外观 | 系统/浅色/深色、完整取色器、材质预设与遮罩强度、自定义背景压缩与填充、品牌面板配色、页面过渡与窗格位置 | appearance.js、design-tokens.css |
 | 私有门户背景 | 图片只进入 closed Shadow DOM，轻 DOM 不出现 Data URL | portal-modernizer.js |
 | 危险操作确认 | 删除、覆盖导入、恢复设置、清空记录、清除背景均可取消 | confirm-dialog.js |
 | 请求记录 | 最近 10 次登录、下线和状态记录，默认脱敏 | state-store.js、drcom-client.js |
@@ -418,9 +418,13 @@ DrCOM 响应固定按以下优先级处理：
 
 ### 8.2 背景与个性化
 
-portal:config:get 只返回启用状态、标题、门户地址、主题、强调色和 `onlineDetailMode`，不返回 backgroundImage。完整外观通过 portal:appearance:get 单独获取。
+portal:config:get 只返回启用状态、标题、门户地址、主题、强调色和 `onlineDetailMode`，不返回 backgroundImage。完整外观通过 portal:appearance:get 单独获取；每日壁纸由该接口在后台解析为缓存的图片 Data URL（后台只返回缓存内容，不外发请求），解析失败时回退为简洁底色。壁纸图同样只进入 closed Shadow DOM，不进入轻 DOM。
 
 自定义图片只写入内容脚本创建的 closed Shadow DOM 私有层。门户轻 DOM、宿主元素属性和 CSS 变量中不出现 Data URL。门户右上角提供 44px 个性化按钮，包含提示和无障碍名称，点击后发送 options:open 打开设置。
+
+登录页/欢迎页的品牌面板颜色由强调色派生，用户可在设置页覆盖为独立色值（`panelColor`），底部图案在网格/圆点/斜线/菱形交叉/无五档间切换（`panelPattern`）。四个 CSS 几何角色由 `animated-characters.js` 渲染：过冲入场、瞳孔按向量跟随（幅度 3–5px）、输入时互看、聚焦/输入密码时整体回避（拉长侧倾、眼睛左移）、密码可见时紫色角色偷看、失败时摇头与波浪嘴、成功时笑脸与 180 片撒花；`prefers-reduced-motion` 下全部静止，任何角色异常不影响认证流程。
+
+壁纸（每日或自定义）下，设置页区块、欢迎页内容区、弹窗页头与门户表面自动叠加玻璃遮罩，强度由 `scrimStrength`（0.4–1.4）调节并随材质预设变化；门户表面还会对背景图做 24×24 采样亮度判定，暗背景配深遮罩白字、亮背景配浅遮罩深字（`data-surface-tone`）。
 
 ### 8.3 网页消息来源
 
@@ -592,14 +596,23 @@ options.js
     ui: {
       modernizePortal: true,
       onlineDetailMode: "classic",
+      autoRefreshSettings: true,
       title: "徐医校园网",
       accent: "#007aff",
       theme: "system",
-      background: "fresh",
+      background: "fresh",           // fresh | daily | custom
       backgroundImage: "",
       backgroundBlur: 14,
       backgroundDim: 0.42,
-      backgroundScale: 1.04
+      backgroundScale: 1.04,
+      backgroundPosition: "center",  // 九宫格之一
+      backgroundFit: "cover",        // cover | contain | fill（对应 WinImage Stretch）
+      material: "acrylic",           // solid | mica | acrylic | acrylicStrong | custom
+      scrimStrength: 1,              // 0.4–1.4，壁纸下文字遮罩强度
+      navTransition: "entrance",     // entrance | slide | drillIn | suppress
+      navPanePosition: "left",       // left | top
+      panelColor: "",                // 空 = 跟随强调色；#RRGGBB = 品牌面板自定义底色
+      panelPattern: "grid"           // grid | dots | diagonal | cross | none
     },
     redirect: { returnToPortal: true, guardSeconds: 4 },
     automation: { loginOnStartup: true, keepAlive: true, intervalMinutes: 3 }
@@ -607,9 +620,9 @@ options.js
 }
 ~~~
 
-账号、配置和请求记录通过串行写入队列更新，避免并发覆盖。完整状态写入前执行 8 MB 预算检查；背景图片保存目标约 3 MB。
+账号、配置和请求记录通过串行写入队列更新，避免并发覆盖。完整状态写入前执行 8 MB 预算检查；背景图片保存上限约 1.9 MB 字符（受 Chrome 内联样式单值约 2,048,000 字符上限约束，超出会被整体拒绝导致背景不显示）。每日壁纸以独立键 `drcomDailyWallpaper` 缓存，不占用状态预算，图片字节上限 1.4 MB。
 
-schema 12 会合并历史重复自然键账号；成功写回后删除旧顶层 username/password；删除历史账号 note 以及 ui.subtitle、ui.density、ui.hideOriginalPortal。规范化前后状态会比较，即使存储已经标记为 schema 12，也会把残留字段幂等写回清理。写回失败时不会提前删除旧凭据源字段。
+schema 12 会合并历史重复自然键账号；成功写回后删除旧顶层 username/password；删除历史账号 note 以及 ui.subtitle、ui.density、ui.hideOriginalPortal。规范化前后状态会比较，即使存储已经标记为 schema 12，也会把残留字段幂等写回清理；稳态下通过最近写入序列化缓存跳过重复的整状态比较。写回失败时不会提前删除旧凭据源字段。
 
 ### 9.2 storage.session
 
@@ -678,7 +691,7 @@ message-router.js 先判定发送方，再执行白名单，最后裁剪门户�
 
 ### 11.3 设置页
 
-分为网络、账号、外观、高级和关于。网络提供连接概览、门户、状态测试、启动登录和保活；账号管理密码和每账号网络参数；外观处理主题、强调色、背景、本机压缩及门户在线信息的 `classic/full/minimal/hidden` 显示模式；高级包含门户/API、协议、抓包 URL、短时保护、请求记录、默认关闭的门户诊断卡和恢复默认。诊断卡展示开关、占用、会话数、JSON 导出与确认后的清空。抓包导入若命中已有自然键，会在覆盖名称、密码和网络参数前确认。
+分为网络、账号、外观、高级和关于。网络提供连接概览、门户、状态测试、启动登录和保活；账号管理密码和每账号网络参数；外观处理主题、强调色取色器（光谱+明度+hex+预设）、材质预设与遮罩强度、背景（纯色/每日壁纸/自定义图）、填充方式与九宫格焦点、品牌面板配色与图案、页面过渡动画、窗格位置及门户在线信息的 `classic/full/minimal/hidden` 显示模式；高级包含门户/API、协议、抓包 URL、短时保护、请求记录、默认关闭的门户诊断卡和恢复默认。诊断卡展示开关、占用、会话数、JSON 导出与确认后的清空。抓包导入若命中已有自然键，会在覆盖名称、密码和网络参数前确认。全部设置修改后立即自动保存生效，不设全局保存按钮；换网关或启用每日壁纸需要的权限在保存瞬间请求。
 
 页首提供“自动同步”“立即同步”和“重新加载页面”。`config.ui.autoRefreshSettings` 默认 `true`，保存在 `drcomAssistantState`，不进入门户可见配置。自动同步通过四类信号工作：
 

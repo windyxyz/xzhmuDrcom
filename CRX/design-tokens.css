@@ -1,7 +1,7 @@
 /* ============================================================
    DrCOM 徐医校园网助手 — WinUI 3 设计系统
    令牌基准：microsoft-ui-xaml Common_themeresources / WinUIonWeb theme.css
-   结构：字体与图标 → 主题令牌（浅/深） → 旧名兼容 → 背景层 → 共享控件 → 降级
+   结构：字体与图标 → 主题令牌（浅/深） → 材质与图案 → 背景层 → 共享控件 → 降级
    ============================================================ */
 
 /* ---------- 1. 字体与图标 ---------- */
@@ -281,52 +281,6 @@
 }
 
 /* 文字遮罩强度乘数（外观页可调，默认 1 = 跟随材质预设） */
-
-/* ---------- 6. 旧名兼容（页面样式迁移期别名） ---------- */
-
-:root {
-  --color-canvas: var(--solid-bg-base);
-  --color-surface: var(--card-bg);
-  --color-surface-raised: var(--ctrl-solid-fill);
-  --color-surface-secondary: var(--card-bg-secondary);
-  --color-surface-hover: var(--subtle-fill-hover);
-  --color-text: var(--text-primary);
-  --color-text-secondary: var(--text-secondary);
-  --color-separator: var(--divider-stroke);
-  --color-separator-strong: var(--stroke-secondary);
-  --color-accent: var(--accent-fill-default);
-  --color-accent-hover: var(--accent-fill-hover);
-  --color-accent-soft: color-mix(in srgb, var(--accent-fill-default) 12%, transparent);
-  --color-success: var(--sys-success);
-  --color-warning: var(--sys-caution);
-  --color-danger: var(--sys-critical);
-  --color-on-accent: var(--accent-text);
-
-  --glass-fill: var(--layer-fill-default);
-  --glass-fill-strong: var(--flyout-bg);
-  --glass-border: var(--stroke-default);
-  --glass-rim: transparent;
-  --glass-shadow: var(--shadow-flyout);
-  --glass-blur: 30px;
-
-  --radius-control: var(--control-radius);
-  --radius-surface: var(--overlay-radius);
-  --radius-window: var(--overlay-radius);
-  --shadow-raised: var(--shadow-flyout);
-  --shadow-overlay: var(--shadow-dialog);
-  --focus-ring: 0 0 0 2px var(--focus-stroke-outer);
-  --motion-fast: var(--fast-duration);
-  --motion-enter: var(--entrance-duration);
-  --motion-ease: var(--decelerate);
-  --motion-spring: var(--fast-out-slow-in);
-
-  --accent: var(--accent-fill-default);
-  --ink: var(--text-primary);
-  --muted: var(--text-secondary);
-  --line: var(--divider-stroke);
-  --paper: var(--card-bg);
-  --canvas: var(--solid-bg-base);
-}
 
 /* 主题切换时颜色平滑过渡（WinUIonWeb 手法） */
 :root,

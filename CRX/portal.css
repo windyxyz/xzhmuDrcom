@@ -1,6 +1,6 @@
 /* 门户现代认证页 — WinUI 控件 + 动画角色品牌面板 */
 
-html.drcom-modern-active, html.drcom-modern-active body { min-height: 100% !important; min-height: 100dvh !important; margin: 0 !important; overflow: auto !important; color-scheme: light dark; background: var(--color-canvas) !important; }
+html.drcom-modern-active, html.drcom-modern-active body { min-height: 100% !important; min-height: 100dvh !important; margin: 0 !important; overflow: auto !important; color-scheme: light dark; background: var(--solid-bg-base) !important; }
 html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appearance):not(.confirm-dialog) { display: none !important; }
 #drcom-private-appearance { position: fixed; z-index: 2147483646; inset: 0; display: block !important; overflow: hidden; pointer-events: none; }
 #drcom-modern-root, #drcom-modern-root * { box-sizing: border-box; }
@@ -540,32 +540,6 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
 }
 #drcom-captcha-dismiss:hover { background: var(--subtle-fill-hover); }
 
-/* ---------- 撒花 ---------- */
-
-.drcom-confetti {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483646;
-  overflow: hidden;
-  pointer-events: none;
-}
-.drcom-confetti span {
-  position: absolute;
-  top: -4vh;
-  left: var(--cx);
-  width: 8px;
-  height: 14px;
-  border-radius: 2px;
-  background: var(--cc);
-  opacity: 0.95;
-  animation: confetti-fall var(--ct) linear var(--cd) both;
-}
-@keyframes confetti-fall {
-  0% { transform: translateY(-4vh) rotate(0) ; opacity: 0.95; }
-  85% { opacity: 0.95; }
-  100% { transform: translateY(108vh) rotate(var(--cr)); opacity: 0; }
-}
-
 /* ---------- 页脚 ---------- */
 
 .drcom-page > footer {
@@ -629,7 +603,7 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .drcom-char, .char-eye, .char-pupil, .char-mouth { animation: none !important; transition: none !important; }
-  .drcom-confetti { display: none !important; }
+  .dchar, .dchar-eyeball, .dchar-pupil, .dchar-mouth-wrapper, .dchar-yellow-mouth { animation: none !important; transition: none !important; }
+  .dchar-confetti { display: none !important; }
   .app-themed-page .drcom-surface, #drcom-modern-root .drcom-surface { animation-duration: 0.01ms !important; }
 }
