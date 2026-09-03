@@ -184,14 +184,20 @@ function bindEvents() {
     toast("在线信息显示已应用");
   }));
   $("appearance-background").addEventListener("change", runAsync(async (event) => {
-    if (event.target.value === "daily" && !await ensureWallpaperPermission()) {
-      event.target.value = "fresh";
+    const select = event.target;
+    if (select.value === "daily" && !await ensureWallpaperPermission()) {
+      select.value = "fresh";
       syncAppearanceControls();
       toast("未授予必应访问权限，已保持简洁底色");
       return;
     }
     syncAppearanceControls();
     applyCurrentAppearance();
+    /* 无图的自定义背景只是选图前的过渡态：不持久化，避免被规范化为简洁底色后弹回 */
+    if (select.value === "custom" && !$("background-image-data").value) {
+      toast("请选择一张背景图片，选中后会自动应用");
+      return;
+    }
     await persistAppearance();
     refreshDailyWallpaper();
     toast("背景设置已应用");
@@ -1437,6 +1443,12 @@ function readConfig() {
 
 function readAppearanceConfig() {
   const position = $("background-position")?.value;
+  /* 无图的自定义背景只是选图前的过渡态：不持久化（后台会把 custom 无图归一为
+     简洁底色），避免在保存其它外观时把下拉弹回 fresh */
+  const background = $("appearance-background").value;
+  const effectiveBackground = background === "custom" && !$("background-image-data").value
+    ? "fresh"
+    : background;
   return {
     onlineDetailMode: $("online-detail-mode").value,
     theme: $("appearance-theme").value,
@@ -1447,8 +1459,8 @@ function readAppearanceConfig() {
     panelColor: readPanelColor(),
     panelPattern: $("panel-pattern")?.value || "grid",
     accent: $("appearance-accent").value,
-    background: $("appearance-background").value,
-    backgroundImage: $("background-image-data").value,
+    background: effectiveBackground,
+    backgroundImage: effectiveBackground === "custom" ? $("background-image-data").value : "",
     backgroundBlur: Number($("background-blur").value),
     backgroundDim: Number($("background-dim").value),
     backgroundScale: Number($("background-scale").value),
@@ -1497,8 +1509,6 @@ function syncAppearanceControls() {
   const hasImage = Boolean(imageData);
   $("background-controls").hidden = !custom;
   $("clear-background").disabled = !hasImage;
-  const fileInput = $("background-file");
-  if (fileInput) fileInput.disabled = !custom;
   $("background-blur-value").value = `${Number($("background-blur").value)} px`;
   $("background-dim-value").value = `${Math.round(Number($("background-dim").value) * 100)}%`;
   $("background-scale-value").value = `${Math.round(Number($("background-scale").value) * 100)}%`;

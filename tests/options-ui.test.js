@@ -322,6 +322,35 @@ test("外观表单会保存主题、自定义背景和可读性参数", () => {
   });
 });
 
+test("未选图时的自定义背景不会持久化，避免保存时被弹回简洁底色", () => {
+  const elements = new Map([
+    ["online-detail-mode", { value: "classic" }],
+    ["appearance-theme", { value: "light" }],
+    ["appearance-accent", { value: "#007aff" }],
+    ["appearance-background", { value: "custom" }],
+    ["background-image-data", { value: "" }],
+    ["background-blur", { value: "14" }],
+    ["background-dim", { value: "0.42" }],
+    ["background-scale", { value: "1.04" }]
+  ]);
+  const context = vm.createContext({
+    clearTimeout,
+    console,
+    document: {
+      addEventListener() {},
+      getElementById(id) {
+        return elements.get(id) || null;
+      }
+    },
+    setTimeout
+  });
+  loadOptions(context);
+
+  const result = JSON.parse(JSON.stringify(context.readAppearanceConfig()));
+  assert.equal(result.background, "fresh");
+  assert.equal(result.backgroundImage, "");
+});
+
 test("外观图片选择后会立即持久化，不依赖页面底部的总保存按钮", async () => {
   const messages = [];
   const elements = new Map([
