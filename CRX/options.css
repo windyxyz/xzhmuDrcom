@@ -424,7 +424,7 @@ body.app-themed-page {
   -webkit-backdrop-filter: var(--flyout-backdrop-filter);
   backdrop-filter: var(--flyout-backdrop-filter);
 }
-:root[data-appearance-background="custom"] .settings-shell .advanced-settings { padding: 0; background: var(--flyout-bg); }
+:root[data-appearance-background="custom"] .settings-shell .advanced-settings { padding: 0; background: var(--layer-fill-default); }
 :root[data-appearance-background="custom"] .settings-shell .advanced-settings > summary { border-radius: var(--overlay-radius); }
 
 .slider-control {
