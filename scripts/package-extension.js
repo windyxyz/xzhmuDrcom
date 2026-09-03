@@ -138,18 +138,29 @@ function readVersion(projectRoot) {
 function buildPackage(options = {}) {
   const projectRoot = options.projectRoot || join(__dirname, "..");
   const outputDirectory = options.outputDirectory || join(projectRoot, "dist");
+  const target = options.target === "firefox" ? "firefox" : "chrome";
   const version = readVersion(projectRoot);
   const entries = RELEASE_FILES.map((entry) => {
-    const absolutePath = join(projectRoot, ...entry.sourcePath.split("/"));
+    let absolutePath = join(projectRoot, ...entry.sourcePath.split("/"));
     if (!existsSync(absolutePath)) {
       throw new Error(`打包白名单文件不存在：${entry.sourcePath}`);
     }
-    return { ...entry, content: readFileSync(absolutePath) };
+    let content = readFileSync(absolutePath);
+    if (target === "firefox" && entry.archivePath === "manifest.json") {
+      /* Firefox 变体清单：无 Chrome key、options_ui、gecko 元数据；版本与主清单保持一致 */
+      const firefoxManifest = JSON.parse(readFileSync(join(projectRoot, "CRX", "manifest.firefox.json"), "utf8"));
+      if (firefoxManifest.version !== version) {
+        throw new Error(`Firefox 清单版本 ${firefoxManifest.version} 与主版本 ${version} 不一致`);
+      }
+      content = Buffer.from(JSON.stringify(firefoxManifest, null, 2) + "\n", "utf8");
+    }
+    return { ...entry, content };
   });
   const zipBuffer = createZip(entries);
   const sha256 = createHash("sha256").update(zipBuffer).digest("hex");
-  const fileName = `drcom-xuzhou-medical-${version}.zip`;
-  const checksumName = `drcom-xuzhou-medical-${version}.sha256`;
+  const targetLabel = target === "firefox" ? "firefox-" : "";
+  const fileName = `drcom-xuzhou-medical-${targetLabel}${version}.zip`;
+  const checksumName = `drcom-xuzhou-medical-${targetLabel}${version}.sha256`;
   const zipPath = join(outputDirectory, fileName);
   const checksumPath = join(outputDirectory, checksumName);
 
@@ -157,11 +168,12 @@ function buildPackage(options = {}) {
   writeFileSync(zipPath, zipBuffer);
   writeFileSync(checksumPath, `${sha256}  ${fileName}\n`, "utf8");
 
-  return { checksumName, checksumPath, fileName, sha256, zipPath };
+  return { checksumName, checksumPath, fileName, sha256, zipPath, target };
 }
 
 if (require.main === module) {
-  const result = buildPackage();
+  const target = process.argv.includes("--firefox") ? "firefox" : "chrome";
+  const result = buildPackage({ target });
   console.log(`已生成 ${result.zipPath}`);
   console.log(`SHA-256 ${result.sha256}`);
 }

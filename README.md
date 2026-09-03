@@ -90,6 +90,8 @@ npm run verify
 
 先执行 `npm run verify`，再运行 `npm run package`。产物为 `dist/drcom-xuzhou-medical-1.0.0.zip` 和对应 SHA-256 文件；ZIP 根目录直接包含 `manifest.json` 与 `LICENSE`。
 
+Firefox 使用 MV3 兼容构建：`npm run package:firefox` 产出 `dist/drcom-xuzhou-medical-firefox-1.0.0.zip`。它基于同一份 `CRX/` 源码与白名单，仅替换 manifest：移除 Chrome 的 `key`、`options_page` 改用 `options_ui`、加入 `browser_specific_settings.gecko` 元数据（要求 Firefox 118+，因连接状态使用 `storage.session`）。代码中 Chrome 专有 API（如 `storage.local.setAccessLevel`）均做了能力检测，不支持时自动跳过。
+
 创建本地标签或未来接入标签工作流前运行：
 
 ```powershell
