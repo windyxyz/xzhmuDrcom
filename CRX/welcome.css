@@ -34,7 +34,10 @@ body {
   background:
     linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(160deg, #4338ca 0%, #312e81 48%, #1e1b4b 100%);
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--appearance-accent) 78%, #1e1b4b) 0%,
+      color-mix(in srgb, var(--appearance-accent) 45%, #17153a) 48%,
+      color-mix(in srgb, var(--appearance-accent) 22%, #100e26) 100%);
   background-size: 22px 22px, 22px 22px, auto;
   overflow: hidden;
 }
@@ -59,6 +62,9 @@ body {
 }
 
 .welcome-characters { margin-bottom: 12px; }
+.welcome-brand-stage .dchar-frame { flex: none; }
+
+.welcome-lockup { position: relative; z-index: 5; }
 
 .welcome-lockup strong {
   display: block;
@@ -192,7 +198,8 @@ body :focus-visible {
   .welcome-brand { border-radius: 0; border-left: 0; border-right: 0; border-top: 0; }
   .welcome-content { padding: 16px; }
   .setup-steps li { padding: 10px 12px; }
-  .welcome-actions button { flex: 1; }
+  .welcome-actions { flex-wrap: nowrap; }
+  .welcome-actions button { flex: 1; font-size: 13px; white-space: nowrap; padding: 6px 8px 7px; }
 }
 
 @media (max-height: 600px) and (orientation: landscape) {

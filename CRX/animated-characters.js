@@ -32,7 +32,7 @@
     const barePupils = (count) => Array.from({ length: count }, () =>
       `<span class="dchar-pupil dchar-pupil-bare"></span>`).join("");
     return `
-      <div class="dchar-scaler"><div class="dchar-stage" data-state="idle">
+      <div class="dchar-stage" data-state="idle">
         <div class="dchar dchar-purple">
           <span class="dchar-eyes">${eyeballs(2, CHARACTERS.purple.eyes.size)}</span>
           <span class="dchar-mouth dchar-mouth-purple"></span>
@@ -48,7 +48,7 @@
           <span class="dchar-eyes">${barePupils(2)}</span>
           <span class="dchar-mouth-wrapper"><svg width="80" height="20" viewBox="0 0 80 20"><path class="dchar-yellow-mouth" stroke="#2D2D2D" stroke-width="3" fill="none" stroke-linecap="round"/></svg></span>
         </div>
-      </div></div>`;
+      </div>`;
   }
 
   function clamp(value, min, max) {
@@ -290,10 +290,9 @@
 
     function renderScale() {
       const scale = clamp(frame.clientWidth / STAGE_WIDTH, 0.4, 1);
-      const scaler = frame.querySelector(".dchar-scaler");
-      if (!scaler) return;
-      scaler.style.transform = `scale(${scale})`;
-      scaler.style.height = `${STAGE_HEIGHT * scale}px`;
+      stage.style.transformOrigin = "bottom left";
+      stage.style.transform = `scale(${scale})`;
+      frame.style.height = `${Math.round(STAGE_HEIGHT * scale)}px`;
     }
 
     function applyMouse(x, y) {
@@ -340,6 +339,12 @@
       }
     }
 
+    let resizeObserver = null;
+    if (typeof ResizeObserver === "function") {
+      resizeObserver = new ResizeObserver(() => handleResize());
+      resizeObserver.observe(frame);
+    }
+
     const controller = {
       setState: setMode,
       get state() { return mode; },
@@ -353,6 +358,7 @@
         timers.forEach((id) => clearTimeout(id));
         if (rafId) cancelAnimationFrame(rafId);
         if (lookRafId) cancelAnimationFrame(lookRafId);
+        resizeObserver?.disconnect();
         if (interactive && typeof window !== "undefined") {
           window.removeEventListener("mousemove", onMouseMove);
           window.removeEventListener("resize", handleResize);
