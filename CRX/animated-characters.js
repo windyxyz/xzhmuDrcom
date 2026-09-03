@@ -156,7 +156,8 @@
     function eyesPosition(key) {
       const config = CHARACTERS[key];
       const at = config.eyesAt;
-      if (mode === "visible" && at.visible) return at.visible;
+      /* 有密码内容时（无论显隐）眼睛整体左移避开表单，与参考实现一致 */
+      if ((mode === "hiding" || mode === "visible") && at.visible) return at.visible;
       if (looking && at.looking) return at.looking;
       return [at.default[0] + face[key].x, at.default[1] + face[key].y];
     }
@@ -165,7 +166,7 @@
       const config = CHARACTERS[key];
       if (!config.mouthAt) return null;
       const at = config.mouthAt;
-      if (mode === "visible" && at.visible) return at.visible;
+      if ((mode === "hiding" || mode === "visible") && at.visible) return at.visible;
       if (looking && at.looking) return at.looking;
       return [at.default[0] + face[key].x, at.default[1] + face[key].y];
     }
@@ -193,7 +194,7 @@
     function forceLook(key) {
       if (mode === "happy") return { x: 0, y: successLookY };
       /* 回避：聚焦/输入密码时全体视线离开表单方向 */
-      if (mode === "hiding") return { x: -4, y: 3 };
+      if (mode === "hiding") return { x: -4, y: -4 };
       if (mode === "visible") {
         if (key === "purple") return peeking ? { x: 4, y: 5 } : { x: -4, y: -4 };
         if (key === "black") return { x: -4, y: -4 };

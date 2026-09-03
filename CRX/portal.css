@@ -165,6 +165,40 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   box-shadow: var(--shadow-flyout);
 }
 
+/* 背景亮度自适应遮罩：暗背景 → 深遮罩白字；亮背景 → 浅遮罩深字 */
+#drcom-modern-root[data-surface-tone="dark"] .drcom-surface {
+  background: rgba(32, 32, 32, 0.86);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.78);
+  --text-tertiary: rgba(255, 255, 255, 0.53);
+  --card-stroke: rgba(255, 255, 255, 0.12);
+  --divider-stroke: rgba(255, 255, 255, 0.1);
+  --ctrl-fill-default: rgba(255, 255, 255, 0.09);
+  --ctrl-fill-secondary: rgba(255, 255, 255, 0.14);
+  --ctrl-fill-tertiary: rgba(255, 255, 255, 0.06);
+  --ctrl-fill-input-active: rgba(50, 50, 50, 0.9);
+  --subtle-fill-hover: rgba(255, 255, 255, 0.09);
+  --subtle-fill-pressed: rgba(255, 255, 255, 0.06);
+  --sys-success-bg: rgba(108, 203, 95, 0.16);
+  --sys-critical-bg: rgba(255, 153, 164, 0.16);
+}
+#drcom-modern-root[data-surface-tone="light"] .drcom-surface {
+  background: rgba(250, 250, 250, 0.88);
+  --text-primary: rgba(0, 0, 0, 0.9);
+  --text-secondary: rgba(0, 0, 0, 0.62);
+  --text-tertiary: rgba(0, 0, 0, 0.45);
+  --card-stroke: rgba(0, 0, 0, 0.1);
+  --divider-stroke: rgba(0, 0, 0, 0.08);
+  --ctrl-fill-default: rgba(255, 255, 255, 0.85);
+  --ctrl-fill-secondary: rgba(0, 0, 0, 0.05);
+  --ctrl-fill-tertiary: rgba(0, 0, 0, 0.08);
+  --ctrl-fill-input-active: #ffffff;
+  --subtle-fill-hover: rgba(0, 0, 0, 0.05);
+  --subtle-fill-pressed: rgba(0, 0, 0, 0.08);
+  --sys-success-bg: rgba(15, 123, 15, 0.12);
+  --sys-critical-bg: rgba(196, 43, 28, 0.12);
+}
+
 .drcom-intro { margin: 0 0 18px; }
 .drcom-intro h1 {
   margin: 0;
