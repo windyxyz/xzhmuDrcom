@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "徐医校园网助手",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "DrCOM 现代认证页、多账号登录、连接状态恢复、智能重试与脱敏请求记录。",
   "browser_specific_settings": {
     "gecko": {

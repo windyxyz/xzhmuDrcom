@@ -31,7 +31,7 @@ jobs:
       - name: Upload verified package
         uses: actions/upload-artifact@v4
         with:
-          name: drcom-xuzhou-medical-1.0.0
+          name: drcom-xuzhou-medical-1.0.1
           path: |
             dist/*.zip
             dist/*.sha256
