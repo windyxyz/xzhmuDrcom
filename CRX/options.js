@@ -6,7 +6,7 @@ const suffixLabel = accountUtils.suffixLabel;
 const makeAccountLabel = accountUtils.label;
 const naturalAccountKey = accountUtils.naturalKey;
 
-const BACKGROUND_IMAGE_BUDGET_BYTES = 3 * 1024 * 1024;
+const BACKGROUND_IMAGE_BUDGET_BYTES = 1_900_000; // Chrome 内联样式单值上限约 2,048,000 字符，图片 Data URL 必须低于该值
 const BACKGROUND_SOURCE_LIMIT_BYTES = 48 * 1024 * 1024;
 const BACKGROUND_TARGET_DIMENSIONS = [2560, 2240, 1920, 1600, 1280, 960];
 const BACKGROUND_WEBP_QUALITIES = [0.92, 0.88, 0.84];
@@ -1528,8 +1528,8 @@ function syncAppearanceControls() {
       ? "每日壁纸由后台从必应获取并缓存；首次保存时需要允许访问必应"
       : custom
         ? hasImage
-          ? `当前约 ${formatStorageSize(imageData.length)}，保存上限 3 MB`
-          : "选择后立即保存并应用；超过 3 MB 时自动高质量压缩"
+          ? `当前约 ${formatStorageSize(imageData.length)}，保存上限 1.9 MB`
+          : "选择后立即保存并应用；超过 1.9 MB 时自动高质量压缩"
         : "使用当前主题底色，不加载任何图片";
   }
 }
@@ -1621,7 +1621,7 @@ async function compressBackgroundBitmap(bitmap) {
     }
   }
 
-  throw new Error("图片自动压缩后仍超过 3 MB，请换用更简单的背景图");
+  throw new Error("图片自动压缩后仍超过 1.9 MB，请换用更简单的背景图");
 }
 
 function encodeCanvas(canvas, quality) {

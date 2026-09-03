@@ -459,11 +459,11 @@ test("设置页会显示当前背景图片占用与预算上限", () => {
 
   context.syncAppearanceControls();
 
-  assert.equal(note.textContent, "当前约 2 KB，保存上限 3 MB");
+  assert.equal(note.textContent, "当前约 2 KB，保存上限 1.9 MB");
   assert.equal(elements.get("background-controls").hidden, false);
 });
 
-test("超过保存预算的高分辨率背景会自动多轮压缩到三兆以内", async () => {
+test("超过保存预算的高分辨率背景会自动多轮压缩到内联样式上限以内", async () => {
   const encodeCalls = [];
   let bitmapClosed = false;
   const canvas = {
@@ -476,7 +476,7 @@ test("超过保存预算的高分辨率背景会自动多轮压缩到三兆以�
       encodeCalls.push({ width: this.width, height: this.height, type, quality });
       const encodedLength = encodeCalls.length === 1
         ? 3 * 1024 * 1024 + 256
-        : 2 * 1024 * 1024;
+        : 1_400_000;
       resolve({ encodedLength, size: Math.floor(encodedLength * 0.75), type });
     }
   };
@@ -524,7 +524,7 @@ test("超过保存预算的高分辨率背景会自动多轮压缩到三兆以�
     size: 18 * 1024 * 1024
   });
 
-  assert.ok(result.length <= 3 * 1024 * 1024, `压缩结果仍超限：${result.length}`);
+  assert.ok(result.length <= 1_900_000, `压缩结果仍超限：${result.length}`);
   assert.ok(encodeCalls.length >= 2, "首次编码超限后应继续压缩");
   assert.ok(encodeCalls[0].quality >= 0.9, "第一次编码应优先保留高画质");
   assert.ok(encodeCalls[1].quality < encodeCalls[0].quality, "后续编码应逐步调整质量");

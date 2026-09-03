@@ -5,7 +5,7 @@
 
 const WALLPAPER_STORAGE_KEY = "drcomDailyWallpaper";
 const WALLPAPER_ORIGINS = ["https://cn.bing.com/*"];
-const WALLPAPER_IMAGE_MAX_BYTES = 3 * 1024 * 1024;
+const WALLPAPER_IMAGE_MAX_BYTES = 1_400_000; // 转 Data URL 后须低于 Chrome 内联样式 ~2,048,000 字符上限
 const WALLPAPER_FETCH_TIMEOUT_MS = 10000;
 
 let wallpaperFlight = null;
