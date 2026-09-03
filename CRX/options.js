@@ -979,7 +979,7 @@ function syncDependentControls() {
 
 function splitKeepAliveInterval(value) {
   const safe = Math.min(30, Math.max(0.5, Number(value) || 0.5));
-  const totalSeconds = Math.round(safe * 60 / 15) * 15;
+  const totalSeconds = Math.round(safe * 60 / 5) * 5;
   return {
     minutes: Math.min(30, Math.floor(totalSeconds / 60)),
     seconds: totalSeconds >= 1800 ? 0 : totalSeconds % 60

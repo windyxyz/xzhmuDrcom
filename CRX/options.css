@@ -404,6 +404,15 @@ body.app-themed-page {
 .settings-row-text strong { font-size: 14px; font-weight: 600; line-height: 20px; }
 .settings-row-text small { color: var(--text-secondary); font-size: 12px; line-height: 16px; }
 
+.duration-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.duration-control .duration-word { color: var(--text-secondary); font-size: 13px; white-space: nowrap; }
+.duration-control select { width: 72px; min-width: 72px; }
+
 .slider-control {
   display: flex;
   align-items: center;

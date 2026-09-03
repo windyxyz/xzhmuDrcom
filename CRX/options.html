@@ -348,15 +348,18 @@
                   <span class="settings-row-text"><strong>检查间隔</strong><small id="interval-summary">每 3 分钟检查一次</small></span>
                 </span>
                 <span class="duration-control" aria-label="保活检查间隔">
-                  <label><span>分钟</span><select id="interval-minutes">
+                  <span class="duration-word">每</span>
+                  <select id="interval-minutes" aria-label="分钟">
                     <option value="0">0</option><option value="1">1</option><option value="2">2</option>
                     <option value="3">3</option><option value="5">5</option><option value="10">10</option>
                     <option value="15">15</option><option value="20">20</option><option value="30">30</option>
-                  </select></label>
-                  <label><span>秒</span><select id="interval-seconds">
-                    <option value="0">0</option><option value="15">15</option>
-                    <option value="30">30</option><option value="45">45</option>
-                  </select></label>
+                  </select>
+                  <span class="duration-word">分钟</span>
+                  <select id="interval-seconds" aria-label="秒">
+                    <option value="0">0</option><option value="5">5</option>
+                    <option value="15">15</option><option value="30">30</option><option value="45">45</option>
+                  </select>
+                  <span class="duration-word">秒</span>
                 </span>
               </div>
             </div>
