@@ -8,6 +8,14 @@
 
 - 门户登录/在线页表面不再按背景图片平均亮度自动切换明暗遮罩，改为始终跟随整体浅/深主题：浅色主题配浅遮罩深字、深色主题配深遮罩浅字，避免自定义壁纸与强调色场景下遮罩和图片判定不一致。
 - 移除门户页基于图片亮度判定的 24×24 采样逻辑与对应 `data-surface-tone` 样式，减少一次图片解码与画布采样开销。
+- Firefox 构建改用 event page 加载：`manifest.firefox.json` 的 `background` 迁移到 `background.scripts` 顺序清单（与 Chrome 的 `importScripts` 同序），`background.js` 改为仅在存在 `importScripts` 时加载依赖，兼容两种后台模型；`strict_min_version` 提升到 128.0 并声明 `data_collection_permissions: ["none"]`。
+- 新增 `npm run package:cws`：生成面向 Chrome Web Store 的上传包（自动删除 manifest `key`，商店会分配扩展 ID）。
+
+### 修复
+
+- 修复自动保存改造遗留的表单脏标记监听，自定义背景图片选择/清除链路恢复正常；无图时的“自定义背景”不再被持久化弹回简洁底色。
+- 修复折叠态侧栏文字占位导致的图标错位与空档，折叠时文字彻底隐藏并居中图标。
+- 聚焦或输入密码时角色眼睛与嘴整体左移配合身体拉长侧倾，完整还原参考实现的回避姿态。
 
 ## [1.0.0] - 2026-09-03
 

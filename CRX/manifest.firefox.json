@@ -6,7 +6,10 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "drcom-campus-assistant@xzhmu.local",
-      "strict_min_version": "118.0"
+      "strict_min_version": "128.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
     }
   },
   "action": {
@@ -14,7 +17,21 @@
     "default_title": "校园网助手"
   },
   "background": {
-    "service_worker": "background.js"
+    "scripts": [
+      "account-utils.js",
+      "portal-session.js",
+      "portal-diagnostics-utils.js",
+      "background/state-store.js",
+      "background/diagnostics-service.js",
+      "background/portal-context.js",
+      "background/drcom-client.js",
+      "background/account-service.js",
+      "background/connection-service.js",
+      "background/wallpaper-service.js",
+      "background/portal-service.js",
+      "background/message-router.js",
+      "background.js"
+    ]
   },
   "options_ui": {
     "page": "options.html",

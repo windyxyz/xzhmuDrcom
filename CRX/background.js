@@ -1,19 +1,25 @@
 "use strict";
 
-importScripts(
-  "account-utils.js",
-  "portal-session.js",
-  "portal-diagnostics-utils.js",
-  "background/state-store.js",
-  "background/diagnostics-service.js",
-  "background/portal-context.js",
-  "background/drcom-client.js",
-  "background/account-service.js",
-  "background/connection-service.js",
-  "background/wallpaper-service.js",
-  "background/portal-service.js",
-  "background/message-router.js"
-);
+/* 依赖加载：Chrome 以 Service Worker 运行，importScripts 加载全部后台模块；
+   Firefox 的 event page（manifest background.scripts 已按相同顺序预载）没有
+   importScripts，此处自动跳过，避免重复或缺失。 */
+(function loadBackgroundModules() {
+  if (typeof importScripts !== "function") return;
+  importScripts(
+    "account-utils.js",
+    "portal-session.js",
+    "portal-diagnostics-utils.js",
+    "background/state-store.js",
+    "background/diagnostics-service.js",
+    "background/portal-context.js",
+    "background/drcom-client.js",
+    "background/account-service.js",
+    "background/connection-service.js",
+    "background/wallpaper-service.js",
+    "background/portal-service.js",
+    "background/message-router.js"
+  );
+})();
 
 void restrictLocalStorageAccess();
 
