@@ -1007,130 +1007,141 @@ button .win-ring--inline + span { vertical-align: middle; }
   backdrop-filter: var(--flyout-backdrop-filter);
 }
 
-/* ---------- 22. 共享控件：动画角色（登录/欢迎页品牌面板） ---------- */
+/* ---------- 22. 共享组件：动画角色（animated-characters.js 专用样式，移植自参考项目） ---------- */
 
-.drcom-characters {
-  --px: 0;
-  --py: 0;
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 14px;
-  height: 180px;
-}
+.dchar-frame { position: relative; width: 100%; overflow: visible; }
+.dchar-scaler { transform-origin: bottom left; position: relative; }
+.dchar-stage { position: relative; width: 550px; height: 400px; }
 
-.drcom-char {
-  position: relative;
-  transition: transform 0.7s var(--pointed), opacity 0.45s var(--fast-out-slow-in);
-  animation: char-idle-sway 4.4s ease-in-out infinite;
-}
-.drcom-char:nth-child(2) { animation-delay: 0.6s; }
-.drcom-char:nth-child(3) { animation-delay: 1.2s; }
-.drcom-char:nth-child(4) { animation-delay: 1.8s; }
-
-@keyframes char-idle-sway {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
-}
-
-.char-purple { width: 66px; height: 108px; background: #6c3ff5; border-radius: 14px; }
-.char-black  { width: 60px; height: 86px;  background: #2d2d2d; border-radius: 14px; }
-.char-orange { width: 78px; height: 62px;  background: #ff9b6b; border-radius: 40px 40px 8px 8px; }
-.char-yellow { width: 86px; height: 70px;  background: #e8d754; border-radius: 20px; }
-
-.char-eyes {
+.dchar {
   position: absolute;
-  top: 22px;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  gap: 12px;
+  bottom: 0;
+  transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: bottom center;
+  will-change: transform, height;
 }
-.char-orange .char-eyes { top: 14px; }
-.char-yellow .char-eyes { top: 18px; }
 
-.char-eye {
+/* 入场（过冲曲线，交错延迟） */
+.dchar-purple { animation: dchar-purple-entrance 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.dchar-black { animation: dchar-black-entrance 1s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards; }
+.dchar-orange { animation: dchar-orange-entrance 1.1s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s backwards; }
+.dchar-yellow { animation: dchar-yellow-entrance 1s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s backwards; }
+.dchar-stage.entered .dchar { animation: none; }
+
+@keyframes dchar-purple-entrance {
+  0% { transform: translateX(-150px) translateY(50px) rotate(-15deg) scale(0.3); opacity: 0; }
+  60% { transform: translateX(10px) translateY(-10px) rotate(3deg) scale(1.05); }
+  100% { transform: translateX(0) translateY(0) rotate(0deg) scale(1); opacity: 1; }
+}
+@keyframes dchar-black-entrance {
+  0% { transform: translateY(-100px) scale(0.5); opacity: 0; }
+  70% { transform: translateY(10px) scale(1.08); }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes dchar-orange-entrance {
+  0% { transform: translateX(-200px) translateY(80px) rotate(-25deg) scale(0.2); opacity: 0; }
+  65% { transform: translateX(15px) translateY(-8px) rotate(5deg) scale(1.1); }
+  100% { transform: translateX(0) translateY(0) rotate(0deg) scale(1); opacity: 1; }
+}
+@keyframes dchar-yellow-entrance {
+  0% { transform: translateX(200px) translateY(60px) rotate(20deg) scale(0.3); opacity: 0; }
+  65% { transform: translateX(-12px) translateY(-5px) rotate(-4deg) scale(1.06); }
+  100% { transform: translateX(0) translateY(0) rotate(0deg) scale(1); opacity: 1; }
+}
+
+/* 几何（移植参考数值） */
+.dchar-purple { left: 70px; width: 180px; height: 400px; background: #6c3ff5; border-radius: 0; z-index: 1; }
+.dchar-black { left: 240px; width: 120px; height: 310px; background: #2d2d2d; border-radius: 0; z-index: 2; }
+.dchar-orange { left: 0; width: 240px; height: 150px; background: #ff9b6b; border-radius: 120px 120px 0 0; z-index: 3; }
+.dchar-yellow { left: 310px; width: 140px; height: 230px; background: #e8d754; border-radius: 70px 70px 0 0; z-index: 4; }
+
+/* 眼睛 */
+.dchar-eyes { position: absolute; display: flex; transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1); will-change: left, top; }
+.dchar-purple .dchar-eyes { gap: 32px; }
+.dchar-black .dchar-eyes { gap: 24px; }
+.dchar-orange .dchar-eyes { gap: 32px; transition: all 0.2s cubic-bezier(0, 0, 0.2, 1); }
+.dchar-yellow .dchar-eyes { gap: 24px; transition: all 0.2s cubic-bezier(0, 0, 0.2, 1); }
+
+.dchar-eyeball {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
   background: #ffffff;
-  overflow: hidden;
-  transition: height 0.25s var(--fast-out-slow-in), opacity 0.25s var(--fast-out-slow-in);
-}
-.char-pupil {
-  width: 6px;
-  height: 6px;
   border-radius: 50%;
-  background: #17171f;
-  transform: translate(calc(var(--px) * 3px), calc(var(--py) * 3px));
-  transition: transform 0.12s linear;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: height;
 }
+.dchar-purple .dchar-eyeball { width: 18px; height: 18px; }
+.dchar-black .dchar-eyeball { width: 16px; height: 16px; }
 
-.char-eye { animation: char-blink 5.2s infinite; }
-.char-eye:nth-child(2) { animation-delay: 0.08s; }
-@keyframes char-blink {
-  0%, 94%, 100% { height: 15px; }
-  96% { height: 2px; }
-}
-
-.char-mouth {
-  position: absolute;
-  left: 50%;
-  bottom: 26px;
+.dchar-pupil {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  border: 2px solid rgba(23, 23, 31, 0.85);
-  border-color: rgba(23, 23, 31, 0.85) transparent transparent transparent;
-  transform: translateX(-50%);
-  transition: all 0.3s var(--fast-out-slow-in);
+  background: #2d2d2d;
+  transition: transform 0.1s ease-out;
+  will-change: transform;
 }
-.char-orange .char-mouth, .char-yellow .char-mouth { bottom: 16px; }
+.dchar-black .dchar-pupil { width: 6px; height: 6px; }
+.dchar-pupil-bare { width: 12px; height: 12px; transition: transform 0.1s ease-out, height 0.15s ease-out; }
 
-.drcom-characters[data-mood="typing"] .char-purple { transform: skewX(-4deg) translateY(-4px); }
-.drcom-characters[data-mood="typing"] .char-black { transform: rotate(4deg); }
-.drcom-characters[data-mood="typing"] .char-eye { height: 10px; align-items: flex-end; }
+/* 嘴 */
+.dchar-mouth { position: absolute; background: #2d2d2d; }
 
-.drcom-characters[data-mood="covering"] .char-eye { opacity: 0; }
-.drcom-characters[data-mood="covering"] .char-mouth { opacity: 0.25; }
-.drcom-characters[data-mood="covering"] .char-purple { transform: rotate(-3deg) translateY(2px); }
-.drcom-characters[data-mood="covering"] .char-black { transform: rotate(3deg) translateY(2px); }
+.dchar-mouth-purple {
+  width: 24px;
+  height: 8px;
+  border-radius: 0 0 12px 12px;
+  transition: left 0.7s cubic-bezier(0.4, 0, 0.2, 1), top 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.5s cubic-bezier(0.4, 0, 0.2, 1), height 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    border-radius 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.dchar-stage[data-state="typing"] .dchar-mouth-purple,
+.dchar-stage[data-state="hiding"] .dchar-mouth-purple {
+  width: 7px;
+  height: 32px;
+  border-radius: 0;
+  transform: translateX(13.5px) translateY(-28px) var(--counter-skew, skewX(0deg));
+}
+.dchar-stage[data-state="sad"] .dchar-mouth-purple { border-radius: 12px 12px 0 0; }
+.dchar-stage[data-state="happy"] .dchar-mouth-purple { width: 30px; height: 16px; border-radius: 0 0 15px 15px; }
 
-.drcom-characters[data-mood="sad"] .drcom-char { animation: char-shake 0.8s var(--fast-out-slow-in) 1; }
-.drcom-characters[data-mood="sad"] .char-eye { height: 8px; align-items: flex-end; }
-.drcom-characters[data-mood="sad"] .char-mouth {
+.dchar-mouth-orange {
+  width: 26px;
+  height: 13px;
+  border-radius: 0 0 13px 13px;
+  transition: left 0.2s cubic-bezier(0, 0, 0.2, 1), top 0.2s cubic-bezier(0, 0, 0.2, 1),
+    width 0.5s cubic-bezier(0.4, 0, 0.2, 1), height 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    border-radius 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.dchar-stage[data-state="typing"] .dchar-mouth-orange,
+.dchar-stage[data-state="hiding"] .dchar-mouth-orange {
   width: 14px;
-  height: 8px;
-  border: 0;
-  border-bottom: 2.5px solid rgba(23, 23, 31, 0.85);
-  border-radius: 0 0 10px 10px;
+  height: 14px;
+  border-radius: 50%;
+  transform: translateX(6px);
 }
+.dchar-stage[data-state="sad"] .dchar-mouth-orange { border-radius: 13px 13px 0 0; }
+.dchar-stage[data-state="happy"] .dchar-mouth-orange { width: 32px; height: 18px; border-radius: 0 0 16px 16px; }
 
-.drcom-characters[data-mood="happy"] .drcom-char { animation: char-bounce 0.9s var(--decelerate) 1; }
-.drcom-characters[data-mood="happy"] .char-eye { height: 6px; align-items: center; }
-.drcom-characters[data-mood="happy"] .char-mouth {
-  width: 16px;
-  height: 8px;
-  border: 0;
-  border-top: 2.5px solid rgba(23, 23, 31, 0.85);
-  border-radius: 10px 10px 0 0;
-}
+.dchar-mouth-wrapper { position: absolute; transition: all 0.2s cubic-bezier(0, 0, 0.2, 1); }
+.dchar-yellow-mouth { d: path("M0 10 Q10 10, 20 10 Q30 10, 40 10 Q50 10, 60 10 Q70 10, 80 10"); transition: d 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+.dchar-stage[data-state="sad"] .dchar-yellow-mouth { d: path("M0 10 Q10 2, 20 10 Q30 18, 40 10 Q50 2, 60 10 Q70 18, 80 10"); }
+.dchar-stage[data-state="happy"] .dchar-yellow-mouth { d: path("M0 2 Q10 10, 20 14 Q30 18, 40 18 Q50 18, 60 14 Q70 10, 80 2"); }
 
-@keyframes char-shake {
-  0%, 100% { transform: rotate(0); }
-  20% { transform: rotate(-6deg); }
-  45% { transform: rotate(5deg); }
-  70% { transform: rotate(-3deg); }
+/* 撒花 */
+.dchar-confetti {
+  position: fixed;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 2147483646;
 }
-@keyframes char-bounce {
-  0%, 100% { transform: translateY(0); }
-  35% { transform: translateY(-14px); }
-  60% { transform: translateY(-4px); }
+.dchar-confetti-piece { position: absolute; border-radius: 2px; animation: dchar-confetti-fall linear forwards; }
+@keyframes dchar-confetti-fall {
+  0% { translate: 0 0; opacity: 1; }
+  100% { translate: 30px 200vh; opacity: 1; rotate: 720deg; }
 }
 
 /* ---------- 23. 无障碍降级 ---------- */

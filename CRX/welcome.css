@@ -58,10 +58,7 @@ body {
   padding: clamp(24px, 5vw, 48px);
 }
 
-.welcome-characters {
-  height: 200px;
-  margin-bottom: 12px;
-}
+.welcome-characters { margin-bottom: 12px; }
 
 .welcome-lockup strong {
   display: block;
@@ -186,8 +183,6 @@ body :focus-visible {
   .welcome-shell { grid-template-columns: 1fr; min-height: 0; }
   .welcome-brand { min-height: 220px; }
   .welcome-brand-stage { min-height: 220px; padding: 20px; }
-  .welcome-characters { height: 110px; }
-  .drcom-char { transform-origin: bottom; transform: scale(0.78); }
   .welcome-content { padding-bottom: 4px; }
 }
 

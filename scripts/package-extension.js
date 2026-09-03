@@ -33,6 +33,7 @@ const RELEASE_FILES = [
   ["CRX/popup.css", "popup.css"],
   ["CRX/popup.js", "popup.js"],
   ["CRX/portal.css", "portal.css"],
+  ["CRX/animated-characters.js", "animated-characters.js"],
   ["CRX/portal-ui.js", "portal-ui.js"],
   ["CRX/portal-diagnostics.js", "portal-diagnostics.js"],
   ["CRX/portal-modernizer.js", "portal-modernizer.js"],

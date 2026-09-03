@@ -60,24 +60,13 @@
       .join("")}</nav>`;
   }
 
-  function renderCharacters(mood = "idle", mini = false) {
-    const kinds = ["purple", "black", "orange", "yellow"];
-    return `<div class="drcom-characters${mini ? " drcom-characters--mini" : ""}" data-mood="${escapeHtml(mood)}" aria-hidden="true">${kinds
-      .map((kind) => `
-        <div class="drcom-char char-${kind}">
-          <span class="char-eyes"><span class="char-eye"><span class="char-pupil"></span></span><span class="char-eye"><span class="char-pupil"></span></span></span>
-          <span class="char-mouth"></span>
-        </div>`)
-      .join("")}</div>`;
-  }
-
   function renderBrandPanel(safeTitle, safeHost) {
     return `
       <section class="drcom-brand-panel" aria-hidden="true">
         <span class="drcom-blob drcom-blob-a"></span>
         <span class="drcom-blob drcom-blob-b"></span>
         <div class="drcom-brand-stage">
-          ${renderCharacters("idle")}
+          <div class="dchar-frame" data-characters></div>
           <div class="drcom-brand-copy">
             <strong>${safeTitle}</strong>
             <span>校园网认证 · ${safeHost}</span>
@@ -194,7 +183,12 @@
             </label>
             <label>
               <span>密码</span>
-              <input id="drcom-password" name="password" type="password" autocomplete="current-password" required>
+              <span class="drcom-password-wrapper">
+                <input id="drcom-password" name="password" type="password" autocomplete="current-password" required>
+                <button id="drcom-password-toggle" class="drcom-password-toggle" type="button" aria-label="显示密码" aria-pressed="false" title="显示或隐藏密码">
+                  <span class="win-glyph" aria-hidden="true">&#xE890;</span>
+                </button>
+              </span>
             </label>
             <label class="drcom-remember">
               <input id="drcom-remember" type="checkbox" checked>

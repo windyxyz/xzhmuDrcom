@@ -218,6 +218,7 @@ test("门户共享令牌和纯逻辑模块在内容脚本之前加载", () => {
     "account-utils.js",
     "portal-session.js",
     "appearance.js",
+    "animated-characters.js",
     "portal-ui.js",
     "confirm-dialog.js",
     "portal-diagnostics-utils.js",

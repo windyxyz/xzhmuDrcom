@@ -2,13 +2,15 @@
 
 (() => {
   const ui = globalThis.DrcomPortalUI;
+  const characters = globalThis.DrcomCharacters;
   let pendingFallbackCapture = null;
   let lastSavedCaptureKey = "";
   let activePortalConfig = null;
   let portalReadinessObserver = null;
   let recognitionQueued = false;
   let userRestoredOriginal = false;
-  let moodTimer = 0;
+  let characterController = null;
+  let sadRevertTimer = 0;
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => void boot(), { once: true });
@@ -111,7 +113,7 @@
       document.body.append(root);
       document.documentElement.classList.add("drcom-modern-active");
       bindPortalEvents(root, online);
-      bindCharacterMood(root);
+      bindCharacters(root, online);
       if (!online) prefillFromOriginalPage(root);
       if (online && !statusResult) void refreshPortalStatus(root);
     } catch (error) {
@@ -156,6 +158,10 @@
     document.getElementById("drcom-modern-root")?.remove();
     document.getElementById("drcom-private-appearance")?.remove();
     document.getElementById("drcom-captcha-hint")?.remove();
+    if (characterController) {
+      characterController.destroy();
+      characterController = null;
+    }
   }
 
   function showCaptchaFallbackHint() {
@@ -178,63 +184,57 @@
     removeModernPortal();
   }
 
-  function setCharacterMood(root, mood, revertMs = 0) {
-    const characters = root.querySelector(".drcom-characters");
-    if (!characters) return;
-    if (moodTimer) {
-      clearTimeout(moodTimer);
-      moodTimer = 0;
+  function setCharacterMode(root, next) {
+    if (!characterController) return;
+    if (sadRevertTimer) {
+      clearTimeout(sadRevertTimer);
+      sadRevertTimer = 0;
     }
-    characters.dataset.mood = mood;
-    if (revertMs > 0) {
-      moodTimer = setTimeout(() => {
-        moodTimer = 0;
-        characters.dataset.mood = "idle";
-      }, revertMs);
-    }
+    characterController.setState(next);
   }
 
-  function bindCharacterMood(root) {
-    const characters = root.querySelector(".drcom-characters");
-    if (!characters) return;
-    root.addEventListener("pointermove", (event) => {
-      const rect = root.getBoundingClientRect();
-      const px = ((event.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1;
-      const py = ((event.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1;
-      characters.style.setProperty("--px", Math.max(-1, Math.min(1, px)).toFixed(3));
-      characters.style.setProperty("--py", Math.max(-1, Math.min(1, py)).toFixed(3));
-    }, { passive: true });
+  function characterStateFromForm(root) {
+    const password = root.querySelector("#drcom-password");
+    const visible = root.querySelector("#drcom-password-toggle")?.getAttribute("aria-pressed") === "true";
+    if (password && password.value && visible) return "visible";
+    if (password && password.value) return "hiding";
+    return "idle";
+  }
+
+  function bindCharacters(root, online) {
+    const frame = root.querySelector("[data-characters]");
+    if (!frame || !characters) return;
+    characterController = characters.mount(frame, { interactive: true });
+    if (online) return;
 
     const username = root.querySelector("#drcom-username");
     const password = root.querySelector("#drcom-password");
-    username?.addEventListener("focus", () => setCharacterMood(root, "typing"));
-    username?.addEventListener("input", () => setCharacterMood(root, "typing"));
-    password?.addEventListener("focus", () => setCharacterMood(root, "covering"));
-    const idle = () => setCharacterMood(root, "idle");
-    username?.addEventListener("blur", idle);
-    password?.addEventListener("blur", idle);
-    root.querySelector("#drcom-reset")?.addEventListener("click", idle);
-  }
-
-  const CONFETTI_COLORS = ["#6c3ff5", "#ff9b6b", "#e8d754", "#4cc2ff", "#6ccb5f", "#ff99a4"];
-
-  function spawnConfetti(root) {
-    if (root.querySelector(".drcom-confetti")) return;
-    if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const container = document.createElement("div");
-    container.className = "drcom-confetti";
-    container.setAttribute("aria-hidden", "true");
-    for (let index = 0; index < 40; index += 1) {
-      const piece = document.createElement("span");
-      piece.style.setProperty("--cx", `${Math.round(Math.random() * 100)}vw`);
-      piece.style.setProperty("--cd", `${(Math.random() * 0.9).toFixed(2)}s`);
-      piece.style.setProperty("--ct", `${(1.4 + Math.random() * 1.1).toFixed(2)}s`);
-      piece.style.setProperty("--cr", `${Math.round(360 + Math.random() * 720)}deg`);
-      piece.style.setProperty("--cc", CONFETTI_COLORS[index % CONFETTI_COLORS.length]);
-      container.append(piece);
-    }
-    root.append(container);
-    setTimeout(() => container.remove(), 2800);
+    const toggle = root.querySelector("#drcom-password-toggle");
+    username?.addEventListener("focus", () => setCharacterMode(root, "typing"));
+    username?.addEventListener("input", () => setCharacterMode(root, "typing"));
+    username?.addEventListener("blur", () => setCharacterMode(root, characterStateFromForm(root)));
+    password?.addEventListener("input", () => setCharacterMode(root, characterStateFromForm(root)));
+    password?.addEventListener("focus", () => setCharacterMode(root, characterStateFromForm(root)));
+    password?.addEventListener("blur", () => setCharacterMode(root, characterStateFromForm(root)));
+    toggle?.addEventListener("click", () => {
+      if (!password) return;
+      const show = password.type === "password";
+      password.type = show ? "text" : "password";
+      toggle.setAttribute("aria-pressed", show ? "true" : "false");
+      toggle.setAttribute("aria-label", show ? "隐藏密码" : "显示密码");
+      const glyph = toggle.querySelector(".win-glyph");
+      if (glyph) glyph.textContent = show ? "\uE7B3" : "\uE890";
+      setCharacterMode(root, characterStateFromForm(root));
+    });
+    root.querySelector("#drcom-reset")?.addEventListener("click", () => {
+      if (toggle) {
+        toggle.setAttribute("aria-pressed", "false");
+        toggle.setAttribute("aria-label", "显示密码");
+        const glyph = toggle.querySelector(".win-glyph");
+        if (glyph) glyph.textContent = "\uE890";
+      }
+      setCharacterMode(root, "idle");
+    });
   }
 
   function bindPortalEvents(root, online) {
@@ -333,16 +333,14 @@
 
       if (result.online || result.success) {
         mountPortal(activePortalConfig || {}, true);
-        const mountedRoot = document.getElementById("drcom-modern-root");
-        setCharacterMood(mountedRoot, "happy");
-        try {
-          spawnConfetti(mountedRoot);
-        } catch (error) {
-          // 撒花是纯装饰，绝不能影响登录结果展示。
-        }
+        setCharacterMode(document.getElementById("drcom-modern-root"), "happy");
         return;
       }
-      setCharacterMood(root, "sad", 2400);
+      setCharacterMode(root, "sad");
+      sadRevertTimer = setTimeout(() => {
+        sadRevertTimer = 0;
+        setCharacterMode(root, characterStateFromForm(root));
+      }, 3000);
       setPortalStatus(root, result.message || "认证未通过，请检查账号和密码", "error");
     } catch (error) {
       setPortalStatus(root, error.message || String(error), "error");

@@ -43,6 +43,7 @@
         "account-utils.js",
         "portal-session.js",
         "appearance.js",
+        "animated-characters.js",
         "portal-ui.js",
         "confirm-dialog.js",
         "portal-diagnostics-utils.js",

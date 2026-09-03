@@ -109,7 +109,10 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   background:
     linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(160deg, #4338ca 0%, #312e81 48%, #1e1b4b 100%);
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--appearance-accent) 78%, #1e1b4b) 0%,
+      color-mix(in srgb, var(--appearance-accent) 45%, #17153a) 48%,
+      color-mix(in srgb, var(--appearance-accent) 22%, #100e26) 100%);
   background-size: 22px 22px, 22px 22px, auto;
   overflow: hidden;
 }
@@ -132,6 +135,8 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   min-height: inherit;
   padding: clamp(20px, 5vw, 44px);
 }
+.drcom-brand-stage .dchar-frame { flex: none; margin-bottom: 8px; }
+.drcom-brand-copy { position: relative; z-index: 5; }
 
 .drcom-brand-copy { margin-top: 28px; }
 .drcom-brand-copy strong {
@@ -141,13 +146,6 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   color: #ffffff;
 }
 .drcom-brand-copy span { display: block; margin-top: 4px; color: rgba(255, 255, 255, 0.72); font-size: 13px; }
-
-/* ---------- 动画角色（共享组件见 design-tokens.css，此处仅尺寸） ---------- */
-
-.drcom-characters {
-  height: 190px;
-  gap: clamp(8px, 2vw, 18px);
-}
 
 /* ---------- 登录/在线卡片 ---------- */
 
@@ -250,6 +248,29 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
 .drcom-remember input:checked::before { left: calc(100% - 16px); background: var(--accent-text); }
 .drcom-remember input:focus-visible { outline: 2px solid var(--focus-stroke-outer); outline-offset: 2px; }
 .drcom-remember span { color: var(--text-secondary) !important; font-size: 12px !important; }
+
+.drcom-password-wrapper { position: relative; display: block; }
+.drcom-password-wrapper input { width: 100%; padding-right: 42px; }
+.drcom-password-wrapper input::-ms-reveal,
+.drcom-password-wrapper input::-ms-clear { display: none; }
+.drcom-password-toggle {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+.drcom-password-toggle:hover { background: var(--subtle-fill-hover); color: var(--text-primary); }
+.drcom-password-toggle .win-glyph { font-size: 14px; }
 
 .drcom-form-status {
   margin: 0;

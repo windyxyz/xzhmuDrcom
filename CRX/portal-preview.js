@@ -13,6 +13,11 @@ globalThis.DrcomAppearance.applyToRoot(previewRoot, {
   background: "fresh"
 });
 
+const previewFrame = previewRoot.querySelector("[data-characters]");
+if (previewFrame && globalThis.DrcomCharacters) {
+  globalThis.DrcomCharacters.mount(previewFrame, { interactive: true });
+}
+
 previewRoot.querySelector("#drcom-login-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const status = previewRoot.querySelector("#drcom-form-status");
