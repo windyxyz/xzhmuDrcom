@@ -228,6 +228,27 @@
   --sys-critical-bg: #442726;
 }
 
+/* ---------- 5.5 材质预设（appearance.js 写入 data-material，置于深色段后以覆盖两套主题） ---------- */
+
+:root[data-material="solid"] {
+  --flyout-backdrop-filter: none;
+  --flyout-bg: var(--ctrl-solid-fill);
+  --layer-fill-default: var(--ctrl-solid-fill);
+  --layer-fill-mica: var(--ctrl-solid-fill);
+  --card-bg: var(--ctrl-solid-fill);
+}
+:root[data-material="mica"] {
+  --flyout-backdrop-filter: none;
+  --flyout-bg: var(--layer-fill-mica);
+  --layer-fill-default: var(--layer-fill-mica);
+}
+:root[data-material="acrylicStrong"] {
+  --flyout-backdrop-filter: blur(44px) saturate(190%) brightness(1.22) contrast(1.05);
+}
+:root[data-material="custom"] {
+  --flyout-backdrop-filter: blur(var(--material-blur, 30px)) saturate(var(--material-saturate, 160%));
+}
+
 /* ---------- 6. 旧名兼容（页面样式迁移期别名） ---------- */
 
 :root {
@@ -304,7 +325,7 @@ body.app-themed-page {
 :root[data-appearance-background="custom"] body.app-themed-page::before {
   background-image: var(--appearance-image);
   background-position: var(--appearance-position, center);
-  background-size: cover;
+  background-size: var(--appearance-fit, cover);
   filter: blur(var(--appearance-blur));
   transform: scale(var(--appearance-scale));
 }
@@ -357,6 +378,34 @@ body.app-themed-page > :not(.skip-link) {
 
 #drcom-modern-root .drcom-surface {
   animation: drcom-surface-enter var(--entrance-duration) var(--decelerate) both;
+}
+
+/* 页面过渡动画（设置可选）：入场 / 滑动 / 钻取 / 无 */
+@keyframes dnav-slide-in {
+  from { opacity: 0; transform: translateX(200px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes dnav-drill-in {
+  0% { opacity: 0; transform: scale(0.94); }
+  42.5% { opacity: 1; }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.app-themed-page .settings-section[data-settings-panel]:not([hidden]),
+.app-themed-page .advanced-settings[data-settings-panel]:not([hidden]) {
+  animation: drcom-surface-enter var(--entrance-duration) var(--decelerate) both;
+}
+:root[data-nav-transition="slide"] .app-themed-page .settings-section[data-settings-panel]:not([hidden]) {
+  animation: dnav-slide-in var(--entrance-duration) var(--decelerate) both;
+}
+:root[data-nav-transition="drillIn"] .app-themed-page .settings-section[data-settings-panel]:not([hidden]) {
+  animation: dnav-drill-in 0.783s linear both;
+}
+:root[data-nav-transition="suppress"] .app-themed-page .settings-section[data-settings-panel]:not([hidden]),
+:root[data-nav-transition="suppress"] .app-themed-page .welcome-shell,
+:root[data-nav-transition="suppress"] .app-themed-page .settings-shell,
+:root[data-nav-transition="suppress"] .app-themed-page .shell {
+  animation: none;
 }
 
 /* ---------- 10. 全局交互 ---------- */

@@ -10,7 +10,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       const response = await chrome.runtime.sendMessage({ action: "state:get" });
       if (response && response.state) {
-        globalThis.DrcomAppearance?.applyToRoot(document.documentElement, response.state.config.ui);
+        const ui = response.state.config.ui;
+        globalThis.DrcomAppearance.applyToRoot(document.documentElement, ui);
+        if (ui.background === "daily") {
+          chrome.runtime.sendMessage({ action: "wallpaper:get" }, (wallpaperResponse) => {
+            const wallpaper = wallpaperResponse && wallpaperResponse.wallpaper;
+            if (wallpaper && wallpaper.ok && wallpaper.dataUrl) {
+              globalThis.DrcomAppearance.applyToRoot(document.documentElement, {
+                ...ui,
+                background: "custom",
+                backgroundImage: wallpaper.dataUrl
+              });
+            }
+          });
+        }
         portalUrl = response.state.config.portalUrl || portalUrl;
         const host = gatewayHost(portalUrl);
         const title = document.getElementById("portal-title");

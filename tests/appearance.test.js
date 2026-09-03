@@ -25,7 +25,11 @@ test("外观配置会拒绝不安全背景并把数值限制在可读范围", ()
     backgroundBlur: 32,
     backgroundDim: 0.2,
     backgroundScale: 1.15,
-    backgroundPosition: "center"
+    backgroundPosition: "center",
+    backgroundFit: "cover",
+    material: "acrylic",
+    navTransition: "entrance",
+    navPanePosition: "left"
   });
 });
 

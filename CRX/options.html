@@ -12,6 +12,9 @@
   <a class="skip-link" href="#main-content">跳到设置内容</a>
   <div class="settings-layout">
     <aside class="settings-sidebar win-nav-pane" aria-label="设置导航">
+      <div class="sidebar-top">
+        <button id="pane-toggle" class="win-nav-toggle" type="button" aria-label="折叠或展开导航" aria-expanded="true" title="折叠导航"><span class="win-glyph win-glyph--16 animated-icon-hamburger" aria-hidden="true">&#xE700;</span></button>
+      </div>
       <div class="sidebar-brand">
         <span><strong>校园网助手</strong><small id="sidebar-account-summary">默认账号</small></span>
       </div>
@@ -181,6 +184,32 @@
                 </select>
               </label>
               <label>
+                <span>材质</span>
+                <select id="appearance-material">
+                  <option value="solid">纯色</option>
+                  <option value="mica">Mica</option>
+                  <option value="acrylic">Acrylic 轻度</option>
+                  <option value="acrylicStrong">Acrylic 强</option>
+                  <option value="custom">自定义（高级个性化）</option>
+                </select>
+              </label>
+              <label>
+                <span>页面过渡动画</span>
+                <select id="appearance-nav-transition">
+                  <option value="entrance">入场（默认）</option>
+                  <option value="slide">滑动</option>
+                  <option value="drillIn">钻取</option>
+                  <option value="suppress">无</option>
+                </select>
+              </label>
+              <label>
+                <span>导航窗格位置</span>
+                <select id="appearance-nav-pane-position">
+                  <option value="left">左侧（默认）</option>
+                  <option value="top">顶部</option>
+                </select>
+              </label>
+              <label class="wide">
                 <span>在线信息显示</span>
                 <select id="online-detail-mode">
                   <option value="classic">经典：时间、流量和展开详情</option>
@@ -193,9 +222,9 @@
 
             <div class="subsection-heading">
               <h3>强调色</h3>
-              <p>预设或自定义的主题色，立即应用到全部页面。</p>
+              <p>拖动光谱选择颜色，或使用预设与色值。</p>
             </div>
-            <div class="accent-picker">
+            <div class="colorpicker">
               <div class="accent-swatches" role="group" aria-label="预设强调色">
                 <button type="button" class="accent-swatch" data-color="#007aff" style="--swatch:#007aff" aria-label="使用预设强调色 #007aff"></button>
                 <button type="button" class="accent-swatch" data-color="#0067c0" style="--swatch:#0067c0" aria-label="使用预设强调色 #0067c0"></button>
@@ -206,10 +235,21 @@
                 <button type="button" class="accent-swatch" data-color="#8764b8" style="--swatch:#8764b8" aria-label="使用预设强调色 #8764b8"></button>
                 <button type="button" class="accent-swatch" data-color="#e3008c" style="--swatch:#e3008c" aria-label="使用预设强调色 #e3008c"></button>
               </div>
-              <div class="accent-custom">
-                <input id="appearance-accent" type="color" value="#007aff" aria-label="自定义强调色">
-                <input id="appearance-accent-hex" class="accent-hex" value="#007aff" maxlength="7" spellcheck="false" aria-label="强调色色值">
+              <div class="cp-main">
+                <div id="cp-spectrum" class="cp-spectrum">
+                  <canvas id="cp-canvas" width="256" height="256" aria-hidden="true"></canvas>
+                  <span class="cp-handle" id="cp-handle"></span>
+                </div>
+                <div class="cp-side">
+                  <span class="cp-preview" id="cp-preview" aria-hidden="true"></span>
+                  <label class="cp-value-row">
+                    <span>明度</span>
+                    <input id="cp-value" class="cp-value win-slider" type="range" min="0" max="100" step="1" value="50" aria-label="颜色明度">
+                  </label>
+                  <input id="appearance-accent-hex" class="accent-hex" value="#007aff" maxlength="7" spellcheck="false" aria-label="强调色色值">
+                </div>
               </div>
+              <input id="appearance-accent" type="color" value="#007aff" hidden aria-label="当前强调色">
             </div>
 
             <div class="subsection-heading">
@@ -223,6 +263,14 @@
                   <option value="fresh">简洁底色</option>
                   <option value="daily">每日壁纸（必应）</option>
                   <option value="custom">自定义图片</option>
+                </select>
+              </label>
+              <label>
+                <span>填充方式</span>
+                <select id="background-fit">
+                  <option value="cover">填满裁剪</option>
+                  <option value="contain">适应完整显示</option>
+                  <option value="fill">拉伸铺满</option>
                 </select>
               </label>
             </div>

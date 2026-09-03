@@ -139,7 +139,7 @@
         :host { all: initial; }
         .layer, .image, .veil { position: absolute; inset: 0; pointer-events: none; }
         .layer { overflow: hidden; background: #f2f3f5; }
-        .image { inset: -48px; background: center / cover no-repeat url("${image}"); filter: blur(${appearance.backgroundBlur}px); transform: scale(${appearance.backgroundScale}); }
+        .image { inset: -48px; background: var(--appearance-position, center) / var(--appearance-fit, cover) no-repeat url("${image}"); filter: blur(${appearance.backgroundBlur}px); transform: scale(${appearance.backgroundScale}); }
         .veil { background: rgba(${dark ? "8, 12, 20" : "238, 241, 246"}, ${appearance.backgroundDim}); }
         @media (prefers-color-scheme: dark) { .system .veil { background: rgba(8, 12, 20, ${appearance.backgroundDim}); } }
       </style>

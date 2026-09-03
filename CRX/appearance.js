@@ -11,6 +11,12 @@
     "left center", "center", "right center",
     "left bottom", "center bottom", "right bottom"
   ];
+  const BACKGROUND_FITS = ["cover", "contain", "fill"];
+  const MATERIALS = ["solid", "mica", "acrylic", "acrylicStrong", "custom"];
+  const NAV_TRANSITIONS = ["entrance", "slide", "drillIn", "suppress"];
+  const NAV_PANE_POSITIONS = ["left", "top"];
+
+  const FIT_TO_CSS = { cover: "cover", contain: "contain", fill: "100% 100%" };
 
   const DEFAULTS = Object.freeze({
     theme: "system",
@@ -20,7 +26,11 @@
     backgroundBlur: 14,
     backgroundDim: 0.42,
     backgroundScale: 1.04,
-    backgroundPosition: "center"
+    backgroundPosition: "center",
+    backgroundFit: "cover",
+    material: "acrylic",
+    navTransition: "entrance",
+    navPanePosition: "left"
   });
 
   function clamp(value, min, max, fallback) {
@@ -42,6 +52,10 @@
 
   function normalizePosition(value) {
     return BACKGROUND_POSITIONS.includes(value) ? value : DEFAULTS.backgroundPosition;
+  }
+
+  function normalizeEnum(value, values, fallback) {
+    return values.includes(value) ? value : fallback;
   }
 
   function relativeLuminance(hexColor) {
@@ -75,7 +89,11 @@
       backgroundBlur: clamp(input.backgroundBlur, 0, 32, DEFAULTS.backgroundBlur),
       backgroundDim: clamp(input.backgroundDim, 0.2, 0.72, DEFAULTS.backgroundDim),
       backgroundScale: clamp(input.backgroundScale, 1, 1.15, DEFAULTS.backgroundScale),
-      backgroundPosition: normalizePosition(input.backgroundPosition)
+      backgroundPosition: normalizePosition(input.backgroundPosition),
+      backgroundFit: normalizeEnum(input.backgroundFit, BACKGROUND_FITS, DEFAULTS.backgroundFit),
+      material: normalizeEnum(input.material, MATERIALS, DEFAULTS.material),
+      navTransition: normalizeEnum(input.navTransition, NAV_TRANSITIONS, DEFAULTS.navTransition),
+      navPanePosition: normalizeEnum(input.navPanePosition, NAV_PANE_POSITIONS, DEFAULTS.navPanePosition)
     };
   }
 
@@ -89,6 +107,7 @@
     if (effectiveTheme === "system") delete rootElement.dataset.theme;
     else rootElement.dataset.theme = effectiveTheme;
     rootElement.dataset.appearanceBackground = normalized.background;
+    rootElement.dataset.material = normalized.material;
     rootElement.style.setProperty("color-scheme", effectiveTheme === "system" ? "light dark" : effectiveTheme);
     rootElement.style.setProperty("--appearance-accent", normalized.accent);
     rootElement.style.setProperty("--appearance-on-accent", onAccentColor(normalized.accent));
@@ -97,6 +116,9 @@
     rootElement.style.setProperty("--appearance-dim", String(normalized.backgroundDim));
     rootElement.style.setProperty("--appearance-scale", String(normalized.backgroundScale));
     rootElement.style.setProperty("--appearance-position", normalized.backgroundPosition);
+    rootElement.style.setProperty("--appearance-fit", FIT_TO_CSS[normalized.backgroundFit] || "cover");
+    rootElement.dataset.navTransition = normalized.navTransition;
+    rootElement.dataset.navPanePosition = normalized.navPanePosition;
     return { ...normalized, effectiveTheme, onAccent: onAccentColor(normalized.accent) };
   }
 

@@ -88,11 +88,27 @@ function runAsync(fn) {
 async function loadState() {
   const response = await sendMessage({ action: "state:get" });
   state = response.state;
-  globalThis.DrcomAppearance.applyToRoot(document.documentElement, state.config.ui);
+  applyAppearance(state.config.ui);
   $("portal-host").textContent = new URL(state.config.portalUrl).host;
   renderAccountSelect();
   renderAccountList();
   fillSelectedAccount();
+}
+
+function applyAppearance(ui) {
+  const appearance = globalThis.DrcomAppearance.applyToRoot(document.documentElement, ui);
+  if (ui.background !== "daily") return appearance;
+  chrome.runtime.sendMessage({ action: "wallpaper:get" }, (response) => {
+    const wallpaper = response && response.wallpaper;
+    if (wallpaper && wallpaper.ok && wallpaper.dataUrl) {
+      globalThis.DrcomAppearance.applyToRoot(document.documentElement, {
+        ...ui,
+        background: "custom",
+        backgroundImage: wallpaper.dataUrl
+      });
+    }
+  });
+  return appearance;
 }
 
 function renderAccountSelect() {

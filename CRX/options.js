@@ -108,10 +108,33 @@ function bindEvents() {
     await persistAppearance();
     toast("显示模式已应用");
   }));
+  $("appearance-material").addEventListener("change", runAsync(async () => {
+    applyCurrentAppearance();
+    await persistAppearance();
+    toast("材质已应用");
+  }));
+  $("appearance-nav-transition").addEventListener("change", runAsync(async () => {
+    applyCurrentAppearance();
+    await persistAppearance();
+    toast("页面过渡已应用");
+  }));
+  $("appearance-nav-pane-position").addEventListener("change", runAsync(async () => {
+    applyCurrentAppearance();
+    await persistAppearance();
+    toast("窗格位置已应用");
+  }));
+  $("background-fit").addEventListener("change", runAsync(async () => {
+    syncAppearanceControls();
+    applyCurrentAppearance();
+    await persistAppearance();
+    toast("填充方式已应用");
+  }));
+  setupColorPicker();
+  setupPaneToggle();
   document.querySelectorAll(".accent-swatch").forEach((swatch) => {
     swatch.addEventListener("click", runAsync(async () => {
       $("appearance-accent").value = swatch.dataset.color;
-      syncAccentControls();
+      syncPickerFromHex(swatch.dataset.color);
       applyCurrentAppearance();
       await persistAppearance();
       toast("强调色已应用");
@@ -540,6 +563,160 @@ function syncAccentControls() {
   });
 }
 
+/* ---------- WinUI ColorPicker（光谱 + 明度 + hex，即时生效） ---------- */
+
+const colorPicker = { h: 212, s: 1, v: 0.5 };
+
+function hsvToRgb(h, s, v) {
+  const segment = ((h % 360) + 360) % 360 / 60;
+  const i = Math.floor(segment);
+  const f = segment - i;
+  const p = v * (1 - s);
+  const q = v * (1 - f * s);
+  const t = v * (1 - (1 - f) * s);
+  const map = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]];
+  const [r, g, b] = map[i % 6];
+  return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+}
+
+function rgbToHex(r, g, b) {
+  return `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function hexToRgb(hex) {
+  const match = /^#([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+  if (!match) return null;
+  return {
+    r: parseInt(match[1].slice(0, 2), 16),
+    g: parseInt(match[1].slice(2, 4), 16),
+    b: parseInt(match[1].slice(4, 6), 16)
+  };
+}
+
+function rgbToHsv(r, g, b) {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === rn) h = 60 * (((gn - bn) / d) % 6);
+    else if (max === gn) h = 60 * ((bn - rn) / d + 2);
+    else h = 60 * ((rn - gn) / d + 4);
+  }
+  if (h < 0) h += 360;
+  return { h, s: max === 0 ? 0 : d / max, v: max };
+}
+
+function hexToHsv(hex) {
+  const rgb = hexToRgb(hex);
+  return rgb ? rgbToHsv(rgb.r, rgb.g, rgb.b) : null;
+}
+
+function pickerHex() {
+  const { r, g, b } = hsvToRgb(colorPicker.h, colorPicker.s, colorPicker.v);
+  return rgbToHex(r, g, b);
+}
+
+function drawSpectrum() {
+  const canvas = $("cp-canvas");
+  if (!canvas || !canvas.getContext) return;
+  const context = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const image = context.createImageData(width, height);
+  for (let y = 0; y < height; y += 1) {
+    const s = 1 - y / (height - 1);
+    for (let x = 0; x < width; x += 1) {
+      const { r, g, b } = hsvToRgb((x / (width - 1)) * 360, s, colorPicker.v);
+      const offset = (y * width + x) * 4;
+      image.data[offset] = r;
+      image.data[offset + 1] = g;
+      image.data[offset + 2] = b;
+      image.data[offset + 3] = 255;
+    }
+  }
+  context.putImageData(image, 0, 0);
+}
+
+function syncPicker(persist = false) {
+  const spectrum = $("cp-spectrum");
+  const handle = $("cp-handle");
+  const preview = $("cp-preview");
+  const valueSlider = $("cp-value");
+  if (!spectrum || !handle) return;
+  drawSpectrum();
+  const hex = pickerHex();
+  handle.style.left = `${(colorPicker.h / 360) * 100}%`;
+  handle.style.top = `${(1 - colorPicker.s) * 100}%`;
+  handle.style.setProperty("--cp-handle-ring", (colorPicker.v > 0.5 && colorPicker.s < 0.5) ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.9)");
+  if (preview) preview.style.backgroundColor = hex;
+  if (valueSlider) {
+    const pure = hsvToRgb(colorPicker.h, 1, 1);
+    valueSlider.style.background = `linear-gradient(to right, #000000, rgb(${pure.r}, ${pure.g}, ${pure.b}))`;
+    valueSlider.disabled = false;
+  }
+  $("appearance-accent").value = hex;
+  const hexInput = $("appearance-accent-hex");
+  if (hexInput && document.activeElement !== hexInput) hexInput.value = hex;
+  syncAccentControls();
+  applyCurrentAppearance();
+  if (persist) {
+    persistAppearance().then(() => toast("强调色已应用")).catch((error) => toast(error.message || String(error)));
+  }
+}
+
+function syncPickerFromHex(hex) {
+  const hsv = hexToHsv(hex);
+  if (!hsv) return;
+  colorPicker.h = hsv.h;
+  colorPicker.s = hsv.s;
+  colorPicker.v = hsv.v === 0 ? 0.5 : hsv.v;
+  syncPicker(false);
+}
+
+function setupColorPicker() {
+  const spectrum = $("cp-spectrum");
+  if (!spectrum) return;
+  const updateFromEvent = (event) => {
+    const rect = spectrum.getBoundingClientRect();
+    colorPicker.h = clampNumber((event.clientX - rect.left) / Math.max(1, rect.width) * 360, 0, 359.9);
+    colorPicker.s = clampNumber(1 - (event.clientY - rect.top) / Math.max(1, rect.height), 0, 1);
+    syncPicker(false);
+  };
+  spectrum.addEventListener("pointerdown", (event) => {
+    spectrum.setPointerCapture(event.pointerId);
+    updateFromEvent(event);
+  });
+  spectrum.addEventListener("pointermove", (event) => {
+    if (spectrum.hasPointerCapture?.(event.pointerId)) updateFromEvent(event);
+  });
+  spectrum.addEventListener("pointerup", (event) => {
+    if (spectrum.hasPointerCapture?.(event.pointerId)) {
+      spectrum.releasePointerCapture(event.pointerId);
+      updateFromEvent(event);
+      persistAppearance().then(() => toast("强调色已应用")).catch(() => {});
+    }
+  });
+  const valueSlider = $("cp-value");
+  valueSlider?.addEventListener("input", () => {
+    colorPicker.v = Number(valueSlider.value) / 100;
+    syncPicker(false);
+  });
+  valueSlider?.addEventListener("change", runAsync(async () => {
+    await persistAppearance();
+    toast("强调色已应用");
+  }));
+}
+
+function clampNumber(value, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return min;
+  return Math.min(max, Math.max(min, number));
+}
+
 function syncSliderProgress(id) {
   const input = $(id);
   if (!input || !input.style) return;
@@ -565,16 +742,21 @@ function hydrateAppearance(input) {
     ? input.onlineDetailMode
     : "classic";
   $("appearance-theme").value = appearance.theme;
+  $("appearance-material").value = appearance.material;
+  $("appearance-nav-transition").value = appearance.navTransition;
+  $("appearance-nav-pane-position").value = appearance.navPanePosition;
   $("appearance-accent").value = appearance.accent;
   $("appearance-background").value = appearance.background;
   $("background-image-data").value = appearance.backgroundImage;
   $("background-blur").value = appearance.backgroundBlur;
   $("background-dim").value = appearance.backgroundDim;
   $("background-scale").value = appearance.backgroundScale;
+  $("background-fit").value = appearance.backgroundFit;
   $("background-position").value = BACKGROUND_POSITIONS.has(input?.backgroundPosition)
     ? input.backgroundPosition
     : "center";
   syncAccentControls();
+  syncPickerFromHex(appearance.accent);
   syncAppearanceControls();
   applyCurrentAppearance();
   refreshDailyWallpaper();
@@ -719,6 +901,38 @@ function openConfiguredPortal() {
   }
   chrome.tabs.create({ url: portalUrl });
   return true;
+}
+
+function setupPaneToggle() {
+  const layout = document.querySelector(".settings-layout");
+  const button = $("pane-toggle");
+  if (!layout || !button) return;
+  const apply = (compact) => {
+    layout.classList.toggle("nav-compact", compact);
+    button.setAttribute("aria-expanded", compact ? "false" : "true");
+    button.title = compact ? "展开导航" : "折叠导航";
+    try { localStorage.setItem("drcom-nav-compact", compact ? "1" : "0"); } catch (error) {}
+  };
+  let compact = false;
+  try { compact = localStorage.getItem("drcom-nav-compact") === "1"; } catch (error) {}
+  apply(compact);
+  button.addEventListener("pointerdown", () => {
+    button.querySelector(".animated-icon-hamburger")?.classList.add("pressing");
+  });
+  button.addEventListener("pointerup", () => {
+    button.querySelector(".animated-icon-hamburger")?.classList.remove("pressing");
+  });
+  button.addEventListener("click", () => {
+    const next = !layout.classList.contains("nav-compact");
+    apply(next);
+    const glyph = button.querySelector(".animated-icon-hamburger");
+    if (glyph) {
+      glyph.classList.remove("releasing");
+      void glyph.offsetWidth;
+      glyph.classList.add("releasing");
+      setTimeout(() => glyph.classList.remove("releasing"), 350);
+    }
+  });
 }
 
 function setupSettingsNavigation() {
@@ -1124,12 +1338,16 @@ function readAppearanceConfig() {
   return {
     onlineDetailMode: $("online-detail-mode").value,
     theme: $("appearance-theme").value,
+    material: $("appearance-material")?.value || "acrylic",
+    navTransition: $("appearance-nav-transition")?.value || "entrance",
+    navPanePosition: $("appearance-nav-pane-position")?.value || "left",
     accent: $("appearance-accent").value,
     background: $("appearance-background").value,
     backgroundImage: $("background-image-data").value,
     backgroundBlur: Number($("background-blur").value),
     backgroundDim: Number($("background-dim").value),
     backgroundScale: Number($("background-scale").value),
+    backgroundFit: $("background-fit")?.value || "cover",
     backgroundPosition: BACKGROUND_POSITIONS.has(position) ? position : "center"
   };
 }
@@ -1140,6 +1358,8 @@ function applyCurrentAppearance() {
   preview.style.setProperty("--preview-accent", appearance.accent);
   preview.style.backgroundImage = appearance.backgroundImage ? `url("${appearance.backgroundImage}")` : "none";
   preview.style.setProperty("--preview-position", appearance.backgroundPosition || "center");
+  preview.style.backgroundSize = appearance.backgroundFit === "fill" ? "100% 100%"
+    : appearance.backgroundFit === "contain" ? "contain" : "cover";
   preview.dataset.hasImage = appearance.backgroundImage ? "true" : "false";
 }
 

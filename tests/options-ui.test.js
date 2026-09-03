@@ -305,12 +305,16 @@ test("外观表单会保存主题、自定义背景和可读性参数", () => {
   assert.deepEqual(result, {
     onlineDetailMode: "full",
     theme: "dark",
+    material: "acrylic",
+    navTransition: "entrance",
+    navPanePosition: "left",
     accent: "#2563eb",
     background: "custom",
     backgroundImage: "data:image/webp;base64,AAAA",
     backgroundBlur: 18,
     backgroundDim: 0.46,
     backgroundScale: 1.06,
+    backgroundFit: "cover",
     backgroundPosition: "center"
   });
 });
@@ -355,12 +359,16 @@ test("外观图片选择后会立即持久化，不依赖页面底部的总保�
       ui: {
         onlineDetailMode: "minimal",
         theme: "dark",
+        material: "acrylic",
+        navTransition: "entrance",
+        navPanePosition: "left",
         accent: "#2563eb",
         background: "custom",
         backgroundImage: "data:image/webp;base64,AAAA",
         backgroundBlur: 18,
         backgroundDim: 0.46,
         backgroundScale: 1.06,
+        backgroundFit: "cover",
         backgroundPosition: "center"
       }
     }
