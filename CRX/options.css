@@ -53,12 +53,13 @@ body.app-themed-page {
   transition: width var(--normal-duration) cubic-bezier(0, 0, 0.35, 0.15, 1);
 }
 
-/* 折叠态：48px compact，只显示字形 */
+/* 折叠态：48px compact，只显示字形（文字彻底隐藏不占位，图标按内容区居中） */
 .settings-layout.nav-compact .settings-sidebar { width: 52px; }
 .settings-layout.nav-compact .sidebar-brand,
 .settings-layout.nav-compact .sidebar-note { display: none; }
 .settings-layout.nav-compact .win-nav-item { padding: 0; justify-content: center; gap: 0; }
-.settings-layout.nav-compact .win-nav-item > span:not(.win-glyph) { opacity: 0; }
+.settings-layout.nav-compact .win-nav-item > span:not(.win-glyph) { display: none; }
+.settings-layout.nav-compact .win-nav-item .win-glyph { transform: translateX(1.5px); }
 .settings-layout.nav-compact .win-nav-item[aria-current="page"]::before { height: 16px; }
 
 .sidebar-top {

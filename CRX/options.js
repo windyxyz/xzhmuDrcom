@@ -70,8 +70,6 @@ function bindEvents() {
   });
   $("account-form").addEventListener("input", markAccountFormDirty);
   $("account-form").addEventListener("change", markAccountFormDirty);
-  $("settings-form").addEventListener("input", () => { settingsFormDirty = true; });
-  $("settings-form").addEventListener("change", () => { settingsFormDirty = true; });
   chrome.storage?.onChanged?.addListener(settingsRefreshController.handleStorageChange);
   document.addEventListener("visibilitychange", settingsRefreshController.handleVisibilityChange);
   globalThis.addEventListener("focus", settingsRefreshController.handleFocus);
