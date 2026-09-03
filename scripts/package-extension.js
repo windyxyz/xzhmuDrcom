@@ -138,7 +138,7 @@ function readVersion(projectRoot) {
 function buildPackage(options = {}) {
   const projectRoot = options.projectRoot || join(__dirname, "..");
   const outputDirectory = options.outputDirectory || join(projectRoot, "dist");
-  const target = options.target === "firefox" ? "firefox" : "chrome";
+  const target = options.target === "firefox" || options.target === "cws" ? options.target : "chrome";
   const version = readVersion(projectRoot);
   const entries = RELEASE_FILES.map((entry) => {
     let absolutePath = join(projectRoot, ...entry.sourcePath.split("/"));
@@ -146,19 +146,26 @@ function buildPackage(options = {}) {
       throw new Error(`打包白名单文件不存在：${entry.sourcePath}`);
     }
     let content = readFileSync(absolutePath);
-    if (target === "firefox" && entry.archivePath === "manifest.json") {
-      /* Firefox 变体清单：无 Chrome key、options_ui、gecko 元数据；版本与主清单保持一致 */
-      const firefoxManifest = JSON.parse(readFileSync(join(projectRoot, "CRX", "manifest.firefox.json"), "utf8"));
-      if (firefoxManifest.version !== version) {
-        throw new Error(`Firefox 清单版本 ${firefoxManifest.version} 与主版本 ${version} 不一致`);
+    if (entry.archivePath === "manifest.json") {
+      if (target === "firefox") {
+        /* Firefox 变体：无 key、options_ui、gecko 元数据 */
+        const firefoxManifest = JSON.parse(readFileSync(join(projectRoot, "CRX", "manifest.firefox.json"), "utf8"));
+        if (firefoxManifest.version !== version) {
+          throw new Error(`Firefox 清单版本 ${firefoxManifest.version} 与主版本 ${version} 不一致`);
+        }
+        content = Buffer.from(JSON.stringify(firefoxManifest, null, 2) + "\n", "utf8");
+      } else if (target === "cws") {
+        /* Chrome Web Store 上传包不允许 key（商店会分配扩展 ID 与 key） */
+        const cwsManifest = JSON.parse(content.toString("utf8"));
+        delete cwsManifest.key;
+        content = Buffer.from(JSON.stringify(cwsManifest, null, 2) + "\n", "utf8");
       }
-      content = Buffer.from(JSON.stringify(firefoxManifest, null, 2) + "\n", "utf8");
     }
     return { ...entry, content };
   });
   const zipBuffer = createZip(entries);
   const sha256 = createHash("sha256").update(zipBuffer).digest("hex");
-  const targetLabel = target === "firefox" ? "firefox-" : "";
+  const targetLabel = target === "firefox" ? "firefox-" : target === "cws" ? "cws-" : "";
   const fileName = `drcom-xuzhou-medical-${targetLabel}${version}.zip`;
   const checksumName = `drcom-xuzhou-medical-${targetLabel}${version}.sha256`;
   const zipPath = join(outputDirectory, fileName);
@@ -172,7 +179,7 @@ function buildPackage(options = {}) {
 }
 
 if (require.main === module) {
-  const target = process.argv.includes("--firefox") ? "firefox" : "chrome";
+  const target = process.argv.includes("--firefox") ? "firefox" : process.argv.includes("--cws") ? "cws" : "chrome";
   const result = buildPackage({ target });
   console.log(`已生成 ${result.zipPath}`);
   console.log(`SHA-256 ${result.sha256}`);
