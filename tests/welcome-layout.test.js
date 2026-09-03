@@ -429,11 +429,19 @@ test("扩展弹窗在标准任务宽度内完整显示且不横向溢出", { tim
     const debuggerUrl = await waitForDebugger(child);
     const pageUrl = await waitForPage(new URL(debuggerUrl).port, "popup.html");
     const layout = await evaluateAtViewport(pageUrl, 420, 800, `(async () => {
-      const title = document.querySelector('.popup-header h1');
-      const accountSelect = document.querySelector('#account-select');
+      const waitFor = async (selector) => {
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          const found = document.querySelector(selector);
+          if (found) return found;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        return document.querySelector(selector);
+      };
+      const title = await waitFor('.popup-header h1');
+      const accountSelect = await waitFor('#account-select');
       const body = document.body;
-      const shell = document.querySelector('.shell');
-      const accountPanel = document.querySelector('.account-panel');
+      const shell = await waitFor('.shell');
+      const accountPanel = await waitFor('.account-panel');
       for (let attempt = 0; attempt < 50; attempt += 1) {
         if (getComputedStyle(accountPanel).display === 'grid' && getComputedStyle(title).fontSize === '16px') break;
         await new Promise((resolve) => setTimeout(resolve, 100));

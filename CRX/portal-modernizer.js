@@ -193,11 +193,12 @@
     characterController.setState(next);
   }
 
-  function characterStateFromForm(root) {
+  function characterStateFromForm(root, passwordFocused = false) {
     const password = root.querySelector("#drcom-password");
     const visible = root.querySelector("#drcom-password-toggle")?.getAttribute("aria-pressed") === "true";
-    if (password && password.value && visible) return "visible";
-    if (password && password.value) return "hiding";
+    if (passwordFocused || (password && password.value)) {
+      return visible ? "visible" : "hiding";
+    }
     return "idle";
   }
 
@@ -210,12 +211,23 @@
     const username = root.querySelector("#drcom-username");
     const password = root.querySelector("#drcom-password");
     const toggle = root.querySelector("#drcom-password-toggle");
+    let passwordFocused = false;
+    const syncFromForm = () => setCharacterMode(root, characterStateFromForm(root, passwordFocused));
     username?.addEventListener("focus", () => setCharacterMode(root, "typing"));
     username?.addEventListener("input", () => setCharacterMode(root, "typing"));
-    username?.addEventListener("blur", () => setCharacterMode(root, characterStateFromForm(root)));
-    password?.addEventListener("input", () => setCharacterMode(root, characterStateFromForm(root)));
-    password?.addEventListener("focus", () => setCharacterMode(root, characterStateFromForm(root)));
-    password?.addEventListener("blur", () => setCharacterMode(root, characterStateFromForm(root)));
+    username?.addEventListener("blur", syncFromForm);
+    password?.addEventListener("focus", () => {
+      passwordFocused = true;
+      /* 聚焦密码框立即回避：即使浏览器自动填充不触发 input 事件 */
+      setCharacterMode(root, characterStateFromForm(root, true));
+    });
+    ["input", "change", "keyup"].forEach((type) => {
+      password?.addEventListener(type, syncFromForm);
+    });
+    password?.addEventListener("blur", () => {
+      passwordFocused = false;
+      syncFromForm();
+    });
     toggle?.addEventListener("click", () => {
       if (!password) return;
       const show = password.type === "password";
@@ -224,7 +236,7 @@
       toggle.setAttribute("aria-label", show ? "隐藏密码" : "显示密码");
       const glyph = toggle.querySelector(".win-glyph");
       if (glyph) glyph.textContent = show ? "\uE7B3" : "\uE890";
-      setCharacterMode(root, characterStateFromForm(root));
+      syncFromForm();
     });
     root.querySelector("#drcom-reset")?.addEventListener("click", () => {
       if (toggle) {
@@ -233,6 +245,7 @@
         const glyph = toggle.querySelector(".win-glyph");
         if (glyph) glyph.textContent = "\uE890";
       }
+      passwordFocused = false;
       setCharacterMode(root, "idle");
     });
   }

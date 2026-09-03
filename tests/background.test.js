@@ -430,7 +430,9 @@ test("门户安全配置不携带背景数据且专用外观接口单独返回�
         backgroundBlur: 18,
         backgroundDim: 0.46,
         backgroundScale: 1.06,
-        backgroundPosition: "center"
+        backgroundPosition: "center",
+        panelColor: "",
+        panelPattern: "grid"
     }
   });
   assert.doesNotMatch(JSON.stringify(plain), /accounts|password|apiUrl|wlanUserIp/);

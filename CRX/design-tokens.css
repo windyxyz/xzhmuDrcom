@@ -136,6 +136,23 @@
   color-scheme: light dark;
 }
 
+/* 登录页/欢迎页品牌面板的底色与图案变量 */
+:root {
+  --panel-base: var(--appearance-accent);
+  --panel-pattern-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  --panel-pattern-size: 22px 22px, 22px 22px;
+}
+:root[data-panel-pattern="dots"] {
+  --panel-pattern-image: radial-gradient(rgba(255, 255, 255, 0.1) 1.5px, transparent 1.7px);
+  --panel-pattern-size: 18px 18px;
+}
+:root[data-panel-pattern="none"] {
+  --panel-pattern-image: none;
+  --panel-pattern-size: auto;
+}
+
 /* ---------- 5. 深色主题令牌 ---------- */
 
 @media (prefers-color-scheme: dark) {

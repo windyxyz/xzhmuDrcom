@@ -209,6 +209,25 @@
                   <option value="top">顶部</option>
                 </select>
               </label>
+              <label>
+                <span>品牌面板颜色</span>
+                <select id="panel-color-mode">
+                  <option value="accent">跟随强调色</option>
+                  <option value="custom">自定义色值</option>
+                </select>
+              </label>
+              <label id="panel-color-custom" hidden>
+                <span>面板色值</span>
+                <input id="panel-color-hex" class="accent-hex" value="#007aff" maxlength="7" spellcheck="false" aria-label="品牌面板色值">
+              </label>
+              <label>
+                <span>面板底部图案</span>
+                <select id="panel-pattern">
+                  <option value="grid">网格（默认）</option>
+                  <option value="dots">圆点</option>
+                  <option value="none">无</option>
+                </select>
+              </label>
               <label class="wide">
                 <span>在线信息显示</span>
                 <select id="online-detail-mode">

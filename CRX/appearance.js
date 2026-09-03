@@ -15,6 +15,7 @@
   const MATERIALS = ["solid", "mica", "acrylic", "acrylicStrong", "custom"];
   const NAV_TRANSITIONS = ["entrance", "slide", "drillIn", "suppress"];
   const NAV_PANE_POSITIONS = ["left", "top"];
+  const PANEL_PATTERNS = ["grid", "dots", "none"];
 
   const FIT_TO_CSS = { cover: "cover", contain: "contain", fill: "100% 100%" };
 
@@ -30,7 +31,9 @@
     backgroundFit: "cover",
     material: "acrylic",
     navTransition: "entrance",
-    navPanePosition: "left"
+    navPanePosition: "left",
+    panelColor: "",
+    panelPattern: "grid"
   });
 
   function clamp(value, min, max, fallback) {
@@ -93,7 +96,9 @@
       backgroundFit: normalizeEnum(input.backgroundFit, BACKGROUND_FITS, DEFAULTS.backgroundFit),
       material: normalizeEnum(input.material, MATERIALS, DEFAULTS.material),
       navTransition: normalizeEnum(input.navTransition, NAV_TRANSITIONS, DEFAULTS.navTransition),
-      navPanePosition: normalizeEnum(input.navPanePosition, NAV_PANE_POSITIONS, DEFAULTS.navPanePosition)
+      navPanePosition: normalizeEnum(input.navPanePosition, NAV_PANE_POSITIONS, DEFAULTS.navPanePosition),
+      panelColor: /^#[0-9a-f]{6}$/i.test(String(input.panelColor || "").trim()) ? String(input.panelColor).trim() : "",
+      panelPattern: normalizeEnum(input.panelPattern, PANEL_PATTERNS, DEFAULTS.panelPattern)
     };
   }
 
@@ -117,6 +122,9 @@
     rootElement.style.setProperty("--appearance-scale", String(normalized.backgroundScale));
     rootElement.style.setProperty("--appearance-position", normalized.backgroundPosition);
     rootElement.style.setProperty("--appearance-fit", FIT_TO_CSS[normalized.backgroundFit] || "cover");
+    if (normalized.panelColor) rootElement.style.setProperty("--panel-base", normalized.panelColor);
+    else rootElement.style.setProperty("--panel-base", "var(--appearance-accent)");
+    rootElement.dataset.panelPattern = normalized.panelPattern;
     rootElement.dataset.navTransition = normalized.navTransition;
     rootElement.dataset.navPanePosition = normalized.navPanePosition;
     return { ...normalized, effectiveTheme, onAccent: onAccentColor(normalized.accent) };

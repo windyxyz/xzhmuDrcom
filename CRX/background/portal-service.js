@@ -151,7 +151,9 @@ function publicAppearance(input) {
     backgroundScale: clampNumber(ui.backgroundScale, 1, 1.15, DEFAULT_STATE.config.ui.backgroundScale),
     backgroundPosition: ["left top", "center top", "right top", "left center", "center", "right center", "left bottom", "center bottom", "right bottom"].includes(ui.backgroundPosition)
       ? ui.backgroundPosition
-      : "center"
+      : "center",
+    panelColor: /^#[0-9a-f]{6}$/i.test(String(ui.panelColor || "").trim()) ? String(ui.panelColor).trim() : "",
+    panelPattern: ["grid", "dots", "none"].includes(ui.panelPattern) ? ui.panelPattern : "grid"
   };
 }
 

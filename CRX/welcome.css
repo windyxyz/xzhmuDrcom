@@ -31,14 +31,11 @@ body {
   position: relative;
   border: 1px solid var(--card-stroke);
   border-radius: var(--overlay-radius);
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(160deg,
-      color-mix(in srgb, var(--appearance-accent) 78%, #1e1b4b) 0%,
-      color-mix(in srgb, var(--appearance-accent) 45%, #17153a) 48%,
-      color-mix(in srgb, var(--appearance-accent) 22%, #100e26) 100%);
-  background-size: 22px 22px, 22px 22px, auto;
+  background-image: var(--panel-pattern-image), linear-gradient(160deg,
+    color-mix(in srgb, var(--panel-base) 78%, #1e1b4b) 0%,
+    color-mix(in srgb, var(--panel-base) 45%, #17153a) 48%,
+    color-mix(in srgb, var(--panel-base) 22%, #100e26) 100%);
+  background-size: var(--panel-pattern-size), auto;
   overflow: hidden;
 }
 
@@ -174,6 +171,16 @@ body {
 #open-options:active { background: var(--ctrl-fill-tertiary); color: var(--text-secondary); }
 
 .privacy-note { margin: 0; color: var(--text-tertiary); font-size: 12px; }
+
+/* 自定义壁纸下的内容遮罩 */
+:root[data-appearance-background="custom"] .welcome-content {
+  padding: 16px 20px;
+  border: 1px solid var(--card-stroke);
+  border-radius: var(--overlay-radius);
+  background: var(--layer-fill-default);
+  -webkit-backdrop-filter: var(--flyout-backdrop-filter);
+  backdrop-filter: var(--flyout-backdrop-filter);
+}
 
 /* ---------- 焦点 ---------- */
 

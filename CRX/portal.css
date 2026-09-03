@@ -106,14 +106,11 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   min-height: 420px;
   border: 1px solid var(--card-stroke);
   border-radius: var(--overlay-radius);
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(160deg,
-      color-mix(in srgb, var(--appearance-accent) 78%, #1e1b4b) 0%,
-      color-mix(in srgb, var(--appearance-accent) 45%, #17153a) 48%,
-      color-mix(in srgb, var(--appearance-accent) 22%, #100e26) 100%);
-  background-size: 22px 22px, 22px 22px, auto;
+  background-image: var(--panel-pattern-image), linear-gradient(160deg,
+    color-mix(in srgb, var(--panel-base) 78%, #1e1b4b) 0%,
+    color-mix(in srgb, var(--panel-base) 45%, #17153a) 48%,
+    color-mix(in srgb, var(--panel-base) 22%, #100e26) 100%);
+  background-size: var(--panel-pattern-size), auto;
   overflow: hidden;
 }
 

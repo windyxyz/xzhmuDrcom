@@ -130,6 +130,7 @@ function bindEvents() {
     toast("填充方式已应用");
   }));
   setupColorPicker();
+  setupPanelControls();
   setupPaneToggle();
   document.querySelectorAll(".accent-swatch").forEach((swatch) => {
     swatch.addEventListener("click", runAsync(async () => {
@@ -745,6 +746,11 @@ function hydrateAppearance(input) {
   $("appearance-material").value = appearance.material;
   $("appearance-nav-transition").value = appearance.navTransition;
   $("appearance-nav-pane-position").value = appearance.navPanePosition;
+  const panelMode = input?.panelColor ? "custom" : "accent";
+  $("panel-color-mode").value = panelMode;
+  $("panel-color-custom").hidden = panelMode !== "custom";
+  $("panel-color-hex").value = appearance.panelColor || (globalThis.DrcomAppearance.normalizeAppearance(input).accent);
+  $("panel-pattern").value = appearance.panelPattern;
   $("appearance-accent").value = appearance.accent;
   $("appearance-background").value = appearance.background;
   $("background-image-data").value = appearance.backgroundImage;
@@ -901,6 +907,45 @@ function openConfiguredPortal() {
   }
   chrome.tabs.create({ url: portalUrl });
   return true;
+}
+
+function readPanelColor() {
+  if (($("panel-color-mode")?.value) !== "custom") return "";
+  return normalizeAccentHex($("panel-color-hex")?.value);
+}
+
+function syncPanelControls() {
+  const mode = $("panel-color-mode")?.value || "accent";
+  const customRow = $("panel-color-custom");
+  if (customRow) customRow.hidden = mode !== "custom";
+}
+
+function setupPanelControls() {
+  $("panel-color-mode")?.addEventListener("change", runAsync(async () => {
+    syncPanelControls();
+    if (($("panel-color-mode").value) === "custom" && !normalizeAccentHex($("panel-color-hex")?.value)) {
+      $("panel-color-hex").value = $("appearance-accent").value || "#007aff";
+    }
+    applyCurrentAppearance();
+    await persistAppearance();
+    toast("品牌面板已应用");
+  }));
+  $("panel-color-hex")?.addEventListener("change", runAsync(async () => {
+    const hex = normalizeAccentHex($("panel-color-hex").value);
+    if (!hex) {
+      $("panel-color-hex").value = normalizeAccentHex($("appearance-accent").value) || "#007aff";
+      toast("色值格式应为 #RRGGBB");
+      return;
+    }
+    applyCurrentAppearance();
+    await persistAppearance();
+    toast("品牌面板已应用");
+  }));
+  $("panel-pattern").addEventListener("change", runAsync(async () => {
+    applyCurrentAppearance();
+    await persistAppearance();
+    toast("面板图案已应用");
+  }));
 }
 
 function setupPaneToggle() {
@@ -1341,6 +1386,8 @@ function readAppearanceConfig() {
     material: $("appearance-material")?.value || "acrylic",
     navTransition: $("appearance-nav-transition")?.value || "entrance",
     navPanePosition: $("appearance-nav-pane-position")?.value || "left",
+    panelColor: readPanelColor(),
+    panelPattern: $("panel-pattern")?.value || "grid",
     accent: $("appearance-accent").value,
     background: $("appearance-background").value,
     backgroundImage: $("background-image-data").value,

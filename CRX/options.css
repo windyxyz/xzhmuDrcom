@@ -413,6 +413,20 @@ body.app-themed-page {
 .duration-control .duration-word { color: var(--text-secondary); font-size: 13px; white-space: nowrap; }
 .duration-control select { width: 72px; min-width: 72px; }
 
+/* 自定义壁纸下的文字遮罩（学门户表单卡的玻璃层，提升大量文字的可读性） */
+:root[data-appearance-background="custom"] .settings-shell .page-intro,
+:root[data-appearance-background="custom"] .settings-shell .settings-section,
+:root[data-appearance-background="custom"] .settings-shell .advanced-settings {
+  padding: 12px 16px;
+  border: 1px solid var(--card-stroke);
+  border-radius: var(--overlay-radius);
+  background: var(--layer-fill-default);
+  -webkit-backdrop-filter: var(--flyout-backdrop-filter);
+  backdrop-filter: var(--flyout-backdrop-filter);
+}
+:root[data-appearance-background="custom"] .settings-shell .advanced-settings { padding: 0; background: var(--flyout-bg); }
+:root[data-appearance-background="custom"] .settings-shell .advanced-settings > summary { border-radius: var(--overlay-radius); }
+
 .slider-control {
   display: flex;
   align-items: center;

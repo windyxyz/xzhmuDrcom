@@ -13,6 +13,13 @@ h1, h2, p { margin: 0; }
 .popup-header, .status-panel, .account-panel, .accounts, footer { min-width: 0; padding: 14px 16px; }
 
 .popup-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: max(12px, env(safe-area-inset-top)); }
+:root[data-appearance-background="custom"] .popup-header {
+  border: 1px solid var(--card-stroke);
+  border-radius: var(--control-radius);
+  background: var(--layer-fill-default);
+  -webkit-backdrop-filter: var(--flyout-backdrop-filter);
+  backdrop-filter: var(--flyout-backdrop-filter);
+}
 .popup-header h1 { max-width: 100%; overflow-wrap: anywhere; font-size: 16px; font-weight: 600; line-height: 22px; }
 .popup-header p { margin-top: 2px; color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 

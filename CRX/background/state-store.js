@@ -52,7 +52,9 @@ const DEFAULT_STATE = {
       backgroundFit: "cover",
       material: "acrylic",
       navTransition: "entrance",
-      navPanePosition: "left"
+      navPanePosition: "left",
+      panelColor: "",
+      panelPattern: "grid"
     },
     redirect: {
       // 只保留登录后的短时间防重定向；不再做长期外站/主机名单拦截。
@@ -199,6 +201,12 @@ function normalizeState(input) {
   state.config.ui.navPanePosition = ["left", "top"].includes(state.config.ui.navPanePosition)
     ? state.config.ui.navPanePosition
     : "left";
+  state.config.ui.panelColor = /^#[0-9a-f]{6}$/i.test(String(state.config.ui.panelColor || "").trim())
+    ? String(state.config.ui.panelColor).trim()
+    : "";
+  state.config.ui.panelPattern = ["grid", "dots", "none"].includes(state.config.ui.panelPattern)
+    ? state.config.ui.panelPattern
+    : "grid";
   state.config.ui.backgroundBlur = clampNumber(state.config.ui.backgroundBlur, 0, 32, DEFAULT_STATE.config.ui.backgroundBlur);
   state.config.ui.backgroundDim = clampNumber(state.config.ui.backgroundDim, 0.2, 0.72, DEFAULT_STATE.config.ui.backgroundDim);
   state.config.ui.backgroundScale = clampNumber(state.config.ui.backgroundScale, 1, 1.15, DEFAULT_STATE.config.ui.backgroundScale);

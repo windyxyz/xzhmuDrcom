@@ -192,6 +192,8 @@
 
     function forceLook(key) {
       if (mode === "happy") return { x: 0, y: successLookY };
+      /* 回避：聚焦/输入密码时全体视线离开表单方向 */
+      if (mode === "hiding") return { x: -4, y: 3 };
       if (mode === "visible") {
         if (key === "purple") return peeking ? { x: 4, y: 5 } : { x: -4, y: -4 };
         if (key === "black") return { x: -4, y: -4 };

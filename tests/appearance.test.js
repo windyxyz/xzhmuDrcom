@@ -29,7 +29,9 @@ test("外观配置会拒绝不安全背景并把数值限制在可读范围", ()
     backgroundFit: "cover",
     material: "acrylic",
     navTransition: "entrance",
-    navPanePosition: "left"
+    navPanePosition: "left",
+    panelColor: "",
+    panelPattern: "grid"
   });
 });
 
@@ -39,6 +41,15 @@ test("每日壁纸来源会被接受，焦点位置限制在九宫格", () => {
   assert.equal(daily.backgroundImage, "");
   assert.equal(daily.backgroundPosition, "left top");
   assert.equal(appearance.normalizeAppearance({ background: "daily", backgroundPosition: "diagonal" }).backgroundPosition, "center");
+});
+
+test("品牌面板颜色与图案会被校验并回退到安全默认", () => {
+  const custom = appearance.normalizeAppearance({ panelColor: "#ff8800", panelPattern: "dots" });
+  assert.equal(custom.panelColor, "#ff8800");
+  assert.equal(custom.panelPattern, "dots");
+  const fallback = appearance.normalizeAppearance({ panelColor: "javascript:alert(1)", panelPattern: "stripes" });
+  assert.equal(fallback.panelColor, "");
+  assert.equal(fallback.panelPattern, "grid");
 });
 
 test("自定义背景尊重手动主题并把外观值应用到页面根节点", () => {
