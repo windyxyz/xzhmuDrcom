@@ -8,7 +8,7 @@ const test = require("node:test");
 const projectRoot = join(__dirname, "..");
 const read = (path) => readFileSync(join(projectRoot, path), "utf8");
 
-test("项目包含 GPL-3.0 许可证、贡献指南、安全策略和 2.5.3 变更日志", () => {
+test("项目包含 GPL-3.0 许可证、贡献指南、安全策略和 1.0.0 变更日志", () => {
   const license = read("LICENSE");
   const packageMetadata = JSON.parse(read("package.json"));
   const readme = read("README.md");
@@ -23,6 +23,7 @@ test("项目包含 GPL-3.0 许可证、贡献指南、安全策略和 2.5.3 变�
   assert.match(readme, /CONTRIBUTING\.md/);
   assert.match(contributing, /npm run verify/);
   assert.match(contributing, /不得.*真实账号|不要.*真实账号/);
+  assert.match(changelog, /## \[1\.0\.0\]/);
   assert.match(changelog, /## \[2\.5\.3\]/);
   assert.match(changelog, /账号自然键|账号去重/);
   assert.match(changelog, /确定性|可复现/);

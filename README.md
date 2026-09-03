@@ -1,8 +1,8 @@
 # 徐医校园网助手
 
-这是一个 Chrome Manifest V3 扩展，用于徐州医科大学 DrCOM 校园网网关。扩展默认仅访问 `10.10.10.2`，提供首次安装引导、可恢复的现代认证页、多账号管理、登录/下线、原认证请求捕获、浏览器启动自动登录、定时保活、短时防跳转和脱敏请求日志。2.5 版新增连接状态机、全局单通道登录、智能退避重试、后台重启恢复和存储容量保护；2.5.1 为超限背景加入多轮高质量 WebP 压缩；2.5.2 修复认证结果误判、并发存储覆盖和前端错误反馈；2.5.3 修复设置图标越界、弹窗被压成窄长条、伪品牌标记和个性化背景不落盘等界面回归。欢迎页、弹窗、设置页与认证页均适配窄屏、横屏、触控操作和带安全区的移动设备，并共享跟随系统、浅色、深色和自定义背景外观。全部界面基于 WinUI 3 官方设计令牌重构，登录页与欢迎页采用 CSS 动画角色品牌面板，图标使用 Segoe Fluent Icons 字形，并新增强调色取色器、背景焦点位置和必应每日壁纸。
+这是一个 Chrome Manifest V3 扩展，用于徐州医科大学 DrCOM 校园网网关。扩展默认仅访问 `10.10.10.2`，提供首次安装引导、可恢复的现代认证页、多账号管理、登录/下线、原认证请求捕获、浏览器启动自动登录、定时保活、短时防跳转和脱敏请求日志。1.0.0 完成全部界面的 WinUI 3 重构与个性化体系：连接状态机、全局单通道登录、智能退避重试、后台重启恢复、强调色取色器、材质与遮罩调节、必应每日壁纸和动画角色登录页。欢迎页、弹窗、设置页与认证页均适配窄屏、横屏、触控操作和带安全区的移动设备，并共享跟随系统、浅色、深色和自定义背景外观。
 
-当前仓库只维护 `CRX` 中的稳定版 2.5.3。完整功能、架构、数据结构、消息流、测试和发布方式见 [`docs/development-guide.md`](docs/development-guide.md)，产品体验约束见 [`docs/product-design.md`](docs/product-design.md)。贡献前请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，整改与版本变化见 [`CHANGELOG.md`](CHANGELOG.md)。
+当前仓库只维护 `CRX` 中的稳定版 1.0.0。完整功能、架构、数据结构、消息流、测试和发布方式见 [`docs/development-guide.md`](docs/development-guide.md)，产品体验约束见 [`docs/product-design.md`](docs/product-design.md)。贡献前请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，整改与版本变化见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 安装与使用
 
@@ -88,12 +88,12 @@ npm run verify
 
 ## 发布
 
-先执行 `npm run verify`，再运行 `npm run package`。产物为 `dist/drcom-xuzhou-medical-2.5.3.zip` 和对应 SHA-256 文件；ZIP 根目录直接包含 `manifest.json` 与 `LICENSE`。
+先执行 `npm run verify`，再运行 `npm run package`。产物为 `dist/drcom-xuzhou-medical-1.0.0.zip` 和对应 SHA-256 文件；ZIP 根目录直接包含 `manifest.json` 与 `LICENSE`。
 
 创建本地标签或未来接入标签工作流前运行：
 
 ```powershell
-npm run verify:release -- v2.5.3
+npm run verify:release -- v1.0.0
 ```
 
 ## 许可证

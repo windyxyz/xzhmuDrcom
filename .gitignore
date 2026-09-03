@@ -12,3 +12,6 @@
 Thumbs.db
 .idea/
 .vscode/
+
+# Local agent planning artifacts
+/.zcode/

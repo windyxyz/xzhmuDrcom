@@ -1,6 +1,6 @@
 {
   "name": "drcom-campus-assistant",
-  "version": "2.5.3",
+  "version": "1.0.0",
   "private": true,
   "license": "GPL-3.0-only",
   "description": "徐医 DrCOM 校园网连接助手",

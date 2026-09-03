@@ -2,7 +2,7 @@
 
 ## 1. 项目定位
 
-DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩展。当前稳定版本为 2.5.3，源码位于 CRX/，使用原生 HTML、CSS 和 JavaScript，不依赖第三方 npm 包。
+DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩展。当前稳定版本为 1.0.0，源码位于 CRX/，使用原生 HTML、CSS 和 JavaScript，不依赖第三方 npm 包。
 
 项目解决以下问题：
 
@@ -47,6 +47,7 @@ CRX/
 ├─ account-utils.js
 ├─ portal-session.js
 ├─ appearance.js
+├─ animated-characters.js
 ├─ confirm-dialog.js
 ├─ design-tokens.css
 ├─ background.js
@@ -57,8 +58,11 @@ CRX/
 │  ├─ drcom-client.js
 │  ├─ account-service.js
 │  ├─ connection-service.js
+│  ├─ wallpaper-service.js
 │  ├─ portal-service.js
 │  └─ message-router.js
+├─ fonts/
+│  └─ segoe-fluent-icons.ttf
 ├─ welcome.html / welcome.css / welcome.js
 ├─ popup.html / popup.css / popup.js
 ├─ options.html / options.css / options.js
@@ -86,6 +90,7 @@ docs/product-design.md         产品与界面设计约束
 - **background/drcom-client.js**：请求构造、超时、响应解析、错误分类与敏感信息清理。
 - **background/account-service.js**：账号规范化、自然键去重、保存、选择、删除和网络参数更新。
 - **background/connection-service.js**：登录单通道、连接状态、重试、活动身份、下线、状态检查和保活。
+- **background/wallpaper-service.js**：按需获取必应每日壁纸并本地缓存一天；仅在用户启用并授权后才访问 `cn.bing.com`。
 - **background/portal-service.js**：自定义内容脚本注册、标签页短时保护、外观输出和网页 sender 校验。
 - **background/message-router.js**：可信上下文限制、动作白名单和返回数据裁剪。
 - **background/diagnostics-service.js**：门户诊断的二次脱敏、串行写入、容量预留和会话裁剪。
@@ -742,15 +747,15 @@ npm run package
 
 输出：
 
-- dist/drcom-xuzhou-medical-2.5.3.zip
-- dist/drcom-xuzhou-medical-2.5.3.sha256
+- dist/drcom-xuzhou-medical-1.0.0.zip
+- dist/drcom-xuzhou-medical-1.0.0.sha256
 
 ZIP 根目录直接包含 manifest.json 和 LICENSE。打包器使用显式白名单、固定顺序、1980-01-01 DOS 时间和 STORE 方法。tests/、docs/、portal-preview.*、截图和本地状态不会进入发布包。dist/ 已加入 .gitignore。
 
 ### 14.2 标签校验
 
 ~~~powershell
-npm run verify:release -- v2.5.3
+npm run verify:release -- v1.0.0
 ~~~
 
 脚本要求标签精确等于 v + Manifest 版本，同时检查 package.json 版本，并从 CHANGELOG.md 提取当前版本到 dist/release-notes.md。
@@ -790,7 +795,7 @@ npm run verify:release -- v2.5.3
 
 ### 自定义门户现代界面无法调用后台
 
-2.5.3 的网页消息安全边界精确限制为 http://10.10.10.2。自定义地址可由扩展页访问，但不会获得默认门户的敏感消息能力。
+网页消息的可信来源集合为默认门户 `http://10.10.10.2` 加当前配置的门户地址（见 8.3 节）；门户诊断消息仍只接受默认门户。
 
 ### 打包哈希变化
 

@@ -301,19 +301,16 @@ body.app-themed-page {
   box-shadow: inset 0 0 0 1px var(--focus-stroke-inner);
 }
 
-.settings-shell button.primary,
-.settings-actions button[type="submit"] {
+.settings-shell button.primary {
   background: var(--accent-fill-default);
   color: var(--accent-text);
   border-color: transparent;
 }
-.settings-shell button.primary:hover,
-.settings-actions button[type="submit"]:hover {
+.settings-shell button.primary:hover {
   background: var(--accent-fill-hover);
   color: var(--accent-text);
 }
-.settings-shell button.primary:active,
-.settings-actions button[type="submit"]:active {
+.settings-shell button.primary:active {
   background: var(--accent-fill-pressed);
   color: var(--accent-text-secondary);
 }
@@ -1130,12 +1127,12 @@ body.app-themed-page {
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .settings-sidebar, .settings-actions, .background-preview > div { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .settings-sidebar, .background-preview > div { -webkit-backdrop-filter: none; backdrop-filter: none; }
   .settings-sidebar { background: var(--ctrl-solid-fill); }
 }
 
 @media (prefers-contrast: more) {
-  .settings-sidebar, .settings-actions { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .settings-sidebar { -webkit-backdrop-filter: none; backdrop-filter: none; }
   .settings-row, .diagnostics-card, .simple-account, .request-log-item { border-color: var(--text-primary); }
 }
 
