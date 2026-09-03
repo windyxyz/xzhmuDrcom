@@ -921,6 +921,9 @@ body.app-themed-page {
   .settings-shell select,
   .settings-shell textarea { min-height: 44px; }
   .settings-shell button.compact-button { min-height: 44px; }
+  .check-row input[type="checkbox"],
+  .switch input[type="checkbox"],
+  .refresh-toggle input { min-height: 20px; }
 }
 
 @media (prefers-reduced-transparency: reduce) {

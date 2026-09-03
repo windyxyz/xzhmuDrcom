@@ -129,5 +129,8 @@ footer { padding-top: 2px; padding-right: max(8px, env(safe-area-inset-right)); 
   .actions .primary { grid-column: 1 / -1; }
   .checks { display: grid; grid-template-columns: 1fr; gap: 10px; }
 }
-@media (pointer: coarse) { button, input, select, summary { min-height: 44px; touch-action: manipulation; } .check input { min-height: 20px; } }
+@media (pointer: coarse) {
+  button, input:not([type="checkbox"]), select, summary { min-height: 44px; touch-action: manipulation; }
+  .check input, input[type="checkbox"] { min-height: 16px; }
+}
 @media (forced-colors: active) { .account.active { outline: 2px solid Highlight; } .primary { border: 1px solid ButtonText; } }

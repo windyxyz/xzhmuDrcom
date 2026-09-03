@@ -403,11 +403,14 @@ body.app-themed-page > :not(.skip-link) {
 @media (max-width: 640px), (pointer: coarse) {
   :root { --glass-blur: 16px; }
   .app-themed-page button,
-  .app-themed-page input,
+  .app-themed-page input:not([type="checkbox"]),
   .app-themed-page select,
   #drcom-modern-root button,
-  #drcom-modern-root input,
+  #drcom-modern-root input:not([type="checkbox"]),
   #drcom-modern-root select { min-height: 44px; }
+  /* 开关轨道固定 40×20，不参与 44px 触控增高（触控目标由所在行提供） */
+  .app-themed-page input[type="checkbox"],
+  #drcom-modern-root input[type="checkbox"] { min-height: 20px; }
 }
 
 /* ---------- 11. 共享控件：Button ---------- */

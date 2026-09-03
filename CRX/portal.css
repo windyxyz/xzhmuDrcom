@@ -149,15 +149,6 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   gap: clamp(8px, 2vw, 18px);
 }
 
-/* 在线页迷你角色 */
-.drcom-characters--mini {
-  height: 64px;
-  justify-content: flex-start;
-  margin: 0 0 10px;
-  transform: scale(0.62) translateX(-16px);
-  transform-origin: left bottom;
-}
-
 /* ---------- 登录/在线卡片 ---------- */
 
 .drcom-surface {
@@ -336,7 +327,7 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   position: relative;
 }
 .drcom-status-mark::after {
-  content: "\uE73E";
+  content: "\E73E";
   position: absolute;
   inset: 0;
   display: flex;
@@ -466,7 +457,7 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   box-shadow: var(--shadow-flyout);
 }
 #drcom-captcha-hint::before {
-  content: "\uE7BA";
+  content: "\E7BA";
   font-family: "Segoe Fluent Icons";
   font-size: 16px;
   color: var(--sys-caution);

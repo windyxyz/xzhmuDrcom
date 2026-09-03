@@ -136,7 +136,6 @@
 
     return `
       <section class="drcom-state-view" aria-labelledby="drcom-state-title">
-        ${renderCharacters("happy", true)}
         <span class="drcom-status-mark" aria-hidden="true"></span>
         <h1 id="drcom-state-title">已经连接校园网</h1>
         <p>当前设备已通过 ${title} 认证，可以正常访问网络。</p>
