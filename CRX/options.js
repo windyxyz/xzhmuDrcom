@@ -159,11 +159,14 @@ function bindEvents() {
   }));
   $("background-file").addEventListener("change", runAsync(handleBackgroundFile));
   $("clear-background").addEventListener("click", runAsync(clearBackgroundImage));
-  ["background-blur", "background-dim", "background-scale"].forEach((id) => {
+  ["background-blur", "background-dim", "background-scale", "guard-seconds"].forEach((id) => {
     $(id).addEventListener("input", () => {
       syncAppearanceControls();
+      syncGuardSeconds();
       applyCurrentAppearance();
     });
+  });
+  ["background-blur", "background-dim", "background-scale"].forEach((id) => {
     $(id).addEventListener("change", runAsync(async () => {
       await persistAppearance();
       toast("背景参数已应用");
@@ -474,6 +477,7 @@ function hydrateForm() {
   if (pageStatusHost) pageStatusHost.textContent = gatewayHost(config.portalUrl);
   syncDependentControls();
   syncIntervalControls();
+  syncGuardSeconds();
   settingsFormDirty = false;
 }
 
@@ -546,6 +550,15 @@ function syncSliderProgress(id) {
   input.style.setProperty("--win-slider-progress", `${Math.round(ratio * 100)}%`);
 }
 
+function syncGuardSeconds() {
+  const input = $("guard-seconds");
+  if (!input) return;
+  syncSliderProgress("guard-seconds");
+  const output = $("guard-seconds-value");
+  if (output) output.textContent = `${Math.round(Number(input.value) || 0)} 秒`;
+  input.title = `${Math.round(Number(input.value) || 0)} 秒`;
+}
+
 function hydrateAppearance(input) {
   const appearance = globalThis.DrcomAppearance.normalizeAppearance(input);
   $("online-detail-mode").value = ["classic", "full", "minimal", "hidden"].includes(input?.onlineDetailMode)
@@ -616,7 +629,10 @@ function renderSettingsRefreshStatus(status = {}) {
   const element = $("settings-refresh-status");
   const button = $("refresh-settings");
   if (!element) return;
-  if (button) button.disabled = status.busy === true;
+  if (button) {
+    button.disabled = status.busy === true;
+    setRefreshGlyphSpinning(button, status.busy === true);
+  }
   element.dataset.tone = status.error ? "error" : status.protected ? "warning" : "neutral";
   if (status.busy) {
     element.textContent = status.protected
@@ -656,12 +672,27 @@ function confirmSettingsReload() {
   });
 }
 
+const RING_SVG = '<span class="win-ring win-ring--inline" aria-hidden="true"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" pathLength="100"/></svg></span>';
+
+function setButtonBusy(button, busy, busyText, idleText) {
+  if (!button) return;
+  button.innerHTML = busy
+    ? `${RING_SVG}<span>${busyText}</span>`
+    : `<span>${idleText}</span>`;
+}
+
+function setRefreshGlyphSpinning(button, spinning) {
+  const glyph = button?.querySelector(".win-glyph");
+  if (!glyph) return;
+  glyph.classList.toggle("spinning", spinning === true);
+}
+
 async function testConnection() {
   const button = $("test-connection");
   const status = $("settings-connection-status");
   if (button) {
     button.disabled = true;
-    button.textContent = "检查中…";
+    setButtonBusy(button, true, "检查中…", "测试连接");
   }
   if (status) {
     status.textContent = "检查中 · 正在联系认证网关";
@@ -675,7 +706,7 @@ async function testConnection() {
   } finally {
     if (button) {
       button.disabled = false;
-      button.textContent = "测试连接";
+      setButtonBusy(button, false, "", "测试连接");
     }
   }
 }

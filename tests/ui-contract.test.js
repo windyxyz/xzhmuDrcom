@@ -205,7 +205,7 @@ test("设置页提供四种固定的在线信息显示模式", () => {
 test("设置页提供自动同步、立即同步和安全重载控件", () => {
   const source = readExtensionFile("options.html");
   assert.match(source, /id="auto-refresh-settings"[^>]*type="checkbox"[^>]*checked/);
-  assert.match(source, /id="refresh-settings"[^>]*>立即同步</);
+  assert.match(source, /id="refresh-settings"[^>]*><span class="win-glyph win-glyph--16" aria-hidden="true">&#xE72C;<\/span><span>立即同步<\/span>/);
   assert.match(source, /id="reload-settings-page"[^>]*>重新加载页面</);
   assert.match(source, /id="settings-refresh-status"[^>]*role="status"[^>]*aria-live="polite"/);
 });

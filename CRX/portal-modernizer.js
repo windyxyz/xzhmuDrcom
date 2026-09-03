@@ -374,6 +374,7 @@
   }
 
   function setPortalBusy(root, busy, message = "") {
+    root.dataset.busy = busy ? "true" : "false";
     root.querySelectorAll("button, input, select").forEach((element) => {
       if (element.id !== "drcom-restore-original") element.disabled = busy;
     });

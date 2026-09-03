@@ -35,7 +35,7 @@
         <div id="page-connection-status" class="page-connection-status" data-tone="neutral"><span aria-hidden="true"></span><strong id="page-status-label">等待检查</strong><small>·</small><small id="page-status-host">10.10.10.2</small></div>
         <div class="settings-refresh-controls" aria-label="设置页刷新">
           <label class="refresh-toggle"><input id="auto-refresh-settings" type="checkbox" checked><span>自动同步</span></label>
-          <button id="refresh-settings" class="secondary compact-button" type="button">立即同步</button>
+          <button id="refresh-settings" class="secondary compact-button" type="button"><span class="win-glyph win-glyph--16" aria-hidden="true">&#xE72C;</span><span>立即同步</span></button>
           <button id="reload-settings-page" class="secondary compact-button" type="button">重新加载页面</button>
         </div>
         <small id="settings-refresh-status" class="settings-refresh-status" role="status" aria-live="polite">自动同步已开启</small>
@@ -334,14 +334,14 @@
                 </span>
                 <input id="return-to-portal" type="checkbox">
               </label>
-              <label class="settings-row">
+              <label class="settings-row guard-row">
                 <span class="settings-row-copy">
                   <span class="setting-icon win-glyph" aria-hidden="true">&#xE823;</span>
                   <span class="settings-row-text"><strong>防跳转保护时间</strong><small>只在登录后的短时间内生效。</small></span>
                 </span>
-                <span class="number-control">
-                  <input id="guard-seconds" type="number" min="1" max="120">
-                  <span>秒</span>
+                <span class="slider-control">
+                  <input id="guard-seconds" class="win-slider" type="range" min="1" max="120" step="1" value="4">
+                  <output id="guard-seconds-value">4 秒</output>
                 </span>
               </label>
             </div>

@@ -488,9 +488,17 @@ test("弹窗关键操作在标准宽度保持清晰的三列布局", { timeout: 
     const debuggerUrl = await waitForDebugger(child);
     const pageUrl = await waitForPage(new URL(debuggerUrl).port, "popup.html");
     const layout = await evaluateAtViewport(pageUrl, 420, 800, `(async () => {
-      const login = document.querySelector('#login');
-      const savedTitle = document.querySelector('#saved-accounts-title');
-      const actions = document.querySelector('.actions');
+      const waitFor = async (selector) => {
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          const found = document.querySelector(selector);
+          if (found) return found;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        return document.querySelector(selector);
+      };
+      const login = await waitFor('#login');
+      const savedTitle = await waitFor('#saved-accounts-title');
+      const actions = await waitFor('.actions');
       for (let attempt = 0; attempt < 50; attempt += 1) {
         if (getComputedStyle(actions).display === 'grid' && getComputedStyle(login).minHeight === '44px') break;
         await new Promise((resolve) => setTimeout(resolve, 50));

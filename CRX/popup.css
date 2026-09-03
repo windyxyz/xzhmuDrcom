@@ -68,6 +68,8 @@ button:focus-visible, summary:focus-visible {
 .check input { width: 16px; min-height: 16px; accent-color: var(--accent-fill-default); }
 
 .actions { display: grid; grid-template-columns: 1.45fr 0.75fr 0.75fr; gap: 8px; }
+#login .win-ring { display: none; }
+body[data-busy="true"] #login .win-ring { display: inline-flex; }
 
 .primary, .secondary, .footer-button {
   display: inline-flex; align-items: center; justify-content: center;

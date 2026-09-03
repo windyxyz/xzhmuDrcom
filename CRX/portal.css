@@ -289,6 +289,8 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   color: var(--text-disabled);
   cursor: default;
 }
+#drcom-submit .win-ring { display: none; }
+#drcom-modern-root[data-busy="true"] #drcom-submit .win-ring { display: inline-flex; }
 #drcom-modern-root .drcom-secondary-button {
   background: var(--ctrl-fill-default);
   color: var(--text-primary);

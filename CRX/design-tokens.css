@@ -519,26 +519,32 @@ body.app-themed-page > :not(.skip-link) {
   pointer-events: none;
 }
 
+.win-switch:hover .win-switch-track { border-color: var(--text-primary); }
 .win-switch:hover .win-switch-knob {
   width: 14px;
   height: 14px;
   border-radius: 7px;
 }
+/* 按下：17×14 宽椭圆 ±1.5px 偏移，且关闭过渡（参考实现） */
 .win-switch:active .win-switch-knob,
 .win-switch input:checked:active + .win-switch-track + .win-switch-knob {
+  transition: none;
   width: 17px;
   height: 14px;
   border-radius: 7px;
 }
+.win-switch:active .win-switch-knob { transform: translate(1.5px, -50%); }
 
 .win-switch input:checked ~ .win-switch-track {
   background: var(--accent-fill-default);
   border-color: transparent;
 }
+.win-switch input:checked:hover ~ .win-switch-track { background: var(--accent-fill-hover); }
 .win-switch input:checked ~ .win-switch-knob {
   left: 24px;
   background: var(--accent-text);
 }
+.win-switch input:checked:active ~ .win-switch-track { background: var(--accent-fill-pressed); }
 .win-switch input:checked:active ~ .win-switch-knob { left: 22.5px; }
 .win-switch:not(:has(input:checked)):active .win-switch-knob { left: 5.5px; }
 .win-switch input:disabled ~ .win-switch-track { background: var(--ctrl-fill-disabled); }
@@ -678,18 +684,25 @@ body.app-themed-page > :not(.skip-link) {
     linear-gradient(var(--accent-fill-default), var(--accent-fill-default)) 0 / var(--win-slider-progress, 50%) 100% no-repeat,
     var(--ctrl-strong-fill);
 }
+/* WinUI 拇指：22px 外圈白底 + accent 内芯（radial 模拟双层） */
 .win-slider::-webkit-slider-thumb {
   appearance: none;
-  width: 20px;
-  height: 20px;
-  margin-top: -8px;
+  width: 22px;
+  height: 22px;
+  margin-top: -9px;
   border-radius: 50%;
-  background: var(--accent-fill-default);
-  border: 4px solid var(--ctrl-solid-fill);
-  box-shadow: 0 0 0 1px var(--stroke-secondary);
-  transition: border-width var(--fast-duration) var(--fast-out-slow-in);
+  background: radial-gradient(circle, var(--accent-fill-default) 0 6px, var(--ctrl-solid-fill) 6.5px);
+  border: 1px solid var(--stroke-default);
+  border-bottom-color: var(--stroke-secondary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: background var(--fast-duration) var(--fast-out-slow-in);
 }
-.win-slider:active::-webkit-slider-thumb { border-width: 5px; }
+.win-slider:hover::-webkit-slider-thumb {
+  background: radial-gradient(circle, var(--accent-fill-hover) 0 7px, var(--ctrl-solid-fill) 7.5px);
+}
+.win-slider:active::-webkit-slider-thumb {
+  background: radial-gradient(circle, var(--accent-fill-pressed) 0 4.5px, var(--ctrl-solid-fill) 5px);
+}
 .win-slider::-moz-range-track { height: 4px; border-radius: 2px; background: var(--ctrl-strong-fill); }
 .win-slider::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--accent-fill-default); }
 .win-slider::-moz-range-thumb {
@@ -852,21 +865,48 @@ body.app-themed-page > :not(.skip-link) {
   .confirm-dialog-actions button { min-height: 44px; }
 }
 
-/* ---------- 20. 共享控件：ProgressRing ---------- */
+/* ---------- 20. 共享控件：ProgressRing（官方参数 CSS 近似） ---------- */
 
 .win-ring {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 4px solid transparent;
-  border-top-color: var(--accent-fill-default);
-  border-right-color: var(--accent-fill-default);
-  animation: win-ring-spin 1.4s cubic-bezier(0.45, 0.15, 0.55, 0.85) infinite;
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+.win-ring svg {
+  width: 100%;
+  height: 100%;
+  animation: win-ring-orbit 2s linear infinite;
+  transform-origin: 50% 50%;
+}
+.win-ring circle {
+  fill: none;
+  stroke: var(--accent-fill-default);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 0.001 99.999;
+  animation: win-ring-trim 2s linear infinite;
 }
 
-@keyframes win-ring-spin {
-  from { transform: rotate(0turn); }
-  to { transform: rotate(1turn); }
+@keyframes win-ring-orbit {
+  from { transform: rotate(-90deg); }
+  to { transform: rotate(810deg); }
+}
+@keyframes win-ring-trim {
+  0% { stroke-dasharray: 0.001 99.999; stroke-dashoffset: 0; }
+  50% { stroke-dasharray: 0.5 99.5; stroke-dashoffset: 0; }
+  100% { stroke-dasharray: 0.5 99.5; stroke-dashoffset: -50; }
+}
+
+/* 按钮内联小环 */
+.win-ring--inline { width: 16px; height: 16px; margin-right: 8px; }
+button .win-ring--inline + span { vertical-align: middle; }
+
+/* 刷新字形旋转（同步忙态/点击反馈） */
+.win-glyph.spinning { animation: win-glyph-spin 0.9s cubic-bezier(0.45, 0.15, 0.55, 0.85) infinite; }
+@keyframes win-glyph-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* ---------- 21. 共享控件：NavigationView ---------- */

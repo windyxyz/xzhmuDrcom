@@ -202,7 +202,7 @@
             </label>
             <p id="drcom-form-status" class="drcom-form-status" aria-live="polite"></p>
             <div class="drcom-login-actions">
-              <button id="drcom-submit" class="drcom-primary-button" type="submit">登录校园网</button>
+              <button id="drcom-submit" class="drcom-primary-button" type="submit"><span class="win-ring win-ring--inline" aria-hidden="true"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" pathLength="100"/></svg></span><span>登录校园网</span></button>
               <button id="drcom-reset" class="drcom-secondary-button" type="reset">重置</button>
             </div>
             ${renderOfficialLinks()}

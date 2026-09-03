@@ -239,6 +239,9 @@ function setBusy(isBusy) {
   document.querySelectorAll("button, input, select").forEach((element) => {
     element.disabled = isBusy;
   });
+  document.querySelectorAll(".win-glyph").forEach((glyph) => {
+    glyph.classList?.toggle("spinning", isBusy);
+  });
   if (!isBusy) {
     const accountSelect = $("account-select");
     if (accountSelect) {

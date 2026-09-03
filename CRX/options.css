@@ -167,7 +167,7 @@ body.app-themed-page {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 32px;
+  min-height: 38px;
   padding: 0 12px;
   border: 1px solid var(--card-stroke);
   border-radius: var(--control-radius);
@@ -204,6 +204,8 @@ body.app-themed-page {
     background-color var(--fast-duration) var(--fast-out-slow-in);
 }
 .refresh-toggle input:hover::before { width: 14px; height: 14px; }
+.refresh-toggle input:hover { border-color: var(--text-primary); }
+.refresh-toggle input:active::before { transition: none; width: 17px; height: 14px; }
 .refresh-toggle input:checked { background: var(--accent-fill-default); border-color: transparent; }
 .refresh-toggle input:checked::before { left: calc(100% - 16px); background: var(--accent-text); }
 .refresh-toggle input:focus-visible {
@@ -354,6 +356,22 @@ body.app-themed-page {
 .settings-row-text strong { font-size: 14px; font-weight: 600; line-height: 20px; }
 .settings-row-text small { color: var(--text-secondary); font-size: 12px; line-height: 16px; }
 
+.slider-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  width: min(260px, 46%);
+}
+.slider-control .win-slider { flex: 1; min-width: 0; }
+.slider-control output {
+  min-width: 44px;
+  text-align: right;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* 复选开关（WinUI ToggleSwitch 40×20，input 即轨道） */
 .check-row input[type="checkbox"],
 .switch input[type="checkbox"] {
@@ -388,15 +406,30 @@ body.app-themed-page {
 }
 .check-row input[type="checkbox"]:hover::before,
 .switch input[type="checkbox"]:hover::before { width: 14px; height: 14px; }
+.check-row input[type="checkbox"]:hover,
+.switch input[type="checkbox"]:hover { border-color: var(--text-primary); }
 .check-row input[type="checkbox"]:checked,
 .switch input[type="checkbox"]:checked {
   background: var(--accent-fill-default);
   border-color: transparent;
 }
+.check-row input[type="checkbox"]:checked:hover,
+.switch input[type="checkbox"]:checked:hover { background: var(--accent-fill-hover); }
+/* 按下：17×14 宽椭圆 ±1.5px 偏移，且关闭过渡（参考实现） */
+.check-row input[type="checkbox"]:active::before,
+.switch input[type="checkbox"]:active::before {
+  transition: none;
+  width: 17px;
+  height: 14px;
+}
 .check-row input[type="checkbox"]:checked::before,
 .switch input[type="checkbox"]:checked::before {
   left: calc(100% - 16px);
   background: var(--accent-text);
+}
+.check-row input[type="checkbox"]:checked:active::before,
+.switch input[type="checkbox"]:checked:active::before {
+  transform: translate(-1.5px, -50%);
 }
 .check-row input[type="checkbox"]:focus-visible,
 .switch input[type="checkbox"]:focus-visible {
