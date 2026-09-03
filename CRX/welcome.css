@@ -177,7 +177,7 @@ body {
   padding: 16px 20px;
   border: 1px solid var(--card-stroke);
   border-radius: var(--overlay-radius);
-  background: var(--layer-fill-default);
+  background: color-mix(in srgb, var(--layer-fill-default) calc(var(--scrim-strength, 1) * 100%), transparent);
   -webkit-backdrop-filter: var(--flyout-backdrop-filter);
   backdrop-filter: var(--flyout-backdrop-filter);
 }

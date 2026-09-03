@@ -432,7 +432,8 @@ test("门户安全配置不携带背景数据且专用外观接口单独返回�
         backgroundScale: 1.06,
         backgroundPosition: "center",
         panelColor: "",
-        panelPattern: "grid"
+        panelPattern: "grid",
+        scrimStrength: 1
     }
   });
   assert.doesNotMatch(JSON.stringify(plain), /accounts|password|apiUrl|wlanUserIp/);

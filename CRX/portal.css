@@ -20,6 +20,15 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   isolation: isolate;
 }
 #drcom-modern-root[data-appearance-background="custom"] { background: transparent; }
+#drcom-modern-root[data-appearance-background="custom"] .drcom-surface,
+#drcom-modern-root[data-appearance-background="custom"] .drcom-page > footer {
+  -webkit-backdrop-filter: var(--flyout-backdrop-filter);
+  backdrop-filter: var(--flyout-backdrop-filter);
+}
+#drcom-modern-root[data-appearance-background="custom"] .drcom-surface {
+  background: color-mix(in srgb, var(--layer-fill-default) calc(var(--scrim-strength, 1) * 100%), transparent);
+  border: 1px solid var(--card-stroke);
+}
 
 /* ---------- 页面骨架 ---------- */
 

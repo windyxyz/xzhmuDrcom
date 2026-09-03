@@ -31,7 +31,8 @@ test("外观配置会拒绝不安全背景并把数值限制在可读范围", ()
     navTransition: "entrance",
     navPanePosition: "left",
     panelColor: "",
-    panelPattern: "grid"
+    panelPattern: "grid",
+    scrimStrength: 1
   });
 });
 

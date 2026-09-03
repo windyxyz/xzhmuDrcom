@@ -317,7 +317,8 @@ test("外观表单会保存主题、自定义背景和可读性参数", () => {
     backgroundFit: "cover",
     backgroundPosition: "center",
     panelColor: "",
-    panelPattern: "grid"
+    panelPattern: "grid",
+    scrimStrength: 1
   });
 });
 
@@ -373,7 +374,8 @@ test("外观图片选择后会立即持久化，不依赖页面底部的总保�
         backgroundFit: "cover",
         backgroundPosition: "center",
         panelColor: "",
-        panelPattern: "grid"
+        panelPattern: "grid",
+        scrimStrength: 1
       }
     }
   }]);

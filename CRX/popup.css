@@ -16,7 +16,7 @@ h1, h2, p { margin: 0; }
 :root[data-appearance-background="custom"] .popup-header {
   border: 1px solid var(--card-stroke);
   border-radius: var(--control-radius);
-  background: var(--layer-fill-default);
+  background: color-mix(in srgb, var(--layer-fill-default) calc(var(--scrim-strength, 1) * 100%), transparent);
   -webkit-backdrop-filter: var(--flyout-backdrop-filter);
   backdrop-filter: var(--flyout-backdrop-filter);
 }

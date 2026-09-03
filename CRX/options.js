@@ -79,9 +79,16 @@ function bindEvents() {
 
   $("parse-url").addEventListener("click", parseCapturedUrl);
   $("save-parsed-account").addEventListener("click", runAsync(saveParsedAccount));
-  $("settings-form").addEventListener("submit", runAsync(saveSettings));
   $("reset-config").addEventListener("click", runAsync(resetConfig));
   $("clear-request-log").addEventListener("click", runAsync(clearRequestLog));
+  $("settings-form").addEventListener("submit", runAsync(saveSettings));
+  ["input", "change"].forEach((type) => {
+    $("settings-form").addEventListener(type, (event) => {
+      if (event.target.closest("#appearance-section")) return;
+      settingsFormDirty = true;
+      if (type === "change") scheduleSettingsAutoSave();
+    });
+  });
   $("portal-diagnostics-enabled").addEventListener("change", (event) => {
     const desired = event.target.checked;
     const previous = !desired;
@@ -112,6 +119,16 @@ function bindEvents() {
     applyCurrentAppearance();
     await persistAppearance();
     toast("材质已应用");
+  }));
+  $("scrim-strength").addEventListener("input", () => {
+    syncSliderProgress("scrim-strength");
+    const output = $("scrim-strength-value");
+    if (output) output.textContent = `${Math.round(Number($("scrim-strength").value) * 100)}%`;
+    applyCurrentAppearance();
+  });
+  $("scrim-strength").addEventListener("change", runAsync(async () => {
+    await persistAppearance();
+    toast("遮罩强度已应用");
   }));
   $("appearance-nav-transition").addEventListener("change", runAsync(async () => {
     applyCurrentAppearance();
@@ -746,6 +763,13 @@ function hydrateAppearance(input) {
   $("appearance-material").value = appearance.material;
   $("appearance-nav-transition").value = appearance.navTransition;
   $("appearance-nav-pane-position").value = appearance.navPanePosition;
+  const scrimInput = $("scrim-strength");
+  if (scrimInput) {
+    scrimInput.value = appearance.scrimStrength;
+    syncSliderProgress("scrim-strength");
+  }
+  const scrimOutput = $("scrim-strength-value");
+  if (scrimOutput) scrimOutput.value = `${Math.round(appearance.scrimStrength * 100)}%`;
   const panelMode = input?.panelColor ? "custom" : "accent";
   $("panel-color-mode").value = panelMode;
   $("panel-color-custom").hidden = panelMode !== "custom";
@@ -1001,8 +1025,6 @@ function setupSettingsNavigation() {
     if (titleIcon) {
       titleIcon.textContent = button.dataset.glyph || titleIcon.textContent;
     }
-    const actions = $("settings-actions");
-    if (actions) actions.hidden = !["connection-overview", "advanced-settings"].includes(targetId);
     if (targetId === "advanced-settings") $("advanced-settings").open = true;
     try { localStorage.setItem("drcom-settings-panel", targetId); } catch (error) {}
   };
@@ -1296,6 +1318,34 @@ async function saveParsedAccount() {
 
 async function saveSettings(event) {
   event.preventDefault();
+  await autoSaveSettings({ announce: true });
+}
+
+let settingsAutoSaveTimer = 0;
+
+function scheduleSettingsAutoSave() {
+  clearTimeout(settingsAutoSaveTimer);
+  settingsAutoSaveTimer = setTimeout(() => {
+    runAsync(() => autoSaveSettings({ announce: true }))();
+  }, 250);
+}
+
+function markSettingsAutoSaved() {
+  const element = $("settings-autosave-status");
+  if (!element) return;
+  element.hidden = false;
+  element.textContent = "设置已自动生效 · " + new Date().toLocaleTimeString("zh-CN", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+  clearTimeout(markSettingsAutoSaved.timer);
+  markSettingsAutoSaved.timer = setTimeout(() => { element.hidden = true; }, 2600);
+}
+
+async function autoSaveSettings({ announce = false } = {}) {
+  if (!settingsFormDirty || !state) return false;
   const config = readConfig();
   await requestGatewayAccess(config);
   if (config.ui.background === "daily" && !await ensureWallpaperPermission()) {
@@ -1303,10 +1353,19 @@ async function saveSettings(event) {
   }
   const response = await sendMessage({ action: "config:save", config });
   state = response.state;
-  hydrateForm();
-  renderAccounts();
-  renderRequestLog();
-  toast("配置已保存");
+  settingsFormDirty = false;
+  /* 焦点仍在文本框中时跳过回填，避免打断输入；失焦提交后会再次自动保存 */
+  const active = document.activeElement;
+  const editing = active && active.tagName === "INPUT" && !["range", "checkbox", "color", "file", "hidden"].includes(active.type) && $("settings-form")?.contains(active);
+  if (!editing) {
+    hydrateForm();
+    renderAccounts();
+    renderRequestLog();
+  } else {
+    settingsFormDirty = false;
+  }
+  if (announce) markSettingsAutoSaved();
+  return true;
 }
 
 async function resetConfig() {
@@ -1386,6 +1445,7 @@ function readAppearanceConfig() {
     material: $("appearance-material")?.value || "acrylic",
     navTransition: $("appearance-nav-transition")?.value || "entrance",
     navPanePosition: $("appearance-nav-pane-position")?.value || "left",
+    scrimStrength: Math.min(1.4, Math.max(0.4, Number($("scrim-strength")?.value) || 1)),
     panelColor: readPanelColor(),
     panelPattern: $("panel-pattern")?.value || "grid",
     accent: $("appearance-accent").value,

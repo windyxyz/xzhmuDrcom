@@ -153,7 +153,8 @@ function publicAppearance(input) {
       ? ui.backgroundPosition
       : "center",
     panelColor: /^#[0-9a-f]{6}$/i.test(String(ui.panelColor || "").trim()) ? String(ui.panelColor).trim() : "",
-    panelPattern: ["grid", "dots", "none"].includes(ui.panelPattern) ? ui.panelPattern : "grid"
+    panelPattern: ["grid", "dots", "diagonal", "cross", "none"].includes(ui.panelPattern) ? ui.panelPattern : "grid",
+    scrimStrength: Number.isFinite(Number(ui.scrimStrength)) ? Math.min(1.4, Math.max(0.4, Number(ui.scrimStrength))) : 1
   };
 }
 

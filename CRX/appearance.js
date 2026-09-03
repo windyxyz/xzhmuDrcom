@@ -15,7 +15,7 @@
   const MATERIALS = ["solid", "mica", "acrylic", "acrylicStrong", "custom"];
   const NAV_TRANSITIONS = ["entrance", "slide", "drillIn", "suppress"];
   const NAV_PANE_POSITIONS = ["left", "top"];
-  const PANEL_PATTERNS = ["grid", "dots", "none"];
+  const PANEL_PATTERNS = ["grid", "dots", "diagonal", "cross", "none"];
 
   const FIT_TO_CSS = { cover: "cover", contain: "contain", fill: "100% 100%" };
 
@@ -33,7 +33,8 @@
     navTransition: "entrance",
     navPanePosition: "left",
     panelColor: "",
-    panelPattern: "grid"
+    panelPattern: "grid",
+    scrimStrength: 1
   });
 
   function clamp(value, min, max, fallback) {
@@ -98,7 +99,8 @@
       navTransition: normalizeEnum(input.navTransition, NAV_TRANSITIONS, DEFAULTS.navTransition),
       navPanePosition: normalizeEnum(input.navPanePosition, NAV_PANE_POSITIONS, DEFAULTS.navPanePosition),
       panelColor: /^#[0-9a-f]{6}$/i.test(String(input.panelColor || "").trim()) ? String(input.panelColor).trim() : "",
-      panelPattern: normalizeEnum(input.panelPattern, PANEL_PATTERNS, DEFAULTS.panelPattern)
+      panelPattern: normalizeEnum(input.panelPattern, PANEL_PATTERNS, DEFAULTS.panelPattern),
+      scrimStrength: clamp(input.scrimStrength, 0.4, 1.4, DEFAULTS.scrimStrength)
     };
   }
 
@@ -122,6 +124,7 @@
     rootElement.style.setProperty("--appearance-scale", String(normalized.backgroundScale));
     rootElement.style.setProperty("--appearance-position", normalized.backgroundPosition);
     rootElement.style.setProperty("--appearance-fit", FIT_TO_CSS[normalized.backgroundFit] || "cover");
+    rootElement.style.setProperty("--scrim-strength", String(normalized.scrimStrength));
     if (normalized.panelColor) rootElement.style.setProperty("--panel-base", normalized.panelColor);
     else rootElement.style.setProperty("--panel-base", "var(--appearance-accent)");
     rootElement.dataset.panelPattern = normalized.panelPattern;

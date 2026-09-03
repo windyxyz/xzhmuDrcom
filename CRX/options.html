@@ -194,6 +194,10 @@
                 </select>
               </label>
               <label>
+                <span>遮罩强度 <output id="scrim-strength-value">100%</output></span>
+                <input id="scrim-strength" class="win-slider" type="range" min="0.4" max="1.4" step="0.05" value="1">
+              </label>
+              <label>
                 <span>页面过渡动画</span>
                 <select id="appearance-nav-transition">
                   <option value="entrance">入场（默认）</option>
@@ -225,6 +229,8 @@
                 <select id="panel-pattern">
                   <option value="grid">网格（默认）</option>
                   <option value="dots">圆点</option>
+                  <option value="diagonal">斜线</option>
+                  <option value="cross">菱形交叉</option>
                   <option value="none">无</option>
                 </select>
               </label>
@@ -263,7 +269,7 @@
                   <span class="cp-preview" id="cp-preview" aria-hidden="true"></span>
                   <label class="cp-value-row">
                     <span>明度</span>
-                    <input id="cp-value" class="cp-value win-slider" type="range" min="0" max="100" step="1" value="50" aria-label="颜色明度">
+                    <input id="cp-value" class="cp-value" type="range" min="0" max="100" step="1" value="50" aria-label="颜色明度">
                   </label>
                   <input id="appearance-accent-hex" class="accent-hex" value="#007aff" maxlength="7" spellcheck="false" aria-label="强调色色值">
                 </div>
@@ -535,10 +541,7 @@
         </div>
       </section>
 
-      <footer id="settings-actions" class="settings-actions" hidden>
-        <p>修改后需要保存才会生效。</p>
-        <button class="primary" type="submit">保存配置</button>
-      </footer>
+      <div id="settings-autosave-status" class="settings-autosave-status" role="status" aria-live="polite" hidden></div>
     </form>
   </main>
     </div>
