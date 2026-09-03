@@ -116,57 +116,10 @@
       bindCharacters(root, online);
       if (!online) prefillFromOriginalPage(root);
       if (online && !statusResult) void refreshPortalStatus(root);
-      void applySurfaceTone(root, config.appearance);
     } catch (error) {
       removeModernPortal();
       throw error;
     }
-  }
-
-  /* 根据背景图平均亮度选择表面遮罩明暗：暗背景配深色遮罩+白字，亮背景配浅色遮罩+深字 */
-  async function applySurfaceTone(root, appearance) {
-    const imageUrl = appearance && appearance.backgroundImage;
-    const clear = () => {
-      if (root && typeof root.removeAttribute === "function") root.removeAttribute("data-surface-tone");
-    };
-    if (!imageUrl || typeof Image !== "function") {
-      clear();
-      return;
-    }
-    try {
-      const tone = await imageAverageTone(imageUrl);
-      root.dataset.surfaceTone = tone;
-    } catch (error) {
-      clear();
-    }
-  }
-
-  function imageAverageTone(url) {
-    return new Promise((resolve, reject) => {
-      const image = new Image();
-      image.onload = () => {
-        try {
-          const canvas = document.createElement("canvas");
-          const size = 24;
-          canvas.width = size;
-          canvas.height = size;
-          const context = canvas.getContext("2d", { willReadFrequently: true });
-          if (!context) throw new Error("canvas unavailable");
-          context.drawImage(image, 0, 0, size, size);
-          const data = context.getImageData(0, 0, size, size).data;
-          let sum = 0;
-          for (let index = 0; index < data.length; index += 4) {
-            sum += 0.2126 * data[index] + 0.7152 * data[index + 1] + 0.0722 * data[index + 2];
-          }
-          const average = sum / (data.length / 4);
-          resolve(average > 140 ? "light" : "dark");
-        } catch (error) {
-          reject(error);
-        }
-      };
-      image.onerror = () => reject(new Error("image decode failed"));
-      image.src = url;
-    });
   }
 
   function installPrivateAppearance(input) {
