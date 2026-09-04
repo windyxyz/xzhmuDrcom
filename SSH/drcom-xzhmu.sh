@@ -108,10 +108,46 @@ http_get() {
 
 trap cleanup_request_file EXIT
 
+protocol_payload() {
+  body="$(printf '%s' "$1" | tr '\r\n' '  ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  case "$body" in
+    \{*\}) payload="$body" ;;
+    *\(\{*\}\)\;|*\(\{*\}\))
+      callback_name="${body%%(*}"
+      case "$callback_name" in
+        ''|*[!A-Za-z0-9_.$]*) return 1 ;;
+      esac
+      payload="${body#*(}"
+      payload="${payload%;}"
+      payload="${payload%)}"
+      case "$payload" in \{*\}) ;; *) return 1 ;; esac
+      ;;
+    *=*)
+      case "$body" in *[[:space:]\<\>\{\}]* ) return 1 ;; esac
+      oldifs="$IFS"
+      IFS='&'
+      set -- $body
+      IFS="$oldifs"
+      for pair in "$@"; do
+        case "$pair" in
+          [A-Za-z]*=*)
+            pair_key="${pair%%=*}"
+            case "$pair_key" in *[!A-Za-z0-9_-]*) return 1 ;; esac
+            ;;
+          *) return 1 ;;
+        esac
+      done
+      payload="$body"
+      ;;
+    *) return 1 ;;
+  esac
+  printf '%s' "$payload"
+}
+
 extract_value() {
   key="$2"
-  printf '%s' "$1" |
-    tr '\r\n' '  ' |
+  payload="$(protocol_payload "$1")" || return
+  printf '%s' "$payload" |
     sed -n "s/.*[\"']\{0,1\}${key}[\"']\{0,1\}[[:space:]]*[:=][[:space:]]*[\"']\{0,1\}\([^\"',;}[:space:]]*\).*/\1/p" |
     sed -n '1p'
 }
@@ -284,10 +320,6 @@ extract_mac() {
       return
     fi
   done
-  candidate="$(printf '%s' "$1" | grep -Eo '([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{12}' | sed -n '1p')"
-  if usable_mac "$candidate"; then
-    normalize_mac "$candidate"
-  fi
 }
 
 compose_login_account() {
@@ -348,7 +380,7 @@ build_logout_url() {
 
 already_online_response() {
   msg="$(extract_message "$1")"
-  printf '%s %s' "$msg" "$1" | grep -Eiq '已经在线|已在线|already online|has been online|E2620'
+  printf '%s' "$msg" | grep -Eiq '已经在线|已在线|already online|has been online|E2620'
 }
 
 login_success_response() {
@@ -441,9 +473,12 @@ cmd_login() {
   login_success_response "$body"
   rc="$?"
   if [ "$rc" = "0" ]; then
-    save_session "$ip" "$mac"
-    log "login success: account=$(mask_account "$USERNAME") ip=$(mask_ip "$ip") mac=$(mask_mac "$mac") source=$RUNTIME_IP_SOURCE"
-    return 0
+    state="$(query_status_state)"
+    if [ "$state" = "online" ]; then
+      save_session "$ip" "$mac"
+      log "login success confirmed: account=$(mask_account "$USERNAME") ip=$(mask_ip "$ip") mac=$(mask_mac "$mac") source=$RUNTIME_IP_SOURCE"
+      return 0
+    fi
   fi
   if [ "$rc" = "2" ]; then
     state="$(query_status_state)"

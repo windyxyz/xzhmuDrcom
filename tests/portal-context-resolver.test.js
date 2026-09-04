@@ -9,13 +9,17 @@ const vm = require("node:vm");
 function loadPortalContext(overrides = {}) {
   const context = vm.createContext({
     AbortController,
+    TextDecoder,
+    TextEncoder,
     URL,
     clearTimeout,
     fetch: overrides.fetch || fetch,
     setTimeout
   });
-  const source = readFileSync(join(__dirname, "..", "CRX", "background", "portal-context.js"), "utf8");
-  new vm.Script(source, { filename: "background/portal-context.js" }).runInContext(context);
+  for (const name of ["response-reader.js", "portal-context.js"]) {
+    const source = readFileSync(join(__dirname, "..", "CRX", "background", name), "utf8");
+    new vm.Script(source, { filename: `background/${name}` }).runInContext(context);
+  }
   return context;
 }
 

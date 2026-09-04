@@ -10,6 +10,7 @@
     "portal-session.js",
     "portal-diagnostics-utils.js",
     "background/state-store.js",
+    "background/response-reader.js",
     "background/diagnostics-service.js",
     "background/portal-context.js",
     "background/drcom-client.js",

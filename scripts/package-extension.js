@@ -16,6 +16,7 @@ const RELEASE_FILES = [
   ["CRX/confirm-dialog.js", "confirm-dialog.js"],
   ["CRX/background.js", "background.js"],
   ["CRX/background/state-store.js", "background/state-store.js"],
+  ["CRX/background/response-reader.js", "background/response-reader.js"],
   ["CRX/background/diagnostics-service.js", "background/diagnostics-service.js"],
   ["CRX/background/portal-context.js", "background/portal-context.js"],
   ["CRX/background/drcom-client.js", "background/drcom-client.js"],

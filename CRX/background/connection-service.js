@@ -408,14 +408,17 @@ async function queryPortalPageStatus(config) {
       credentials: "include",
       signal: controller.signal
     });
-    return parsePortalStatus(response.status, await response.text(), config.portalUrl);
+    const html = await readLimitedResponse(response, PORTAL_HTML_LIMIT_BYTES, controller);
+    return parsePortalStatus(response.status, html, config.portalUrl);
   } catch (error) {
     return {
       ok: false,
       success: false,
       online: false,
       state: "unknown",
-      message: error && error.name === "AbortError"
+      message: error && error.name === "ResponseSizeLimitError"
+        ? "校园网门户响应超过 1 MiB 安全上限，无法确认校园网状态。"
+        : error && error.name === "AbortError"
         ? "访问 10.10.10.2 超时，无法确认校园网状态。"
         : "无法确认校园网会话状态。",
       statusCode: 0,

@@ -213,6 +213,7 @@ test("后台入口只负责依赖加载和事件注册", () => {
     'portal-session.js',
     "portal-diagnostics-utils.js",
     "background/state-store.js",
+    "background/response-reader.js",
     "background/diagnostics-service.js",
     "background/portal-context.js",
     "background/drcom-client.js",
@@ -1346,6 +1347,106 @@ test("DrCOM 响应按 HTTP、明确协议、状态提示和安全兜底的顺序
   assert.equal(onlineStatus.success, true);
   assert.equal(unknown.success, false);
   assert.match(unknown.message, /未识别|没有返回明确/);
+});
+
+test("DrCOM 解析只接受完整 JSON、锚定 JSONP、query 和对象键值结构", () => {
+  const background = loadBackground();
+  const cases = [
+    ['{"result":1,"ret_code":0,"msg":"ok"}', { result: 1, ret_code: 0, msg: "ok" }],
+    ['dr1001({"result":"1","msg":"ok"});', { result: "1", msg: "ok" }],
+    ["result=1&ret_code=0&msg=ok", { result: "1", ret_code: "0", msg: "ok" }],
+    ["{result:1, ret_code:0, msg:'ok'}", { result: "1", ret_code: "0", msg: "ok" }]
+  ];
+  for (const [input, expected] of cases) {
+    assert.deepEqual(JSON.parse(JSON.stringify(background.parseDrcomText(input))), expected);
+  }
+  for (const input of [
+    '<!-- result=1 --><html>advertisement</html>',
+    '<script>window.x="result=1"</script>',
+    'prefix result=1 suffix',
+    'dr1001({"result":1}) trailing'
+  ]) {
+    assert.deepEqual(JSON.parse(JSON.stringify(background.parseDrcomText(input))), {});
+  }
+});
+
+test("DrCOM 成功判断不读取任意原始正文中的成功字样", () => {
+  const background = loadBackground();
+  const result = background.normalizeDrcomResult(
+    "login", 200, {}, '<!-- result=1 --><div>login success 已在线</div>'
+  );
+  assert.equal(result.success, false);
+  assert.equal(result.online, false);
+});
+
+test("DrCOM API 按 Content-Length 和实际分块字节数限制为 64 KiB", async () => {
+  for (const response of [
+    {
+      ok: true, status: 200,
+      headers: { get(name) { return name.toLowerCase() === "content-length" ? String(65 * 1024) : null; } },
+      async text() { return '{"result":1}'; }
+    },
+    {
+      ok: true, status: 200,
+      headers: { get() { return null; } },
+      body: {
+        getReader() {
+          let sent = false;
+          return {
+            async read() {
+              if (sent) return { done: true };
+              sent = true;
+              return { done: false, value: new Uint8Array(65 * 1024).fill(65) };
+            },
+            async cancel() {}
+          };
+        }
+      }
+    }
+  ]) {
+    const background = loadBackground({ fetch: async () => response });
+    background.addRequestRecord = async () => undefined;
+    const result = await background.fetchDrcom(
+      { url: "http://10.10.10.2:801/eportal/", redactedUrl: "http://10.10.10.2:801/eportal/" },
+      "login"
+    );
+    assert.equal(result.success, false);
+    assert.match(result.message, /64 KiB|过大|超限/);
+    assert.equal(result.raw, "");
+  }
+});
+
+test("门户 HTML 实际响应超过 1 MiB 时提前拒绝且不返回正文", async () => {
+  const background = loadBackground({
+    fetch: async () => ({
+      ok: true,
+      status: 200,
+      headers: { get() { return String((1024 * 1024) + 1); } },
+      async text() { return 'var v46ip="192.0.2.46";'; }
+    })
+  });
+  const result = await background.resolvePortalRuntimeContext({
+    portalUrl: "http://10.10.10.2/",
+    network: { wlanUserIp: "" }
+  }, "");
+  assert.equal(result.ok, false);
+  assert.match(result.message, /1 MiB|过大|超限/);
+  assert.doesNotMatch(JSON.stringify(result), /v46ip|192\.0\.2\.46/);
+});
+
+test("门户在线状态复核同样拒绝超过 1 MiB 的 HTML", async () => {
+  const background = loadBackground({
+    fetch: async () => ({
+      ok: true,
+      status: 200,
+      headers: { get() { return String((1024 * 1024) + 1); } },
+      async text() { return '<input name="logout">'; }
+    })
+  });
+  const result = await background.queryPortalPageStatus({ portalUrl: "http://10.10.10.2/" });
+  assert.equal(result.state, "unknown");
+  assert.equal(result.raw, "");
+  assert.match(result.message, /1 MiB|过大|超限/);
 });
 
 test("DrCOM 日志原文保留状态码但清除返回体中的凭据", async () => {

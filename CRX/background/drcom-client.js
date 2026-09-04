@@ -3,6 +3,7 @@
 var portalSession = globalThis.DrcomPortalSession;
 
 var accountUtils = globalThis.DrcomAccountUtils;
+const DRCOM_RESPONSE_LIMIT_BYTES = 64 * 1024;
 
 async function fetchDrcom(request, kind) {
   const controller = new AbortController();
@@ -20,7 +21,7 @@ async function fetchDrcom(request, kind) {
       },
       signal: controller.signal
     });
-    const text = await response.text();
+    const text = await readLimitedResponse(response, DRCOM_RESPONSE_LIMIT_BYTES, controller);
     const parsed = parseDrcomText(text);
     const result = normalizeDrcomResult(kind, response.status, parsed, text);
     const payload = {
@@ -74,7 +75,7 @@ async function queryPortalSessionStatus(config) {
       headers: { "Accept": "application/javascript, application/json, text/plain, */*" },
       signal: controller.signal
     });
-    const parsed = parseDrcomText(await response.text());
+    const parsed = parseDrcomText(await readLimitedResponse(response, DRCOM_RESPONSE_LIMIT_BYTES, controller));
     const resultCode = parsed.result === undefined || parsed.result === null
       ? ""
       : stringValue(parsed.result).trim();
@@ -224,24 +225,93 @@ function parseDrcomText(text) {
   }
 
   const direct = tryJson(clean);
-  if (direct) {
+  if (direct && !Array.isArray(direct)) {
     return direct;
   }
 
-  const jsonp = clean.match(/^[\w$.]+\(([\s\S]*)\)\s*;?$/);
-  if (jsonp) {
-    return tryJson(jsonp[1]) || {};
+  const openParen = clean.indexOf("(");
+  const jsonpEnd = clean.endsWith(");") ? clean.length - 2 : clean.endsWith(")") ? clean.length - 1 : -1;
+  if (openParen > 0 && jsonpEnd > openParen) {
+    const callback = clean.slice(0, openParen);
+    if (/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(callback)) {
+      const parsed = tryJson(clean.slice(openParen + 1, jsonpEnd));
+      if (parsed && !Array.isArray(parsed)) return parsed;
+    }
   }
 
-  const loose = {};
-  for (const match of clean.matchAll(/["']?([a-zA-Z][\w-]*)["']?\s*[:=]\s*["']?([^"',;}\n\r]+)/g)) {
-    loose[match[1]] = match[2].trim();
+  if (!clean.startsWith("{") && clean.includes("=")) return parseAnchoredPairs(clean, "&", "=");
+  if (clean.startsWith("{") && clean.endsWith("}")) {
+    return parseAnchoredPairs(clean.slice(1, -1), ",", ":");
   }
-  return loose;
+  return {};
+}
+
+function parseAnchoredPairs(source, separator, assignment) {
+  const parts = splitQuotedPairs(source, separator);
+  if (!parts.length) return {};
+  const result = {};
+  for (const part of parts) {
+    const index = findUnquotedCharacter(part, assignment);
+    if (index <= 0) return {};
+    const rawKey = part.slice(0, index).trim();
+    const key = stripMatchingQuotes(rawKey);
+    if (!/^[A-Za-z][\w-]*$/.test(key)) return {};
+    let value = stripMatchingQuotes(part.slice(index + 1).trim());
+    if (separator === "&") {
+      try { value = decodeURIComponent(value.replace(/\+/g, " ")); } catch (error) { return {}; }
+    }
+    result[key] = value;
+  }
+  return result;
+}
+
+function splitQuotedPairs(source, separator) {
+  const parts = [];
+  let quote = "";
+  let escaped = false;
+  let start = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (escaped) { escaped = false; continue; }
+    if (quote && char === "\\") { escaped = true; continue; }
+    if (char === "\"" || char === "'") {
+      if (!quote) quote = char;
+      else if (quote === char) quote = "";
+      continue;
+    }
+    if (!quote && char === separator) {
+      parts.push(source.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  if (quote || escaped) return [];
+  parts.push(source.slice(start).trim());
+  return parts.every(Boolean) ? parts : [];
+}
+
+function findUnquotedCharacter(source, target) {
+  let quote = "";
+  let escaped = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (escaped) { escaped = false; continue; }
+    if (quote && char === "\\") { escaped = true; continue; }
+    if (char === "\"" || char === "'") {
+      if (!quote) quote = char;
+      else if (quote === char) quote = "";
+    } else if (!quote && char === target) return index;
+  }
+  return -1;
+}
+
+function stripMatchingQuotes(value) {
+  if (value.length >= 2 && ((value[0] === "\"" && value.at(-1) === "\"") || (value[0] === "'" && value.at(-1) === "'"))) {
+    return value.slice(1, -1);
+  }
+  return value;
 }
 
 function normalizeDrcomResult(kind, statusCode, data, rawText) {
-  const raw = stringValue(rawText);
   const msg = decodeMessage(data.msg || data.msga || data.message || data.error || "");
   const resultValue = data.result ?? data.success;
   const retValue = data.ret_code ?? data.ret;
@@ -257,7 +327,7 @@ function normalizeDrcomResult(kind, statusCode, data, rawText) {
   const diagnostic = { statusCode, protocolCode, resultCode, retCode };
   const failureTokens = new Set(["0", "false", "fail", "failed", "error", "-1"]);
   const successTokens = new Set(["1", "ok", "true", "success"]);
-  const alreadyOnline = /已经在线|已在线|has been online|already online|E2620/i.test(`${msg} ${raw}`);
+  const alreadyOnline = /已经在线|已在线|has been online|already online|E2620/i.test(msg);
 
   if (!httpOk) {
     return {
@@ -315,8 +385,8 @@ function normalizeDrcomResult(kind, statusCode, data, rawText) {
   }
 
   if (kind === "logout") {
-    const logoutFailure = /logout\s*(?:fail|error)|unbind_mac\s*(?:fail|error)|注销失败|下线失败|解绑失败|拒绝/i.test(`${msg} ${raw}`);
-    const logoutMessage = /注销成功|下线成功|解绑成功|解除绑定成功|(?:logout|unbind_mac)\s*(?:success|ok)|\boffline\b/i.test(`${msg} ${raw}`);
+    const logoutFailure = /logout\s*(?:fail|error)|unbind_mac\s*(?:fail|error)|注销失败|下线失败|解绑失败|拒绝/i.test(msg);
+    const logoutMessage = /注销成功|下线成功|解绑成功|解除绑定成功|(?:logout|unbind_mac)\s*(?:success|ok)|\boffline\b/i.test(msg);
     const logoutOk = !logoutFailure && logoutMessage;
     return {
       success: logoutOk,
@@ -330,8 +400,8 @@ function normalizeDrcomResult(kind, statusCode, data, rawText) {
     };
   }
 
-  const explicitStatusSuccess = alreadyOnline || /登录成功|认证成功|(?:login|authentication)\s*(?:success|ok)/i.test(`${msg} ${raw}`);
-  const explicitStatusFailure = /登录失败|认证失败|password\s*(?:fail|error)|userid\s*error|拒绝/i.test(`${msg} ${raw}`);
+  const explicitStatusSuccess = alreadyOnline || /登录成功|认证成功|(?:login|authentication)\s*(?:success|ok)/i.test(msg);
+  const explicitStatusFailure = /登录失败|认证失败|password\s*(?:fail|error)|userid\s*error|拒绝/i.test(msg);
   return {
     success: explicitStatusSuccess && !explicitStatusFailure,
     online: explicitStatusSuccess && !explicitStatusFailure,

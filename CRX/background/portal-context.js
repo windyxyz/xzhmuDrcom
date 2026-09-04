@@ -1,5 +1,7 @@
 "use strict";
 
+const PORTAL_HTML_LIMIT_BYTES = 1024 * 1024;
+
 const PORTAL_IP_QUERY_KEYS = [
   "ip",
   "wlanuserip",
@@ -56,7 +58,7 @@ async function resolvePortalRuntimeContext(config, pageUrl) {
       credentials: "include",
       signal: controller.signal
     });
-    const html = await response.text();
+    const html = await readLimitedResponse(response, PORTAL_HTML_LIMIT_BYTES, controller);
     const parsed = parsePortalRuntimeContext(html, pageUrl || response.url || portalUrl);
     if (parsed.ok) {
       return {
@@ -67,6 +69,14 @@ async function resolvePortalRuntimeContext(config, pageUrl) {
     }
     return portalContextFallback(config, response.status);
   } catch (error) {
+    if (error && error.name === "ResponseSizeLimitError") {
+      return {
+        ...portalContextFallback(config, 0),
+        ok: false,
+        failureCode: "portal_response_too_large",
+        message: "校园网门户响应超过 1 MiB 安全上限，尚未发送认证密码。"
+      };
+    }
     const parsed = parsePortalRuntimeContext("", pageUrl || portalUrl);
     if (parsed.ok) {
       return {
