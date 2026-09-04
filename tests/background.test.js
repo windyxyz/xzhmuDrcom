@@ -23,6 +23,7 @@ function loadBackground(options = {}) {
   const createdTabs = [];
   const updatedTabs = [];
   const openedOptions = [];
+  const broadcasted = [];
   const localStore = options.localStore || {};
   const localWrites = [];
   const sessionStore = options.sessionStore || {};
@@ -79,6 +80,9 @@ function loadBackground(options = {}) {
         onInstalled: event("installed"),
         onMessage: event("message"),
         onStartup: event("startup"),
+        sendMessage(message) {
+          broadcasted.push(structuredClone(message));
+        },
         async openOptionsPage() {
           openedOptions.push(true);
         }
@@ -177,6 +181,7 @@ function loadBackground(options = {}) {
     },
     __alarms: alarms,
     __badgeUpdates: badgeUpdates,
+    __broadcasted: broadcasted,
     __createdAlarms: createdAlarms,
     __createdTabs: createdTabs,
     __listeners: listeners,
@@ -851,6 +856,9 @@ test("门户捕获只暂存五分钟且不覆盖持久账号或当前选择", as
   assert.equal(localStore.drcomAssistantState.selectedAccountId, original.id);
   assert.match(JSON.stringify(sessionStore), /captured-secret/);
   assert.equal(background.__openedOptions.length, 1);
+  assert.equal(background.__broadcasted.length, 1);
+  assert.equal(background.__broadcasted[0].action, "account:capture:staged");
+  assert.equal(background.__broadcasted[0].captureId, result.captureId);
   const pending = JSON.parse(JSON.stringify(await background.handleMessage({ action: "account:capture:get" }, {
     id: "test-extension-id", url: "chrome-extension://test/options.html"
   })));

@@ -382,13 +382,16 @@ body.app-themed-page > :not(.skip-link) {
 .app-themed-page .advanced-settings[data-settings-panel]:not([hidden]) {
   animation: drcom-surface-enter var(--entrance-duration) var(--decelerate) both;
 }
-:root[data-nav-transition="slide"] .app-themed-page .settings-section[data-settings-panel]:not([hidden]) {
+:root[data-nav-transition="slide"] .app-themed-page .settings-section[data-settings-panel]:not([hidden]),
+:root[data-nav-transition="slide"] .app-themed-page .advanced-settings[data-settings-panel]:not([hidden]) {
   animation: dnav-slide-in var(--entrance-duration) var(--decelerate) both;
 }
-:root[data-nav-transition="drillIn"] .app-themed-page .settings-section[data-settings-panel]:not([hidden]) {
+:root[data-nav-transition="drillIn"] .app-themed-page .settings-section[data-settings-panel]:not([hidden]),
+:root[data-nav-transition="drillIn"] .app-themed-page .advanced-settings[data-settings-panel]:not([hidden]) {
   animation: dnav-drill-in 0.783s linear both;
 }
 :root[data-nav-transition="suppress"] .app-themed-page .settings-section[data-settings-panel]:not([hidden]),
+:root[data-nav-transition="suppress"] .app-themed-page .advanced-settings[data-settings-panel]:not([hidden]),
 :root[data-nav-transition="suppress"] .app-themed-page .welcome-shell,
 :root[data-nav-transition="suppress"] .app-themed-page .settings-shell,
 :root[data-nav-transition="suppress"] .app-themed-page .shell {
@@ -868,8 +871,8 @@ body.app-themed-page > :not(.skip-link) {
 .confirm-dialog p { margin: 12px 0 0; color: var(--text-secondary); font-size: 14px; line-height: 1.55; white-space: pre-line; flex: 1; }
 .confirm-dialog-actions {
   margin-top: 24px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  justify-content: center;
   gap: 8px;
 }
 .confirm-dialog-actions button {
@@ -897,7 +900,7 @@ body.app-themed-page > :not(.skip-link) {
 }
 
 @media (max-width: 420px), (pointer: coarse) {
-  .confirm-dialog-actions { grid-template-columns: 1fr; }
+  .confirm-dialog-actions { flex-direction: column; align-items: stretch; }
   .confirm-dialog-actions button { min-height: 44px; }
 }
 

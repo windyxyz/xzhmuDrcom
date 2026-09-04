@@ -16,6 +16,7 @@ function loadOptions(context) {
 function createOptionsHarness(options = {}) {
   const messages = [];
   const confirmations = [];
+  const runtimeMessageListeners = [];
   const elements = new Map(Object.entries({
     "capture-confirmation": { hidden: true },
     "capture-source": { textContent: "" },
@@ -45,7 +46,13 @@ function createOptionsHarness(options = {}) {
     URL: options.URL || URL,
     chrome: {
       runtime: {
+        id: "test-extension-id",
         lastError: null,
+        onMessage: {
+          addListener(listener) {
+            runtimeMessageListeners.push(listener);
+          }
+        },
         sendMessage(message, callback) {
           messages.push(structuredClone(message));
           if (options.sendMessage) {
@@ -82,7 +89,7 @@ function createOptionsHarness(options = {}) {
     setTimeout
   });
   loadOptions(context);
-  return { confirmations, context, elements, messages };
+  return { confirmations, context, elements, messages, runtimeMessageListeners };
 }
 
 test("门户诊断加载会显示精确开关、占用和会话状态", async () => {
@@ -125,6 +132,33 @@ test("设置页显示脱敏捕获确认卡且默认焦点落在丢弃", async ()
   assert.match(harness.elements.get("capture-account").textContent, /20\*\*\*18.*@telecom/);
   assert.match(harness.elements.get("capture-impact").textContent, /覆盖/);
   assert.equal(harness.elements.get("capture-discard").focused, true);
+  assert.doesNotMatch(JSON.stringify(harness.messages), /password|secret/i);
+});
+
+test("后台暂存广播到达时设置页自动刷新并显示确认卡", async () => {
+  const capture = {
+    id: "capture-staged",
+    maskedUsername: "20***18",
+    suffix: "@telecom",
+    sourceOrigin: "http://10.10.10.2",
+    replacesExisting: true,
+    expiresAt: Date.now() + 300000
+  };
+  const harness = createOptionsHarness({ sendMessage(message) {
+    if (message.action === "account:capture:get") return { ok: true, capture };
+    return { ok: true };
+  } });
+  assert.equal(harness.runtimeMessageListeners.length, 1);
+
+  harness.runtimeMessageListeners[0]({ action: "account:capture:staged", captureId: "capture-staged" }, { id: "another-extension" });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(harness.elements.get("capture-confirmation").hidden, true);
+
+  harness.runtimeMessageListeners[0]({ action: "account:capture:staged", captureId: "capture-staged" }, { id: "test-extension-id" });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(harness.elements.get("capture-confirmation").hidden, false);
+  assert.equal(harness.elements.get("capture-source").textContent, "http://10.10.10.2");
+  assert.match(harness.elements.get("capture-account").textContent, /20\*\*\*18.*@telecom/);
   assert.doesNotMatch(JSON.stringify(harness.messages), /password|secret/i);
 });
 

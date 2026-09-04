@@ -271,6 +271,25 @@ async function commitPendingAccountCapture() {
 async function discardPendingAccountCapture() {
   return ensurePendingAccountCaptureController().discard();
 }
+
+/* 门户登录暂存了新账号候选：设置页刷新确认卡并跳转到账号视图，避免用户错过确认入口。 */
+async function handleCaptureStaged() {
+  await loadPendingAccountCapture();
+  jumpToCaptureConfirmation();
+}
+
+function jumpToCaptureConfirmation() {
+  const card = $("capture-confirmation");
+  if (!card || card.hidden) return;
+  const accountNav = typeof document.querySelector === "function"
+    ? document.querySelector('[data-settings-target="accounts-section"]')
+    : null;
+  if (accountNav && typeof accountNav.click === "function") accountNav.click();
+  if (typeof card.scrollIntoView === "function") {
+    card.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
 function runAsync(fn) {
   return (...args) => {
     Promise.resolve(fn(...args)).catch((error) => {
@@ -1568,4 +1587,13 @@ function toast(message) {
 
 function escapeHtml(value) {
   return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+}
+
+if (globalThis.chrome && globalThis.chrome.runtime && globalThis.chrome.runtime.onMessage
+    && typeof globalThis.chrome.runtime.onMessage.addListener === "function") {
+  globalThis.chrome.runtime.onMessage.addListener((message, sender) => {
+    if (!message || message.action !== "account:capture:staged") return;
+    if (!sender || sender.id !== globalThis.chrome.runtime.id) return;
+    runAsync(handleCaptureStaged)();
+  });
 }

@@ -148,6 +148,8 @@ async function stageAccountCapture(input, sender) {
     }
     return capture;
   });
+  // 已打开的设置页立即刷新并跳转到账号确认卡；未打开时由 openOptionsPage 落地展示。
+  broadcastCaptureStaged(mutation.value.id);
   if (shouldOpenOptions) await chrome.runtime.openOptionsPage();
   return {
     ok: true,
@@ -155,6 +157,16 @@ async function stageAccountCapture(input, sender) {
     captureId: mutation.value.id,
     expiresAt: mutation.value.expiresAt
   };
+}
+
+function broadcastCaptureStaged(captureId) {
+  try {
+    const runtime = globalThis.chrome && globalThis.chrome.runtime;
+    if (!runtime || typeof runtime.sendMessage !== "function") return;
+    runtime.sendMessage({ action: "account:capture:staged", captureId }, () => {
+      void runtime.lastError;
+    });
+  } catch (error) {}
 }
 
 async function getPendingAccountCapture() {
