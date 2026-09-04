@@ -144,6 +144,10 @@ function loadBackground(options = {}) {
           },
           set: async (patch) => {
             Object.assign(sessionStore, structuredClone(patch));
+          },
+          remove: async (keys) => {
+            const names = Array.isArray(keys) ? keys : [keys];
+            for (const key of names) delete sessionStore[key];
           }
         }
       },
@@ -725,6 +729,98 @@ test("网页内容脚本不能执行设置页专属的破坏性操作", async ()
       /无权执行此操作/
     );
   }
+});
+
+test("网页内容脚本不能直接保存或覆盖持久账号", async () => {
+  const original = account({ password: "trusted-secret" });
+  const localStore = { drcomAssistantState: { schemaVersion: 12, selectedAccountId: original.id, accounts: [original] } };
+  const background = loadBackground({ localStore });
+  await assert.rejects(background.handleMessage({
+    action: "account:save", account: account({ id: "", password: "attacker-secret" })
+  }, portalSender()), /无权执行此操作/);
+  assert.equal(localStore.drcomAssistantState.accounts[0].password, "trusted-secret");
+  assert.equal(localStore.drcomAssistantState.selectedAccountId, original.id);
+});
+
+test("门户捕获只暂存五分钟且不覆盖持久账号或当前选择", async () => {
+  const original = account({ password: "trusted-secret" });
+  const localStore = { drcomAssistantState: { schemaVersion: 12, selectedAccountId: original.id, accounts: [original] } };
+  const sessionStore = {};
+  const background = loadBackground({ localStore, sessionStore });
+  const before = Date.now();
+  const result = JSON.parse(JSON.stringify(await background.handleMessage({
+    action: "account:capture:stage", account: account({ id: "", password: "captured-secret" }), source: "script"
+  }, portalSender())));
+  assert.equal(result.ok, true);
+  assert.equal(result.staged, true);
+  assert.ok(result.expiresAt >= before + (5 * 60 * 1000) - 1000);
+  assert.doesNotMatch(JSON.stringify(result), /captured-secret/);
+  assert.equal(localStore.drcomAssistantState.accounts[0].password, "trusted-secret");
+  assert.equal(localStore.drcomAssistantState.selectedAccountId, original.id);
+  assert.match(JSON.stringify(sessionStore), /captured-secret/);
+  assert.equal(background.__openedOptions.length, 1);
+  const pending = JSON.parse(JSON.stringify(await background.handleMessage({ action: "account:capture:get" }, {
+    id: "test-extension-id", url: "chrome-extension://test/options.html"
+  })));
+  assert.equal(pending.capture.maskedUsername, "20***18");
+  assert.equal(pending.capture.sourceOrigin, "http://10.10.10.2");
+  assert.equal(pending.capture.replacesExisting, true);
+  assert.doesNotMatch(JSON.stringify(pending), /captured-secret/);
+});
+
+test("捕获确认只能由扩展页提交，丢弃或过期均不会保存", async () => {
+  const localStore = {};
+  const sessionStore = {};
+  const background = loadBackground({ localStore, sessionStore });
+  const staged = await background.handleMessage({
+    action: "account:capture:stage", account: account({ id: "", password: "candidate-secret" }), source: "form"
+  }, portalSender());
+  await assert.rejects(
+    background.handleMessage({ action: "account:capture:commit", captureId: staged.captureId }, portalSender()),
+    /无权执行此操作/
+  );
+  assert.deepEqual(localStore.drcomAssistantState.accounts, []);
+  assert.equal(localStore.drcomAssistantState.selectedAccountId, "");
+  const extensionSender = { id: "test-extension-id", url: "chrome-extension://test/options.html" };
+  const discarded = await background.handleMessage({ action: "account:capture:discard", captureId: staged.captureId }, extensionSender);
+  assert.equal(discarded.ok, true);
+  assert.equal((await background.handleMessage({ action: "account:capture:get" }, extensionSender)).capture, null);
+  assert.deepEqual(localStore.drcomAssistantState.accounts, []);
+  sessionStore.drcomAssistantSession = {
+    guards: {}, connection: {},
+    pendingAccountCapture: {
+      id: "expired-capture", account: account({ password: "expired-secret" }),
+      sourceOrigin: "http://10.10.10.2", createdAt: Date.now() - 400000, expiresAt: Date.now() - 1000
+    }
+  };
+  const expired = await background.handleMessage({ action: "account:capture:get" }, extensionSender);
+  assert.equal(expired.capture, null);
+  await assert.rejects(
+    background.handleMessage({ action: "account:capture:commit", captureId: "expired-capture" }, extensionSender),
+    /过期|不存在/
+  );
+  assert.deepEqual(localStore.drcomAssistantState.accounts, []);
+});
+
+test("相同门户候选合并且三十秒内只打开一次设置页，确认后才保存", async () => {
+  const localStore = {};
+  const sessionStore = {};
+  const background = loadBackground({ localStore, sessionStore });
+  const sender = portalSender();
+  const first = await background.handleMessage({
+    action: "account:capture:stage", account: account({ id: "", password: "first-secret" }), source: "script"
+  }, sender);
+  const second = await background.handleMessage({
+    action: "account:capture:stage", account: account({ id: "", password: "second-secret" }), source: "script"
+  }, sender);
+  assert.equal(second.captureId, first.captureId);
+  assert.equal(background.__openedOptions.length, 1);
+  const committed = await background.handleMessage({ action: "account:capture:commit", captureId: second.captureId }, {
+    id: "test-extension-id", url: "chrome-extension://test/options.html"
+  });
+  assert.equal(committed.ok, true);
+  assert.equal(localStore.drcomAssistantState.accounts.length, 1);
+  assert.equal(localStore.drcomAssistantState.accounts[0].password, "second-secret");
 });
 
 test("网页消息只接受自身扩展顶层 frame 与当前门户标签", async () => {

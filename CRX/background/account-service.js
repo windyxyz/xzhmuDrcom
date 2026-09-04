@@ -104,6 +104,96 @@ async function saveAccount(input) {
   return { ok: true, state, account };
 }
 
+function publicAccountCapture(capture) {
+  if (!capture) return null;
+  return {
+    id: capture.id,
+    maskedUsername: accountUtils.mask(capture.account.username),
+    suffix: capture.account.suffix,
+    source: capture.source,
+    sourceOrigin: capture.sourceOrigin,
+    createdAt: capture.createdAt,
+    expiresAt: capture.expiresAt,
+    replacesExisting: capture.replacesExisting === true
+  };
+}
+
+async function stageAccountCapture(input, sender) {
+  const account = sanitizeAccount(input && input.account);
+  if (!account.username || !account.password) throw new Error("账号和密码不能为空");
+  const now = Date.now();
+  const state = await getState();
+  const naturalKey = accountUtils.naturalKey(account);
+  const replacesExisting = state.accounts.some((item) => accountUtils.naturalKey(item) === naturalKey);
+  const sourceOrigin = new URL(String(sender && sender.url || "")).origin;
+  let shouldOpenOptions = false;
+  const mutation = await mutateSession((session) => {
+    const previous = session.pendingAccountCapture;
+    const sameCandidate = previous
+      && previous.sourceOrigin === sourceOrigin
+      && accountUtils.naturalKey(previous.account) === naturalKey;
+    const capture = {
+      id: sameCandidate ? previous.id : createId(),
+      account,
+      source: input && input.source,
+      sourceOrigin,
+      createdAt: sameCandidate ? previous.createdAt : now,
+      expiresAt: now + ACCOUNT_CAPTURE_TTL_MS,
+      replacesExisting
+    };
+    session.pendingAccountCapture = capture;
+    if (now - session.captureOptionsOpenedAt >= ACCOUNT_CAPTURE_OPTIONS_COOLDOWN_MS) {
+      session.captureOptionsOpenedAt = now;
+      shouldOpenOptions = true;
+    }
+    return capture;
+  });
+  if (shouldOpenOptions) await chrome.runtime.openOptionsPage();
+  return {
+    ok: true,
+    staged: true,
+    captureId: mutation.value.id,
+    expiresAt: mutation.value.expiresAt
+  };
+}
+
+async function getPendingAccountCapture() {
+  const session = await getSessionState();
+  const capture = session.pendingAccountCapture;
+  if (!capture) return { ok: true, capture: null };
+  if (capture.expiresAt <= Date.now()) {
+    await mutateSession((draft) => { draft.pendingAccountCapture = null; });
+    return { ok: true, capture: null };
+  }
+  const state = await getState();
+  capture.replacesExisting = state.accounts.some((item) => (
+    accountUtils.naturalKey(item) === accountUtils.naturalKey(capture.account)
+  ));
+  return { ok: true, capture: publicAccountCapture(capture) };
+}
+
+async function discardPendingAccountCapture(captureId) {
+  await mutateSession((session) => {
+    if (!captureId || (session.pendingAccountCapture && session.pendingAccountCapture.id === captureId)) {
+      session.pendingAccountCapture = null;
+    }
+  });
+  return { ok: true };
+}
+
+async function commitPendingAccountCapture(captureId) {
+  const session = await getSessionState();
+  const capture = session.pendingAccountCapture;
+  if (!capture || capture.id !== captureId) throw new Error("捕获候选不存在");
+  if (capture.expiresAt <= Date.now()) {
+    await discardPendingAccountCapture(capture.id);
+    throw new Error("捕获候选已过期");
+  }
+  const result = await saveAccount(capture.account);
+  await discardPendingAccountCapture(capture.id);
+  return result;
+}
+
 async function deleteAccount(accountId) {
   const { state } = await mutateState((draft) => {
     draft.accounts = draft.accounts.filter((account) => account.id !== accountId);

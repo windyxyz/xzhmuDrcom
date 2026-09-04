@@ -5,6 +5,7 @@
   const characters = globalThis.DrcomCharacters;
   let pendingFallbackCapture = null;
   let lastSavedCaptureKey = "";
+  let trustedCaptureUntil = 0;
   let activePortalConfig = null;
   let portalReadinessObserver = null;
   let recognitionQueued = false;
@@ -262,6 +263,7 @@
     }
     root.querySelector("#drcom-login-form")?.addEventListener("submit", (event) => {
       event.preventDefault();
+      if (!event.isTrusted) return;
       void loginFromPortal(root);
     });
     root.querySelector("#drcom-reset")?.addEventListener("click", (event) => {
@@ -338,7 +340,7 @@
     try {
       let result;
       if (remember) {
-        const saved = await sendMessage({ action: "account:save", account });
+        const saved = await sendMessage({ action: "account:save:interactive", account });
         result = await sendMessage({ action: "drcom:login", accountId: saved.accountId });
       } else {
         result = await sendMessage({ action: "drcom:login", account });
@@ -446,6 +448,8 @@
     observer.observe(document.documentElement, { childList: true, subtree: true });
 
     document.addEventListener("submit", (event) => {
+      if (!event.isTrusted) return;
+      trustedCaptureUntil = Date.now() + 5000;
       markPortalTabBriefly();
       const form = event.target;
       if (!form || form.id === "drcom-login-form") return;
@@ -465,10 +469,14 @@
 
     ["pointerdown", "mousedown", "touchstart", "click"].forEach((type) => {
       document.addEventListener(type, (event) => {
+        if (!event.isTrusted) return;
         const target = event.target;
         if (!target || !target.closest || target.closest("#drcom-modern-root")) return;
         const button = target.closest('input[type="submit"], input[name="0MKKey"], #login, #loginLink, button[type="submit"], button[name*="login" i], button[id*="login" i], button[class*="login" i]');
-        if (button) markPortalTabBriefly();
+        if (button) {
+          trustedCaptureUntil = Date.now() + 5000;
+          markPortalTabBriefly();
+        }
       }, true);
     });
   }
@@ -483,7 +491,7 @@
 
   function captureFromData(userAccount, userPassword, extra = {}) {
     if (!userAccount || !userPassword) return;
-    markPortalTabBriefly();
+    if (Date.now() > trustedCaptureUntil) return;
     const source = extra.source || "script";
     if (source === "script" && pendingFallbackCapture) {
       clearTimeout(pendingFallbackCapture);
@@ -500,7 +508,8 @@
     }, 3000);
 
     safeSend({
-      action: "account:save",
+      action: "account:capture:stage",
+      source,
       account: ui.buildAccount({
         username: parsed.username,
         suffix: parsed.suffix,

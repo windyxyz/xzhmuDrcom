@@ -28,6 +28,7 @@ async function restrictLocalStorageAccess() {
 async function handleMessage(message, sender) {
   const action = message && message.action;
   const fromWebPage = isWebPageSender(sender);
+  const fromExtensionPage = isExtensionPageSender(sender);
 
   if (fromWebPage) {
     if (PORTAL_DIAGNOSTIC_WEB_ACTIONS.has(action)) await validateDefaultPortalDiagnosticsSender(sender);
@@ -38,6 +39,11 @@ async function handleMessage(message, sender) {
       }
       throw new Error("网页内容脚本无权执行此操作");
     }
+  }
+
+  if (["account:save", "account:capture:get", "account:capture:commit", "account:capture:discard"].includes(action)
+      && !fromExtensionPage) {
+    throw new Error("此操作仅允许扩展自有页面执行");
   }
 
   switch (action) {
@@ -109,15 +115,25 @@ async function handleMessage(message, sender) {
 
     case "account:save": {
       const result = await saveAccount(message.account || {});
-      if (message.openOptions) {
-        // 抓到真实登录请求后准备打开配置页，此时解除该网关标签页的短时间防跳转。
-        await clearSenderTab(sender);
-        setTimeout(() => {
-          chrome.tabs.create({ url: chrome.runtime.getURL("options.html") });
-        }, 2000);
-      }
-      return fromWebPage ? { ok: true, accountId: result.account.id } : result;
+      return result;
     }
+
+    case "account:save:interactive": {
+      const result = await saveAccount(message.account || {});
+      return { ok: true, accountId: result.account.id };
+    }
+
+    case "account:capture:stage":
+      return stageAccountCapture({ account: message.account || {}, source: message.source || "unknown" }, sender);
+
+    case "account:capture:get":
+      return getPendingAccountCapture();
+
+    case "account:capture:commit":
+      return commitPendingAccountCapture(message.captureId || "");
+
+    case "account:capture:discard":
+      return discardPendingAccountCapture(message.captureId || "");
 
     case "account:delete":
       return deleteAccount(message.accountId || "");
@@ -167,4 +183,11 @@ async function handleMessage(message, sender) {
     default:
       throw new Error(`未知操作：${action || "空"}`);
   }
+}
+
+function isExtensionPageSender(sender) {
+  if (!sender || sender.id !== chrome.runtime.id || typeof sender.url !== "string") return false;
+  const extensionRoot = chrome.runtime.getURL("");
+  return sender.url.startsWith(extensionRoot)
+    && /\/(?:options|popup)\.html(?:$|[?#])/.test(sender.url);
 }

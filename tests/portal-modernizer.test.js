@@ -118,6 +118,7 @@ function createHarness(options = {}) {
   const deferredActions = new Set(options.deferredActions || []);
   const pendingCallbacks = new Map();
   const microtaskErrors = [];
+  const documentListeners = new Map();
   const scheduleMicrotask = queueMicrotask;
   let pageState = options.pageState || (options.online ? "online" : "login");
   let shouldTakeOverCalls = 0;
@@ -142,7 +143,11 @@ function createHarness(options = {}) {
         notifyMutation([{ addedNodes: [element], removedNodes: [] }]);
       }
     },
-    addEventListener() {},
+    addEventListener(type, listener) {
+      const listeners = documentListeners.get(type) || [];
+      listeners.push(listener);
+      documentListeners.set(type, listeners);
+    },
     createElement(tagName) {
       return new FakeElement(document, tagName);
     },
@@ -188,7 +193,8 @@ function createHarness(options = {}) {
       ok: true,
       appearance: { theme: "light", accent: "#0f766e", background: "fresh", backgroundImage: "" }
     },
-    "account:save": { ok: true, accountId: "saved-account" },
+    "account:save:interactive": { ok: true, accountId: "saved-account" },
+    "account:capture:stage": { ok: true, staged: true, expiresAt: Date.now() + 300000 },
     "portal:status:get": {
       state: "online",
       phase: "online",
@@ -292,6 +298,9 @@ function createHarness(options = {}) {
     triggerMutation(records) {
       notifyMutation(records || [{ addedNodes: [], removedNodes: [] }]);
     },
+    async emitDocument(type, event = {}) {
+      for (const listener of documentListeners.get(type) || []) await listener(event);
+    },
     resolveDeferred(action, response = responses[action] || { ok: true }) {
       deferredActions.delete(action);
       const callbacks = pendingCallbacks.get(action) || [];
@@ -335,7 +344,7 @@ test("现代登录界面挂载后可以立即恢复原始页面", async () => {
   assert.equal(harness.document.getElementById("drcom-modern-root"), null);
 });
 
-test("现代登录表单保存账号后发起认证并切换到在线状态", async () => {
+test("现代登录表单只在可信提交时交互保存账号并发起认证", async () => {
   const harness = createHarness();
   await loadModernizer(harness);
 
@@ -344,14 +353,28 @@ test("现代登录表单保存账号后发起认证并切换到在线状态", as
   harness.document.getElementById("drcom-password").value = "secret";
   harness.document.getElementById("drcom-remember").checked = true;
   const form = harness.document.getElementById("drcom-login-form");
-  await form.emit("submit", { preventDefault() {} });
+  await form.emit("submit", { isTrusted: true, preventDefault() {} });
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.deepEqual(
     harness.messages.map((message) => message.action),
-    ["portal:config:get", "portal:appearance:get", "account:save", "drcom:login", "portal:status:get"]
+    ["portal:config:get", "portal:appearance:get", "account:save:interactive", "drcom:login", "portal:status:get"]
   );
   assert.match(harness.document.getElementById("drcom-modern-root").innerHTML, /已经连接校园网/);
+});
+
+test("现代登录表单拒绝合成提交事件", async () => {
+  const harness = createHarness();
+  await loadModernizer(harness);
+  harness.document.getElementById("drcom-username").value = "202513010318";
+  harness.document.getElementById("drcom-password").value = "secret";
+  await harness.document.getElementById("drcom-login-form").emit("submit", {
+    isTrusted: false,
+    preventDefault() {}
+  });
+  await harness.flush();
+  assert.equal(harness.messages.some((message) => message.action === "account:save:interactive"), false);
+  assert.equal(harness.messages.some((message) => message.action === "drcom:login"), false);
 });
 
 test("在线页面读取脱敏会话并支持手动刷新详情", async () => {
@@ -513,7 +536,7 @@ test("用户恢复原始页后延迟登录成功也不会再次接管", async ()
 
   harness.document.getElementById("drcom-username").value = "202513010318";
   harness.document.getElementById("drcom-password").value = "masked";
-  await harness.document.getElementById("drcom-login-form").emit("submit", { preventDefault() {} });
+  await harness.document.getElementById("drcom-login-form").emit("submit", { isTrusted: true, preventDefault() {} });
   await harness.flush();
   await harness.document.getElementById("drcom-restore-original").emit("click");
   harness.resolveDeferred("drcom:login");
@@ -558,6 +581,10 @@ test("就绪观察器合并重复变更，并在接管后保留原始请求捕�
   assert.ok(harness.document.getElementById("drcom-modern-root"));
   assert.equal(harness.connectedObserverCount(), 1);
 
+  await harness.emitDocument("click", {
+    isTrusted: true,
+    target: { closest(selector) { return selector === "#drcom-modern-root" ? null : this; } }
+  });
   harness.triggerMutation([{
     addedNodes: [{
       tagName: "SCRIPT",
@@ -566,7 +593,24 @@ test("就绪观察器合并重复变更，并在接管后保留原始请求捕�
   }]);
   await harness.flush();
 
-  assert.ok(harness.messages.some((message) => message.action === "account:save"));
+  assert.ok(harness.messages.some((message) => message.action === "account:capture:stage"));
+});
+
+test("页面加载脚本和合成点击不能触发原门户账号捕获", async () => {
+  const harness = createHarness({ pageState: "pending" });
+  await loadModernizer(harness);
+  const mutation = [{
+    addedNodes: [{
+      tagName: "SCRIPT",
+      src: "http://10.10.10.2/?a=login&user_account=sample%40telecom&user_password=poisoned"
+    }]
+  }];
+  harness.triggerMutation(mutation);
+  await harness.emitDocument("click", { isTrusted: false, target: { closest() { return this; } } });
+  harness.triggerMutation(mutation);
+  await harness.flush();
+  assert.equal(harness.messages.some((message) => message.action === "account:capture:stage"), false);
+  assert.equal(harness.messages.some((message) => message.action === "account:save"), false);
 });
 
 test("禁用现代门户时只保留原始登录捕获观察器", async () => {

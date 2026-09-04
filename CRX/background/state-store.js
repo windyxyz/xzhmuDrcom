@@ -11,6 +11,8 @@ const RECENT_REQUEST_LIMIT = 10;
 const MAX_STATE_BYTES = 8 * 1024 * 1024;
 const RETRY_BASE_MS = 30 * 1000;
 const RETRY_MAX_MS = 5 * 60 * 1000;
+const ACCOUNT_CAPTURE_TTL_MS = 5 * 60 * 1000;
+const ACCOUNT_CAPTURE_OPTIONS_COOLDOWN_MS = 30 * 1000;
 const CUSTOM_PORTAL_SCRIPT_ID = "drcom-custom-portal";
 const DEPRECATED_UI_FIELDS = ["hideOriginalPortal", "subtitle", "density"];
 
@@ -76,7 +78,8 @@ const WEB_PAGE_ACTIONS = new Set([
   "portal:config:get",
   "portal:appearance:get",
   "portal:status:get",
-  "account:save",
+  "account:capture:stage",
+  "account:save:interactive",
   "account:network:update",
   "drcom:login",
   "drcom:logout",
@@ -346,7 +349,26 @@ async function getSessionState() {
       ...DEFAULT_CONNECTION_STATE,
       ...(value && value.connection && typeof value.connection === "object" ? value.connection : {})
     },
-    activeIdentity: sanitizeActiveIdentity(value && value.activeIdentity)
+    activeIdentity: sanitizeActiveIdentity(value && value.activeIdentity),
+    pendingAccountCapture: sanitizePendingAccountCapture(value && value.pendingAccountCapture),
+    captureOptionsOpenedAt: Math.max(0, Number(value && value.captureOptionsOpenedAt) || 0)
+  };
+}
+
+function sanitizePendingAccountCapture(input) {
+  if (!input || typeof input !== "object") return null;
+  const account = sanitizeAccount(input.account);
+  if (!account.username || !account.password) return null;
+  const sourceOrigin = stringValue(input.sourceOrigin).trim();
+  if (!/^https?:\/\//i.test(sourceOrigin)) return null;
+  return {
+    id: stringValue(input.id) || createId(),
+    account,
+    source: ["script", "form"].includes(input.source) ? input.source : "unknown",
+    sourceOrigin,
+    createdAt: Math.max(0, Number(input.createdAt) || Date.now()),
+    expiresAt: Math.max(0, Number(input.expiresAt) || 0),
+    replacesExisting: input.replacesExisting === true
   };
 }
 

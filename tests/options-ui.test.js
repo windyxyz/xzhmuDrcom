@@ -17,6 +17,12 @@ function createOptionsHarness(options = {}) {
   const messages = [];
   const confirmations = [];
   const elements = new Map(Object.entries({
+    "capture-confirmation": { hidden: true },
+    "capture-source": { textContent: "" },
+    "capture-account": { textContent: "" },
+    "capture-impact": { textContent: "" },
+    "capture-commit": { disabled: false },
+    "capture-discard": { disabled: false, focused: false, focus() { this.focused = true; } },
     "portal-diagnostics-enabled": { checked: false, disabled: false },
     "portal-diagnostics-status": { textContent: "" },
     "portal-diagnostics-storage": { textContent: "" },
@@ -96,6 +102,53 @@ test("门户诊断加载会显示精确开关、占用和会话状态", async ()
   assert.equal(harness.elements.get("portal-diagnostics-storage").textContent, "1.5 KB / 1 MiB");
   assert.equal(harness.elements.get("portal-diagnostics-sessions").textContent, "2 / 10");
   assert.equal(harness.elements.get("portal-diagnostics-dropped").textContent, "3 条");
+});
+
+test("设置页显示脱敏捕获确认卡且默认焦点落在丢弃", async () => {
+  const capture = {
+    id: "capture-1",
+    maskedUsername: "20***18",
+    suffix: "@telecom",
+    sourceOrigin: "http://10.10.10.2",
+    replacesExisting: true,
+    expiresAt: Date.now() + 300000
+  };
+  const harness = createOptionsHarness({ sendMessage(message) {
+    if (message.action === "account:capture:get") return { ok: true, capture };
+    return { ok: true };
+  } });
+
+  await harness.context.loadPendingAccountCapture();
+
+  assert.equal(harness.elements.get("capture-confirmation").hidden, false);
+  assert.equal(harness.elements.get("capture-source").textContent, "http://10.10.10.2");
+  assert.match(harness.elements.get("capture-account").textContent, /20\*\*\*18.*@telecom/);
+  assert.match(harness.elements.get("capture-impact").textContent, /覆盖/);
+  assert.equal(harness.elements.get("capture-discard").focused, true);
+  assert.doesNotMatch(JSON.stringify(harness.messages), /password|secret/i);
+});
+
+test("设置页确认或丢弃候选后清除确认卡", async () => {
+  const actions = [];
+  const capture = {
+    id: "capture-1", maskedUsername: "20***18", suffix: "", sourceOrigin: "http://10.10.10.2",
+    replacesExisting: false, expiresAt: Date.now() + 300000
+  };
+  const harness = createOptionsHarness({ sendMessage(message) {
+    actions.push(message.action);
+    if (message.action === "account:capture:get") return { ok: true, capture };
+    if (message.action === "account:capture:commit") return { ok: true, state: { accounts: [], config: { ui: {} } } };
+    return { ok: true };
+  } });
+  await harness.context.loadPendingAccountCapture();
+  await harness.context.commitPendingAccountCapture();
+  assert.equal(harness.elements.get("capture-confirmation").hidden, true);
+  assert.ok(actions.includes("account:capture:commit"));
+
+  await harness.context.loadPendingAccountCapture();
+  await harness.context.discardPendingAccountCapture();
+  assert.equal(harness.elements.get("capture-confirmation").hidden, true);
+  assert.ok(actions.includes("account:capture:discard"));
 });
 
 test("门户诊断暂停和淘汰状态会明确显示", async () => {

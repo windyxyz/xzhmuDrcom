@@ -17,6 +17,7 @@ let editingAccountId = "";
 let settingsFormDirty = false;
 let accountFormDirty = false;
 let settingsRefreshController = null;
+let pendingAccountCaptureId = "";
 
 document.addEventListener("DOMContentLoaded", init);
 
@@ -26,6 +27,7 @@ async function init() {
   bindEvents();
   try {
     await loadState();
+    await loadPendingAccountCapture();
     await loadPortalDiagnostics();
     settingsRefreshController.start(state.config.ui.autoRefreshSettings !== false);
   } catch (error) {
@@ -108,6 +110,8 @@ function bindEvents() {
     $(id).addEventListener("change", syncIntervalControls);
   });
   $("account-list").addEventListener("click", runAsync(handleAccountListClick));
+  $("capture-commit")?.addEventListener("click", runAsync(commitPendingAccountCapture));
+  $("capture-discard")?.addEventListener("click", runAsync(discardPendingAccountCapture));
   $("appearance-theme").addEventListener("change", runAsync(async () => {
     applyCurrentAppearance();
     await persistAppearance();
@@ -226,6 +230,53 @@ function bindEvents() {
       toast("背景焦点已应用");
     }));
   });
+}
+
+async function loadPendingAccountCapture() {
+  const card = $("capture-confirmation");
+  if (!card) return;
+  const response = await sendMessage({ action: "account:capture:get" });
+  const capture = response && response.capture;
+  if (!capture || Number(capture.expiresAt) <= Date.now()) {
+    pendingAccountCaptureId = "";
+    card.hidden = true;
+    return;
+  }
+  pendingAccountCaptureId = String(capture.id || "");
+  $("capture-source").textContent = String(capture.sourceOrigin || "未知来源");
+  $("capture-account").textContent = `${String(capture.maskedUsername || "****")}${String(capture.suffix || "")}`;
+  $("capture-impact").textContent = capture.replacesExisting
+    ? "确认后会覆盖同账号已有凭据。"
+    : "确认后会新增一个本地账号。";
+  card.hidden = false;
+  $("capture-discard")?.focus();
+}
+
+async function commitPendingAccountCapture() {
+  if (!pendingAccountCaptureId) return;
+  const response = await sendMessage({
+    action: "account:capture:commit",
+    captureId: pendingAccountCaptureId
+  });
+  pendingAccountCaptureId = "";
+  $("capture-confirmation").hidden = true;
+  if (response && response.state && $("account-list")) {
+    state = response.state;
+    renderAccounts();
+  }
+  toast("门户账号已保存");
+}
+
+async function discardPendingAccountCapture() {
+  if (pendingAccountCaptureId) {
+    await sendMessage({
+      action: "account:capture:discard",
+      captureId: pendingAccountCaptureId
+    });
+  }
+  pendingAccountCaptureId = "";
+  $("capture-confirmation").hidden = true;
+  toast("已丢弃门户账号候选");
 }
 
 function runAsync(fn) {

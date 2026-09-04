@@ -45,6 +45,27 @@
       </div>
     </section>
 
+    <section id="capture-confirmation" class="settings-section" hidden aria-labelledby="capture-confirmation-title">
+      <header class="section-heading with-icon">
+        <span class="section-icon win-glyph" aria-hidden="true">&#xE72E;</span>
+        <div>
+          <h2 id="capture-confirmation-title">确认保存门户账号</h2>
+          <p>检测到一次由门户登录产生的账号候选。只有确认后才会写入本地账号。</p>
+        </div>
+      </header>
+      <div class="settings-list">
+        <div class="settings-row"><span class="settings-row-text"><strong>来源</strong><small id="capture-source"></small></span></div>
+        <div class="settings-row"><span class="settings-row-text"><strong>账号</strong><small id="capture-account"></small></span></div>
+        <div class="settings-row"><span class="settings-row-text"><strong>影响</strong><small id="capture-impact"></small></span></div>
+      </div>
+      <div class="editor-actions">
+        <div class="button-group">
+          <button id="capture-discard" class="secondary" type="button">丢弃</button>
+          <button id="capture-commit" class="primary" type="button">确认保存</button>
+        </div>
+      </div>
+    </section>
+
     <section id="connection-overview" class="settings-section overview-section" data-settings-panel aria-labelledby="overview-title">
       <header class="section-heading with-icon">
           <span class="section-icon win-glyph" aria-hidden="true">&#xE701;</span>
@@ -105,7 +126,7 @@
           </label>
           <label>
             <span>密码</span>
-            <input id="account-password" type="password" autocomplete="current-password">
+            <input id="account-password" type="password" autocomplete="off">
           </label>
         </div>
 
