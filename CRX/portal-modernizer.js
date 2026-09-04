@@ -2,10 +2,8 @@
 
 (() => {
   const ui = globalThis.DrcomPortalUI;
+  const capture = globalThis.DrcomPortalCapture;
   const characters = globalThis.DrcomCharacters;
-  let pendingFallbackCapture = null;
-  let lastSavedCaptureKey = "";
-  let trustedCaptureUntil = 0;
   let activePortalConfig = null;
   let portalReadinessObserver = null;
   let recognitionQueued = false;
@@ -22,7 +20,8 @@
   async function boot() {
     try {
       if (!ui) throw new Error("门户界面模块未加载");
-      installOriginalLoginCapture();
+      if (!capture) throw new Error("门户捕获模块未加载");
+      capture.install({ ui, sendMessage: safeSend });
       activePortalConfig = await loadPortalConfig();
       if (activePortalConfig.enabled !== true) return;
       startPortalReadinessObserver();
@@ -427,135 +426,6 @@
     };
   }
 
-  function installOriginalLoginCapture() {
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node.tagName !== "SCRIPT" || !node.src) continue;
-          if (node.src.includes("a=unbind_mac")) {
-            try {
-              const url = new URL(node.src, location.href);
-              const params = url.searchParams;
-              captureLogoutNetwork(params.get("user_account"), {
-                wlanUserIp: params.get("wlan_user_ip"),
-                wlanUserMac: params.get("wlan_user_mac"),
-                wlanUserIpv6: params.get("wlan_user_ipv6"),
-                wlanAcIp: params.get("wlan_ac_ip"),
-                wlanAcName: params.get("wlan_ac_name")
-              });
-            } catch (error) {}
-          } else if (node.src.includes("a=login") || node.src.includes("login_method")) {
-            try {
-              const url = new URL(node.src, location.href);
-              const params = url.searchParams;
-              captureFromData(params.get("user_account"), params.get("user_password"), {
-                source: "script",
-                wlanUserIp: params.get("wlan_user_ip"),
-                wlanUserMac: params.get("wlan_user_mac"),
-                wlanUserIpv6: params.get("wlan_user_ipv6"),
-                wlanAcIp: params.get("wlan_ac_ip"),
-                wlanAcName: params.get("wlan_ac_name")
-              });
-            } catch (error) {}
-          }
-        }
-      }
-    });
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-
-    document.addEventListener("submit", (event) => {
-      if (!event.isTrusted) return;
-      trustedCaptureUntil = Date.now() + 5000;
-      markPortalTabBriefly();
-      const form = event.target;
-      if (!form || form.id === "drcom-login-form") return;
-      try {
-        const data = new FormData(form);
-        const username = data.get("user_account") || data.get("DDDDD") || data.get("username");
-        const password = data.get("user_password") || data.get("upass") || data.get("password") || data.get("0MKKey");
-        if (username && password) {
-          scheduleFallbackCapture(username, password, {
-            source: "form",
-            wlanUserIp: data.get("wlan_user_ip"),
-            wlanUserMac: data.get("wlan_user_mac")
-          });
-        }
-      } catch (error) {}
-    }, true);
-
-    ["pointerdown", "mousedown", "touchstart", "click"].forEach((type) => {
-      document.addEventListener(type, (event) => {
-        if (!event.isTrusted) return;
-        const target = event.target;
-        if (!target || !target.closest || target.closest("#drcom-modern-root")) return;
-        const button = target.closest('input[type="submit"], input[name="0MKKey"], #login, #loginLink, button[type="submit"], button[name*="login" i], button[id*="login" i], button[class*="login" i]');
-        if (button) {
-          trustedCaptureUntil = Date.now() + 5000;
-          markPortalTabBriefly();
-        }
-      }, true);
-    });
-  }
-
-  function scheduleFallbackCapture(userAccount, userPassword, extra = {}) {
-    if (pendingFallbackCapture) clearTimeout(pendingFallbackCapture);
-    pendingFallbackCapture = setTimeout(() => {
-      pendingFallbackCapture = null;
-      captureFromData(userAccount, userPassword, extra);
-    }, 900);
-  }
-
-  function captureFromData(userAccount, userPassword, extra = {}) {
-    if (!userAccount || !userPassword) return;
-    if (Date.now() > trustedCaptureUntil) return;
-    const source = extra.source || "script";
-    if (source === "script" && pendingFallbackCapture) {
-      clearTimeout(pendingFallbackCapture);
-      pendingFallbackCapture = null;
-    }
-
-    const parsed = ui.parseAccount(userAccount);
-    if (!parsed.username) return;
-    const captureKey = `${parsed.username}|${parsed.suffix}|${String(userPassword)}`;
-    if (captureKey === lastSavedCaptureKey) return;
-    lastSavedCaptureKey = captureKey;
-    setTimeout(() => {
-      if (lastSavedCaptureKey === captureKey) lastSavedCaptureKey = "";
-    }, 3000);
-
-    safeSend({
-      action: "account:capture:stage",
-      source,
-      account: ui.buildAccount({
-        username: parsed.username,
-        suffix: parsed.suffix,
-        password: String(userPassword)
-      }, {
-        wlanUserIp: extra.wlanUserIp || findNetworkValue("wlan_user_ip"),
-        wlanUserMac: extra.wlanUserMac || findNetworkValue("wlan_user_mac"),
-        wlanUserIpv6: extra.wlanUserIpv6 || findNetworkValue("wlan_user_ipv6"),
-        wlanAcIp: extra.wlanAcIp || findNetworkValue("wlan_ac_ip"),
-        wlanAcName: extra.wlanAcName || findNetworkValue("wlan_ac_name")
-      })
-    });
-  }
-
-  function captureLogoutNetwork(userAccount, extra = {}) {
-    const parsed = ui.parseAccount(userAccount);
-    if (!parsed.username) return;
-    safeSend({
-      action: "account:network:update",
-      userAccount: parsed.username + parsed.suffix,
-      network: {
-        wlanUserIp: extra.wlanUserIp || findNetworkValue("wlan_user_ip"),
-        wlanUserMac: extra.wlanUserMac || findNetworkValue("wlan_user_mac"),
-        wlanUserIpv6: extra.wlanUserIpv6 || findNetworkValue("wlan_user_ipv6"),
-        wlanAcIp: extra.wlanAcIp || findNetworkValue("wlan_ac_ip"),
-        wlanAcName: extra.wlanAcName || findNetworkValue("wlan_ac_name")
-      }
-    });
-  }
-
   function findOriginalValue(selectors) {
     for (const selector of selectors) {
       const element = document.querySelector(selector);
@@ -578,9 +448,6 @@
     return /注销|下线|已登录|已连接|online|logout/i.test(text) && !passwordInput;
   }
 
-  function markPortalTabBriefly() {
-    safeSend({ action: "redirect:markPortalTab" });
-  }
 
   function sendMessage(message) {
     return new Promise((resolve, reject) => {

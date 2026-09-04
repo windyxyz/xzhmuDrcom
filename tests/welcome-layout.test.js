@@ -118,6 +118,7 @@ function startPortalFixtureServer() {
     ["/CRX/account-utils.js", [join(__dirname, "..", "CRX", "account-utils.js"), "text/javascript; charset=utf-8"]],
     ["/CRX/appearance.js", [join(__dirname, "..", "CRX", "appearance.js"), "text/javascript; charset=utf-8"]],
     ["/CRX/portal-ui.js", [join(__dirname, "..", "CRX", "portal-ui.js"), "text/javascript; charset=utf-8"]],
+    ["/CRX/portal-capture.js", [join(__dirname, "..", "CRX", "portal-capture.js"), "text/javascript; charset=utf-8"]],
     ["/CRX/portal-diagnostics-utils.js", [join(__dirname, "..", "CRX", "portal-diagnostics-utils.js"), "text/javascript; charset=utf-8"]],
     ["/CRX/background/diagnostics-service.js", [join(__dirname, "..", "CRX", "background", "diagnostics-service.js"), "text/javascript; charset=utf-8"]],
     ["/CRX/portal-diagnostics.js", [join(__dirname, "..", "CRX", "portal-diagnostics.js"), "text/javascript; charset=utf-8"]],

@@ -139,18 +139,12 @@ async function requestDailyWallpaper() {
   }
 }
 
-async function clearWallpaperCache() {
-  try {
-    await chrome.storage.local.remove([WALLPAPER_STORAGE_KEY]);
-  } catch (error) {}
-}
 
 if (typeof module === "object" && module.exports) {
   module.exports = {
     WALLPAPER_ORIGINS,
     WALLPAPER_IMAGE_MAX_BYTES,
     bytesToBase64,
-    clearWallpaperCache,
     fetchDailyWallpaper,
     requestDailyWallpaper,
     wallpaperMimeFromSignature,

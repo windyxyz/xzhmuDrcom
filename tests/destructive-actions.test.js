@@ -35,7 +35,10 @@ function loadPage(script, options = {}) {
     },
     setTimeout
   });
-  for (const file of ["account-utils.js", script]) {
+  const files = script === "options.js"
+    ? ["account-utils.js", "options-appearance-images.js", "options-refresh-controller.js", "options-account-capture-controller.js", script]
+    : ["account-utils.js", script];
+  for (const file of files) {
     new vm.Script(readFileSync(join(__dirname, "..", "CRX", file), "utf8"), { filename: file }).runInContext(context);
   }
   return { confirmations, context, messages };

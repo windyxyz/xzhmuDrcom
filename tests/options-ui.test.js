@@ -7,7 +7,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 function loadOptions(context) {
-  for (const file of ["account-utils.js", "options.js"]) {
+  for (const file of ["account-utils.js", "options-appearance-images.js", "options-refresh-controller.js", "options-account-capture-controller.js", "options.js"]) {
     const source = readFileSync(join(__dirname, "..", "CRX", file), "utf8");
     new vm.Script(source, { filename: file }).runInContext(context);
   }

@@ -325,9 +325,10 @@ function createHarness(options = {}) {
 }
 
 async function loadModernizer(harness) {
+  const captureSource = readFileSync(join(__dirname, "..", "CRX", "portal-capture.js"), "utf8");
+  new vm.Script(captureSource, { filename: "portal-capture.js" }).runInContext(harness.context);
   const source = readFileSync(join(__dirname, "..", "CRX", "portal-modernizer.js"), "utf8");
-  new vm.Script(source, { filename: "portal-modernizer.js" }).runInContext(harness.context);
-  await new Promise((resolve) => setImmediate(resolve));
+  new vm.Script(source, { filename: "portal-modernizer.js" }).runInContext(harness.context);  await new Promise((resolve) => setImmediate(resolve));
 }
 
 test("现代登录界面挂载后可以立即恢复原始页面", async () => {

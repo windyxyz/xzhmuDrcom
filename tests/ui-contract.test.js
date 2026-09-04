@@ -210,6 +210,21 @@ test("设置页提供自动同步、立即同步和安全重载控件", () => {
   assert.match(source, /id="settings-refresh-status"[^>]*role="status"[^>]*aria-live="polite"/);
 });
 
+test("设置页刷新控制器作为独立模块先于 options.js 加载", () => {
+  const source = readExtensionFile("options.html");
+  assert.match(readExtensionFile("options-refresh-controller.js"), /DrcomOptionsRefresh/);
+  assert.match(source, /<script src="options-refresh-controller\.js"><\/script>\s*<script src="options-account-capture-controller\.js"><\/script>\s*<script src="options\.js"><\/script>/);
+});
+test("设置页捕获确认控制器作为独立模块先于 options.js 加载", () => {
+  const source = readExtensionFile("options.html");
+  assert.match(readExtensionFile("options-account-capture-controller.js"), /DrcomOptionsAccountCapture/);
+  assert.match(source, /<script src="options-account-capture-controller\.js"><\/script>\s*<script src="options\.js"><\/script>/);
+});
+test("设置页外观图片工具作为独立模块先于 options.js 加载", () => {
+  const source = readExtensionFile("options.html");
+  assert.match(readExtensionFile("options-appearance-images.js"), /DrcomOptionsAppearanceImages/);
+  assert.match(source, /<script src="options-appearance-images\.js"><\/script>\s*<script src="options-refresh-controller\.js"><\/script>/);
+});
 test("门户共享令牌和纯逻辑模块在内容脚本之前加载", () => {
   const manifest = JSON.parse(readExtensionFile("manifest.json"));
   const portalScript = manifest.content_scripts[0];
@@ -220,6 +235,7 @@ test("门户共享令牌和纯逻辑模块在内容脚本之前加载", () => {
     "appearance.js",
     "animated-characters.js",
     "portal-ui.js",
+    "portal-capture.js",
     "confirm-dialog.js",
     "portal-diagnostics-utils.js",
     "portal-diagnostics.js",

@@ -45,6 +45,7 @@
         "appearance.js",
         "animated-characters.js",
         "portal-ui.js",
+        "portal-capture.js",
         "confirm-dialog.js",
         "portal-diagnostics-utils.js",
         "portal-diagnostics.js",

@@ -6,18 +6,24 @@ const suffixLabel = accountUtils.suffixLabel;
 const makeAccountLabel = accountUtils.label;
 const naturalAccountKey = accountUtils.naturalKey;
 
-const BACKGROUND_IMAGE_BUDGET_BYTES = 1_900_000; // Chrome 内联样式单值上限约 2,048,000 字符，图片 Data URL 必须低于该值
-const BACKGROUND_SOURCE_LIMIT_BYTES = 48 * 1024 * 1024;
-const BACKGROUND_TARGET_DIMENSIONS = [2560, 2240, 1920, 1600, 1280, 960];
-const BACKGROUND_WEBP_QUALITIES = [0.92, 0.88, 0.84];
-const SETTINGS_REFRESH_INTERVAL_MS = 15_000;
+const optionsAppearanceImages = globalThis.DrcomOptionsAppearanceImages;
+const optionsRefresh = globalThis.DrcomOptionsRefresh;
+const optionsAccountCapture = globalThis.DrcomOptionsAccountCapture;
+if (!optionsAppearanceImages) throw new Error("外观图片模块未加载");
+if (!optionsRefresh) throw new Error("设置刷新模块未加载");
+if (!optionsAccountCapture) throw new Error("账号捕获确认模块未加载");
+const createSettingsRefreshController = optionsRefresh.createSettingsRefreshController;
+const createPendingAccountCaptureController = optionsAccountCapture.createPendingAccountCaptureController;
+const optimizeBackgroundImage = optionsAppearanceImages.optimizeBackgroundImage;
+const assertBackgroundImageBudget = optionsAppearanceImages.assertBackgroundImageBudget;
+const formatStorageSize = optionsAppearanceImages.formatStorageSize;
 const $ = (id) => document.getElementById(id);
 let state = null;
 let editingAccountId = "";
 let settingsFormDirty = false;
 let accountFormDirty = false;
 let settingsRefreshController = null;
-let pendingAccountCaptureId = "";
+let pendingAccountCaptureController = null;
 
 document.addEventListener("DOMContentLoaded", init);
 
@@ -36,6 +42,14 @@ async function init() {
 }
 
 function bindEvents() {
+  pendingAccountCaptureController = createPendingAccountCaptureController({
+    $,
+    renderAccounts,
+    sendMessage,
+    setState: (nextState) => { state = nextState; },
+    toast
+  });
+
   settingsRefreshController = createSettingsRefreshController({
     loadFull: () => loadState({ includeConnection: false }),
     loadConnection: refreshConnectionState,
@@ -233,53 +247,30 @@ function bindEvents() {
   });
 }
 
-async function loadPendingAccountCapture() {
-  const card = $("capture-confirmation");
-  if (!card) return;
-  const response = await sendMessage({ action: "account:capture:get" });
-  const capture = response && response.capture;
-  if (!capture || Number(capture.expiresAt) <= Date.now()) {
-    pendingAccountCaptureId = "";
-    card.hidden = true;
-    return;
+function ensurePendingAccountCaptureController() {
+  if (!pendingAccountCaptureController) {
+    pendingAccountCaptureController = createPendingAccountCaptureController({
+      $,
+      renderAccounts,
+      sendMessage,
+      setState: (nextState) => { state = nextState; },
+      toast
+    });
   }
-  pendingAccountCaptureId = String(capture.id || "");
-  $("capture-source").textContent = String(capture.sourceOrigin || "未知来源");
-  $("capture-account").textContent = `${String(capture.maskedUsername || "****")}${String(capture.suffix || "")}`;
-  $("capture-impact").textContent = capture.replacesExisting
-    ? "确认后会覆盖同账号已有凭据。"
-    : "确认后会新增一个本地账号。";
-  card.hidden = false;
-  $("capture-discard")?.focus();
+  return pendingAccountCaptureController;
+}
+
+async function loadPendingAccountCapture() {
+  return ensurePendingAccountCaptureController().load();
 }
 
 async function commitPendingAccountCapture() {
-  if (!pendingAccountCaptureId) return;
-  const response = await sendMessage({
-    action: "account:capture:commit",
-    captureId: pendingAccountCaptureId
-  });
-  pendingAccountCaptureId = "";
-  $("capture-confirmation").hidden = true;
-  if (response && response.state && $("account-list")) {
-    state = response.state;
-    renderAccounts();
-  }
-  toast("门户账号已保存");
+  return ensurePendingAccountCaptureController().commit();
 }
 
 async function discardPendingAccountCapture() {
-  if (pendingAccountCaptureId) {
-    await sendMessage({
-      action: "account:capture:discard",
-      captureId: pendingAccountCaptureId
-    });
-  }
-  pendingAccountCaptureId = "";
-  $("capture-confirmation").hidden = true;
-  toast("已丢弃门户账号候选");
+  return ensurePendingAccountCaptureController().discard();
 }
-
 function runAsync(fn) {
   return (...args) => {
     Promise.resolve(fn(...args)).catch((error) => {
@@ -290,126 +281,6 @@ function runAsync(fn) {
 
 function markAccountFormDirty(event) {
   if (event.target?.id !== "account-reveal") accountFormDirty = true;
-}
-
-function createSettingsRefreshController(deps) {
-  let enabled = deps.initialEnabled !== false;
-  let interval = null;
-  let refreshFlight = null;
-
-  const stopInterval = () => {
-    if (interval === null) return;
-    deps.clearIntervalFn(interval);
-    interval = null;
-  };
-
-  const ensureInterval = () => {
-    if (!enabled || !deps.isVisible() || interval !== null) return;
-    interval = deps.setIntervalFn(() => {
-      requestRefresh({ full: false, diagnostics: false }).catch(() => undefined);
-    }, SETTINGS_REFRESH_INTERVAL_MS);
-  };
-
-  const requestRefresh = (options = {}) => {
-    if (refreshFlight) return refreshFlight;
-    const full = options.full !== false;
-    const diagnostics = options.diagnostics !== false;
-    const manual = options.manual === true;
-    const protectedForm = full && deps.hasUnsavedChanges();
-    const task = (async () => {
-      deps.setStatus({ busy: true, protected: protectedForm, enabled });
-      try {
-        const loads = [deps.loadConnection()];
-        if (diagnostics) loads.push(deps.loadDiagnostics());
-        if (full && !protectedForm) loads.push(deps.loadFull());
-        await Promise.all(loads);
-        deps.setStatus({
-          busy: false,
-          protected: protectedForm,
-          enabled,
-          syncedAt: deps.now()
-        });
-        return { ok: true, protected: protectedForm };
-      } catch (error) {
-        deps.setStatus({ busy: false, protected: protectedForm, enabled, error });
-        if (manual) deps.reportManualError(error);
-        return { ok: false, error };
-      }
-    })();
-    refreshFlight = task.finally(() => {
-      refreshFlight = null;
-    });
-    return refreshFlight;
-  };
-
-  const setEnabled = async (nextValue) => {
-    const next = nextValue === true;
-    if (next !== enabled) {
-      await deps.persistEnabled(next);
-      enabled = next;
-    }
-    if (enabled) ensureInterval();
-    else stopInterval();
-    deps.setStatus({ busy: false, enabled });
-    return enabled;
-  };
-
-  const handleStorageChange = (changes, areaName) => {
-    if (!enabled || !changes || typeof changes !== "object") return Promise.resolve(false);
-    if (areaName === "local" && changes.drcomAssistantState) {
-      return requestRefresh({ full: true, diagnostics: true });
-    }
-    if (areaName === "session" && changes.drcomAssistantSession) {
-      return requestRefresh({ full: false, diagnostics: false });
-    }
-    return Promise.resolve(false);
-  };
-
-  const handleVisibilityChange = () => {
-    if (!deps.isVisible()) {
-      stopInterval();
-      return Promise.resolve(false);
-    }
-    if (!enabled) return Promise.resolve(false);
-    ensureInterval();
-    return requestRefresh({ full: true, diagnostics: true });
-  };
-
-  const handleFocus = () => {
-    if (!enabled || !deps.isVisible()) return Promise.resolve(false);
-    ensureInterval();
-    return requestRefresh({ full: true, diagnostics: true });
-  };
-
-  const reload = async () => {
-    if (deps.hasUnsavedChanges() && !(await deps.confirmReload())) return false;
-    deps.reloadPage();
-    return true;
-  };
-
-  const destroy = () => {
-    stopInterval();
-  };
-
-  const start = (initialEnabled = true) => {
-    enabled = initialEnabled !== false;
-    if (enabled) ensureInterval();
-    else stopInterval();
-    deps.setStatus({ busy: false, enabled });
-    return enabled;
-  };
-
-  return {
-    destroy,
-    handleFocus,
-    handleStorageChange,
-    handleVisibilityChange,
-    isEnabled: () => enabled,
-    reload,
-    requestRefresh,
-    setEnabled,
-    start
-  };
 }
 
 async function loadState({ includeConnection = true } = {}) {
@@ -1652,98 +1523,6 @@ async function clearBackgroundImage() {
   applyCurrentAppearance();
   await persistAppearance();
   toast("已恢复简洁背景");
-}
-
-async function optimizeBackgroundImage(file) {
-  const supported = ["image/png", "image/jpeg", "image/webp", "image/avif"];
-  if (!supported.includes(file.type)) throw new Error("请选择 PNG、JPEG、WebP 或 AVIF 图片");
-  if (file.size > BACKGROUND_SOURCE_LIMIT_BYTES) throw new Error("原图不能超过 48 MB");
-
-  if (estimatedDataUrlSize(file.size, file.type) <= BACKGROUND_IMAGE_BUDGET_BYTES) {
-    const original = await readBlobAsDataUrl(file);
-    assertBackgroundImageBudget(original);
-    return original;
-  }
-
-  if (typeof createImageBitmap !== "function") {
-    throw new Error("当前浏览器无法自动压缩图片，请换用尺寸更小的图片");
-  }
-
-  const bitmap = await createImageBitmap(file);
-  try {
-    return await compressBackgroundBitmap(bitmap);
-  } finally {
-    bitmap.close();
-  }
-}
-
-async function compressBackgroundBitmap(bitmap) {
-  const sourceMax = Math.max(bitmap.width, bitmap.height);
-  const dimensions = BACKGROUND_TARGET_DIMENSIONS
-    .filter((dimension) => dimension < sourceMax)
-    .concat(Math.min(sourceMax, BACKGROUND_TARGET_DIMENSIONS.at(-1)))
-    .filter((dimension, index, values) => values.indexOf(dimension) === index);
-  const canvas = document.createElement("canvas");
-
-  for (const targetMax of dimensions) {
-    const ratio = Math.min(1, targetMax / sourceMax);
-    canvas.width = Math.max(1, Math.round(bitmap.width * ratio));
-    canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
-    const context = canvas.getContext("2d", { alpha: false });
-    if (!context) throw new Error("无法处理这张图片");
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-
-    const qualities = targetMax === dimensions.at(-1)
-      ? [...BACKGROUND_WEBP_QUALITIES, 0.8, 0.76, 0.72]
-      : BACKGROUND_WEBP_QUALITIES;
-
-    for (const quality of qualities) {
-      const blob = await encodeCanvas(canvas, quality);
-      if (estimatedDataUrlSize(blob.size, blob.type) > BACKGROUND_IMAGE_BUDGET_BYTES) continue;
-      const dataUrl = await readBlobAsDataUrl(blob);
-      if (dataUrl.length <= BACKGROUND_IMAGE_BUDGET_BYTES) return dataUrl;
-    }
-  }
-
-  throw new Error("图片自动压缩后仍超过 1.9 MB，请换用更简单的背景图");
-}
-
-function encodeCanvas(canvas, quality) {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob);
-      else reject(new Error("无法压缩这张图片"));
-    }, "image/webp", quality);
-  });
-}
-
-function estimatedDataUrlSize(blobBytes, mimeType = "image/webp") {
-  const headerLength = `data:${mimeType || "image/webp"};base64,`.length;
-  return headerLength + Math.ceil(Math.max(0, Number(blobBytes) || 0) / 3) * 4;
-}
-
-function assertBackgroundImageBudget(dataUrl) {
-  const bytes = String(dataUrl || "").length;
-  if (bytes > BACKGROUND_IMAGE_BUDGET_BYTES) {
-    throw new Error("图片处理后仍然过大，请换一张尺寸更小的图片");
-  }
-  return bytes;
-}
-
-function formatStorageSize(bytes) {
-  const value = Math.max(0, Number(bytes) || 0);
-  if (value < 1024) return `${Math.round(value)} B`;
-  if (value < 1024 * 1024) return `${Math.round(value / 102.4) / 10} KB`;
-  return `${Math.round(value / (1024 * 102.4)) / 10} MB`;
-}
-
-function readBlobAsDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener("load", () => resolve(String(reader.result || "")), { once: true });
-    reader.addEventListener("error", () => reject(new Error("读取图片失败")), { once: true });
-    reader.readAsDataURL(blob);
-  });
 }
 
 function maskAccount(account) {

@@ -29,3 +29,7 @@ test("运行时代码和开发数据模型不再定义已废弃字段", () => {
     /\bnote\s*:/
   );
 });
+test("壁纸服务不保留无产品入口的缓存清理导出", () => {
+  const source = readFileSync(join(projectRoot, "CRX", "background", "wallpaper-service.js"), "utf8");
+  assert.doesNotMatch(source, /\bclearWallpaperCache\b/);
+});
