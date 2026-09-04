@@ -11,20 +11,20 @@ const {
   verifyRelease
 } = require("../scripts/verify-release.js");
 
-test("发布标签必须与 Manifest 和 package.json 的 1.0.2 版本一致", () => {
+test("发布标签必须与 Manifest 和 package.json 的 1.0.3 版本一致", () => {
   const projectRoot = join(__dirname, "..");
   const outputDirectory = mkdtempSync(join(tmpdir(), "drcom-release-"));
   try {
-    const result = verifyRelease({ projectRoot, outputDirectory, tag: "v1.0.2" });
-    assert.equal(result.version, "1.0.2");
-    assert.match(readFileSync(result.notesPath, "utf8"), /^## \[1.0.2\]/);
+    const result = verifyRelease({ projectRoot, outputDirectory, tag: "v1.0.3" });
+    assert.equal(result.version, "1.0.3");
+    assert.match(readFileSync(result.notesPath, "utf8"), /^## \[1.0.3\]/);
     assert.throws(
-      () => verifyRelease({ projectRoot, outputDirectory, tag: "v1.0.3" }),
+      () => verifyRelease({ projectRoot, outputDirectory, tag: "v1.0.2" }),
       /标签.*Manifest.*不一致/
     );
     assert.throws(
-      () => verifyRelease({ projectRoot, outputDirectory, tag: "1.0.2" }),
-      /v1\.0\.2/
+      () => verifyRelease({ projectRoot, outputDirectory, tag: "1.0.3" }),
+      /v1\.0\.3/
     );
   } finally {
     rmSync(outputDirectory, { recursive: true, force: true });

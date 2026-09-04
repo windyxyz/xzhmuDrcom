@@ -50,6 +50,7 @@ async function syncPortalContentScript(state) {
       "portal-session.js",
       "appearance.js",
       "portal-ui.js",
+      "portal-capture.js",
       "confirm-dialog.js",
       "portal-modernizer.js"
     ],

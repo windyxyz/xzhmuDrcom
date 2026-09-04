@@ -2,7 +2,7 @@
 
 ## 1. 项目定位
 
-DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩展。当前稳定版本为 1.0.2，源码位于 CRX/，使用原生 HTML、CSS 和 JavaScript，不依赖第三方 npm 包。
+DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩展。当前稳定版本为 1.0.3，源码位于 CRX/，使用原生 HTML、CSS 和 JavaScript，不依赖第三方 npm 包。
 
 项目解决以下问题：
 
@@ -31,7 +31,7 @@ DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩
 | 防跳转 | 登录后短时间最多拦截一次自动离开门户 | portal-service.js |
 | 现代门户 | 覆盖层不删除原 DOM，可以立即恢复学校原页面 | portal-ui.js、portal-modernizer.js |
 | 在线详情 | 读取状态、换算时间/流量/余额并只展示脱敏字段 | portal-session.js、drcom-client.js |
-| 原请求捕获 | 读取原表单和动态脚本中的账号、密码与网络参数 | portal-modernizer.js |
+| 原请求捕获确认 | portal-capture.js 只在可信用户动作后的短窗口暂存账号候选；options 页确认后才写入 | portal-capture.js、options-account-capture-controller.js |
 | 外观 | 系统/浅色/深色、完整取色器、材质预设与遮罩强度、自定义背景压缩与填充、品牌面板配色、页面过渡与窗格位置 | appearance.js、design-tokens.css |
 | 私有门户背景 | 图片只进入 closed Shadow DOM，轻 DOM 不出现 Data URL | portal-modernizer.js |
 | 危险操作确认 | 删除、覆盖导入、恢复设置、清空记录、清除背景均可取消 | confirm-dialog.js |
@@ -66,7 +66,7 @@ CRX/
 ├─ welcome.html / welcome.css / welcome.js
 ├─ popup.html / popup.css / popup.js
 ├─ options.html / options.css / options.js
-├─ portal-ui.js / portal-modernizer.js / portal.css
+├─ portal-ui.js / portal-capture.js / portal-modernizer.js / portal.css
 ├─ portal-diagnostics-utils.js / portal-diagnostics.js
 └─ portal-preview.html / portal-preview.js
 
@@ -85,7 +85,7 @@ docs/product-design.md         产品与界面设计约束
 各后台模块职责：
 
 - **background.js**：按固定顺序调用 importScripts，只注册安装、启动、Alarm、消息和标签更新事件。
-- **background/state-store.js**：schema 12、默认值、迁移、串行写入、容量预算、Session 状态和请求记录。
+- **background/state-store.js**：schema 13、默认值、迁移、串行写入、容量预算、Session 状态和独立请求记录键。
 - **background/portal-context.js**：请求门户首页，按白名单静态解析实时 IP；不执行页面脚本，也不把正文或具体地址写入日志。
 - **background/drcom-client.js**：请求构造、超时、响应解析、错误分类与敏感信息清理。
 - **background/account-service.js**：账号规范化、自然键去重、保存、选择、删除和网络参数更新。
@@ -141,10 +141,10 @@ account-utils.js
   -> confirm-dialog.js
   -> portal-diagnostics-utils.js
   -> portal-diagnostics.js
-  -> portal-modernizer.js
+  -> portal-capture.js / portal-modernizer.js
 ~~~
 
-`portal-ui.js` 在浏览器中依赖前两个共享模块，在 CommonJS 测试中则通过 `require()` 加载；`portal-modernizer.js` 最后执行，负责组合界面、确认对话框、诊断和后台消息。该顺序同时维护在 `manifest.json`、`background/portal-service.js` 的自定义门户注册列表、浏览器 fixture 和打包白名单中，修改任一入口时必须同步更新对应合约测试。
+`portal-ui.js` 在浏览器中依赖前两个共享模块，在 CommonJS 测试中则通过 `require()` 加载；`portal-capture.js` 先安装原页面可信捕获与暂存通道，`portal-modernizer.js` 最后执行，负责组合界面、确认对话框、诊断和后台消息。该顺序同时维护在 `manifest.json`、`background/portal-service.js` 的自定义门户注册列表、浏览器 fixture 和打包白名单中，修改任一入口时必须同步更新对应合约测试。
 
 ## 5. 扩展生命周期
 
@@ -256,7 +256,7 @@ sequenceDiagram
 
   U->>M: 提交账号、后缀、密码和“保存账号”
   opt 保存账号
-    M->>R: account:save(account)
+    M->>R: account:save:interactive(account)
     R-->>M: accountId
   end
   M->>R: drcom:login(accountId 或临时 account)
@@ -287,7 +287,7 @@ sequenceDiagram
 
 #### 7.3.1 页面入口与消息边界
 
-`portal-modernizer.js` 的 `loginFromPortal()` 先用 `portal-ui.js` 规范化用户名、运营商后缀和密码。选择“保存账号”时，页面先发送 `account:save`，再用返回的 `accountId` 发送 `drcom:login`；不保存时则把临时 `account` 直接放入 `drcom:login`，不会写入 `storage.local`。
+`portal-modernizer.js` 的 `loginFromPortal()` 先用 `portal-ui.js` 规范化用户名、运营商后缀和密码。选择“保存账号”时，现代门户只在可信用户提交中发送 `account:save:interactive`，再用返回的 `accountId` 发送 `drcom:login`；不保存时则把临时 `account` 直接放入 `drcom:login`，不会写入 `storage.local`。原学校页面的请求捕获不会静默保存，只会进入 `account:capture:stage` 暂存候选，设置页确认后才提交。
 
 保存账号登录的内部消息形状：
 
@@ -406,7 +406,7 @@ DrCOM 响应固定按以下优先级处理：
 | 原门户能力 | 现代界面行为 | 实现与后台调用 |
 | --- | --- | --- |
 | 四种运营商 | 校园网、联通、电信、移动固定排序 | `portal-ui.js` 生成表单，`account-utils.js` 规范化后缀 |
-| 保存密码 | 勾选后先 `account:save`，再用 `accountId` 登录 | `portal-modernizer.js` → `message-router.js` → `account-service.js` |
+| 保存密码 | 勾选后先 `account:save:interactive`，再用 `accountId` 登录；原页面捕获只暂存并确认 | `portal-modernizer.js` / `portal-capture.js` → `message-router.js` → `account-service.js` |
 | 临时登录 | 不写入 `storage.local`，只在本次消息中携带账号 | `drcom:login` 的临时 `account` 分支 |
 | 重置 | 清空账号和密码，恢复校园网及保存选项 | `portal-modernizer.js` 本地处理，不发后台消息 |
 | 在线状态 | 首次挂载和手动刷新读取脱敏结构化摘要 | `portal:status:get` → `/drcom/chkstatus` |
@@ -554,11 +554,11 @@ options.js
 
 ### 9.1 storage.local
 
-主键为 drcomAssistantState，当前 schemaVersion: 12。
+主状态键为 drcomAssistantState，当前 schemaVersion: 13；请求日志独立保存在 drcomAssistantRecentRequests。
 
 ~~~js
 {
-  schemaVersion: 12,
+  schemaVersion: 13,
   selectedAccountId: "account-id",
   accounts: [{
     id: "account-id",
@@ -575,7 +575,6 @@ options.js
     },
     updatedAt: "ISO-8601"
   }],
-  recentRequests: [],
   config: {
     portalUrl: "http://10.10.10.2/",
     apiUrl: "http://10.10.10.2:801/eportal/",
@@ -622,7 +621,7 @@ options.js
 
 账号、配置和请求记录通过串行写入队列更新，避免并发覆盖。完整状态写入前执行 8 MB 预算检查；背景图片保存上限约 1.9 MB 字符（受 Chrome 内联样式单值约 2,048,000 字符上限约束，超出会被整体拒绝导致背景不显示）。每日壁纸以独立键 `drcomDailyWallpaper` 缓存，不占用状态预算，图片字节上限 1.4 MB。
 
-schema 12 会合并历史重复自然键账号；成功写回后删除旧顶层 username/password；删除历史账号 note 以及 ui.subtitle、ui.density、ui.hideOriginalPortal。规范化前后状态会比较，即使存储已经标记为 schema 12，也会把残留字段幂等写回清理；稳态下通过最近写入序列化缓存跳过重复的整状态比较。写回失败时不会提前删除旧凭据源字段。
+schema 13 会合并历史重复自然键账号；成功写回后删除旧顶层 username/password；删除历史账号 note 以及 ui.subtitle、ui.density、ui.hideOriginalPortal，并把旧主状态中的 recentRequests 迁移到 drcomAssistantRecentRequests。只有独立日志键成功写入后才会删除主状态旧字段；稳态下通过最近写入序列化缓存跳过重复的整状态比较。写回失败时不会提前删除旧凭据源字段或旧日志。
 
 ### 9.2 storage.session
 
@@ -661,7 +660,10 @@ Session 状态只在当前扩展/浏览器 Session 内使用；activeIdentity �
 | portal:config:get | 安全门户配置，不含图片 | 是 | 是 |
 | portal:appearance:get | 完整外观，供私有背景层使用 | 是 | 是 |
 | portal:status:get | 裁剪后的状态、检查时间和脱敏在线摘要 | 否 | 是，仅可信顶层门户 |
-| account:save | 保存或更新账号 | 是，返回完整结果 | 是，只返回 accountId |
+| account:save | 扩展自有页面保存或更新账号 | 是，返回完整结果 | 否 |
+| account:save:interactive | 现代门户真实用户提交保存账号 | 否 | 是，只返回 accountId |
+| account:capture:stage | 原页面捕获候选暂存，不覆盖持久账号 | 否 | 是 |
+| account:capture:get/commit/discard | 设置页读取、确认或丢弃捕获候选 | 是 | 否 |
 | account:delete | 删除账号 | 是 | 否 |
 | account:select | 切换默认账号 | 是 | 否 |
 | account:network:update | 更新匹配账号网络参数 | 是 | 是，只返回摘要 |
@@ -691,7 +693,7 @@ message-router.js 先判定发送方，再执行白名单，最后裁剪门户�
 
 ### 11.3 设置页
 
-分为网络、账号、外观、高级和关于。网络提供连接概览、门户、状态测试、启动登录和保活；账号管理密码和每账号网络参数；外观处理主题、强调色取色器（光谱+明度+hex+预设）、材质预设与遮罩强度、背景（纯色/每日壁纸/自定义图）、填充方式与九宫格焦点、品牌面板配色与图案、页面过渡动画、窗格位置及门户在线信息的 `classic/full/minimal/hidden` 显示模式；高级包含门户/API、协议、抓包 URL、短时保护、请求记录、默认关闭的门户诊断卡和恢复默认。诊断卡展示开关、占用、会话数、JSON 导出与确认后的清空。抓包导入若命中已有自然键，会在覆盖名称、密码和网络参数前确认。全部设置修改后立即自动保存生效，不设全局保存按钮；换网关或启用每日壁纸需要的权限在保存瞬间请求。
+分为网络、账号、外观、高级和关于。网络提供连接概览、门户、状态测试、启动登录和保活；账号管理密码和每账号网络参数；外观处理主题、强调色取色器（光谱+明度+hex+预设）、材质预设与遮罩强度、背景（纯色/每日壁纸/自定义图）、填充方式与九宫格焦点、品牌面板配色与图案、页面过渡动画、窗格位置及门户在线信息的 `classic/full/minimal/hidden` 显示模式；高级包含门户/API、协议、抓包 URL、短时保护、请求记录、默认关闭的门户诊断卡和恢复默认。诊断卡展示开关、占用、会话数、JSON 导出与确认后的清空。抓包导入若命中已有自然键，会在覆盖名称、密码和网络参数前确认；原页面自动捕获的候选默认只暂存并确认，不再静默自动保存。全部设置修改后立即自动保存生效，不设全局保存按钮；换网关或启用每日壁纸需要的权限在保存瞬间请求。
 
 页首提供“自动同步”“立即同步”和“重新加载页面”。`config.ui.autoRefreshSettings` 默认 `true`，保存在 `drcomAssistantState`，不进入门户可见配置。自动同步通过四类信号工作：
 
@@ -760,15 +762,15 @@ npm run package
 
 输出：
 
-- dist/drcom-xuzhou-medical-1.0.2.zip
-- dist/drcom-xuzhou-medical-1.0.2.sha256
+- dist/drcom-xuzhou-medical-1.0.3.zip
+- dist/drcom-xuzhou-medical-1.0.3.sha256
 
 ZIP 根目录直接包含 manifest.json 和 LICENSE。打包器使用显式白名单、固定顺序、1980-01-01 DOS 时间和 STORE 方法。tests/、docs/、portal-preview.*、截图和本地状态不会进入发布包。dist/ 已加入 .gitignore。
 
 ### 14.2 标签校验
 
 ~~~powershell
-npm run verify:release -- v1.0.2
+npm run verify:release -- v1.0.3
 ~~~
 
 脚本要求标签精确等于 v + Manifest 版本，同时检查 package.json 版本，并从 CHANGELOG.md 提取当前版本到 dist/release-notes.md。

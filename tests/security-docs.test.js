@@ -28,3 +28,17 @@ test("安全策略禁止在漏洞报告中附带真实凭据", () => {
   assert.match(security, /密码|凭据/);
   assert.match(security, /私密|非公开/);
 });
+test("安全策略登记保留体验后的延期和接受风险", () => {
+  const security = read("SECURITY.md");
+  for (const term of [
+    "门户内嵌密码框",
+    "HTTP 宿主页面",
+    "宿主脚本可能观察",
+    "closed Shadow DOM",
+    "只阻断持久账号投毒",
+    "明文存在受限 `storage.local`",
+    "HTTP GET 发送凭据"
+  ]) {
+    assert.equal(security.includes(term), true, term);
+  }
+});

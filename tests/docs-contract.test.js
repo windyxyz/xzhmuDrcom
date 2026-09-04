@@ -15,7 +15,7 @@ test("开发指南覆盖最终架构、生命周期、接口、测试、打包�
     "background/portal-context.js",
     "background/drcom-client.js",
     "DrcomAccountUtils",
-    "schemaVersion: 12",
+    "schemaVersion: 13",
     "activeIdentity",
     "portal:appearance:get",
     "closed Shadow DOM",
@@ -23,7 +23,7 @@ test("开发指南覆盖最终架构、生命周期、接口、测试、打包�
     "npm run test:browser",
     "npm run verify:package",
     "npm run package",
-    "drcom-xuzhou-medical-1.0.2.zip",
+    "drcom-xuzhou-medical-1.0.3.zip",
     "SHA-256",
     "设备失陷",
     "删除文件前"
@@ -39,6 +39,7 @@ test("README 只链接仍在维护的正式文档并说明自动化发布命令"
   assert.match(readme, /npm run package/);
   assert.match(readme, /npm run verify:release/);
   assert.match(readme, /background\/state-store\.js/);
+  assert.match(readme, /暂存并确认/);
 });
 
 test("完成整改后删除过期审阅副本和无版本视觉截图，保留测试预览入口", () => {
@@ -47,4 +48,14 @@ test("完成整改后删除过期审阅副本和无版本视觉截图，保留�
   assert.equal(existsSync(join(projectRoot, "artifacts", "ui-review", "options-mobile.png")), false);
   assert.equal(existsSync(join(projectRoot, "CRX", "portal-preview.html")), true);
   assert.equal(existsSync(join(projectRoot, "CRX", "portal-preview.js")), true);
+});
+test("安全整改登记覆盖二十一项发现并区分延期风险", () => {
+  const remediation = read("docs/security-remediation-2026-09.md");
+  const itemIds = [...remediation.matchAll(/\|\s*(F[12]-\d+|N\d+)\s*\|/g)].map((match) => match[1]);
+  assert.equal(new Set(itemIds).size, 21);
+  for (const status of ["已修复", "部分缓解", "接受风险", "延期"]) {
+    assert.match(remediation, new RegExp(status));
+  }
+  assert.match(remediation, /宿主页面.*观察.*密码/);
+  assert.match(remediation, /账号投毒/);
 });

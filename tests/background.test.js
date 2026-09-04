@@ -1639,6 +1639,7 @@ test("保存自定义门户后会为已授权来源注册现代认证内容脚�
       "portal-session.js",
       "appearance.js",
       "portal-ui.js",
+      "portal-capture.js",
       "confirm-dialog.js",
       "portal-modernizer.js"
     ],

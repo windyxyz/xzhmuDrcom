@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "徐医网络tools",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "DrCOM 现代认证页、多账号登录、连接状态恢复、智能重试与脱敏请求记录。",
   "browser_specific_settings": {
     "gecko": {
