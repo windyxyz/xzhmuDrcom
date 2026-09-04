@@ -22,7 +22,7 @@ jobs:
       - name: Verify source and package contract
         run: npm run verify
       - name: Build release assets
-        run: npm run package
+        run: npm run package && npm run package:firefox
       - name: Verify tag and extract changelog
         run: npm run verify:release -- "$GITHUB_REF_NAME"
       - name: Publish GitHub Release

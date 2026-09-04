@@ -787,7 +787,7 @@ npm run verify:release -- v1.0.3
 
 ### 14.3 工作流
 
-.github/workflows/ci.yml 在 push 和 pull request 上执行静态、单元、浏览器、打包验证并上传构建产物。.github/workflows/release.yml 只在 v* 标签上运行，完整验证后构建 ZIP、SHA-256、提取变更说明并调用 gh release create。
+.github/workflows/ci.yml 在 push 和 pull request 上执行静态、单元、浏览器、打包验证并上传构建产物。.github/workflows/release.yml 只在 v* 标签上运行，完整验证后同时构建 Chrome（商店）与 Firefox 两个 ZIP 及其 SHA-256、提取变更说明并调用 gh release create。
 
 这些文件不会自行登录或发布；只有将源码放入 GitHub 仓库并推送相应事件后才会运行。
 
