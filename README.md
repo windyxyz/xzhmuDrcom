@@ -95,7 +95,7 @@ npm run verify
 
 **上架 Chrome Web Store** 使用 `npm run package`（等价 `npm run package:chrome`），产出 `dist/drcom-xuzhou-medical-chrome-1.0.3.zip`——商店校验不允许 manifest 含 `key`（商店会为扩展分配自己的 key 与 ID），该包从主清单派生并自动删除 `key`。
 
-Firefox 使用 MV3 兼容构建：`npm run package:firefox` 产出 `dist/drcom-xuzhou-medical-firefox-1.0.3.zip`。它基于同一份 `CRX/` 源码与白名单，仅替换 manifest：移除 Chrome 的 `key`、`options_page` 改用 `options_ui`、加入 `browser_specific_settings.gecko` 元数据（要求 Firefox 118+，因连接状态使用 `storage.session`）。代码中 Chrome 专有 API（如 `storage.local.setAccessLevel`）均做了能力检测，不支持时自动跳过。
+Firefox 使用 MV3 兼容构建：`npm run package:firefox` 产出 `dist/drcom-xuzhou-medical-firefox-1.0.3.zip`。它基于同一份 `CRX/` 源码与白名单，仅替换 manifest：移除 Chrome 的 `key`、`options_page` 改用 `options_ui`、加入 `browser_specific_settings.gecko` 元数据（要求 Firefox 128+，因连接状态使用 `storage.session`）。代码中 Chrome 专有 API（如 `storage.local.setAccessLevel`）均做了能力检测，不支持时自动跳过。
 
 创建本地标签或未来接入标签工作流前运行：
 
