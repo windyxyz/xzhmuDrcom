@@ -56,7 +56,8 @@ test('门户会话格式化保持学校口径并使用易读单位', () => {
   assert.equal(api.formatKilobytes(1536), '1.50 MB');
   assert.equal(api.formatKilobytes(1234567), '1.18 GB');
   assert.equal(api.formatBalance(123456), '¥12.34');
-  assert.equal(api.formatTimestamp(1769990400000), '2026/2/2 08:00');
+  // formatTimestamp 使用本地时区渲染；用本地时间分量构造输入，断言与运行环境时区无关。
+  assert.equal(api.formatTimestamp(new Date(2026, 1, 2, 8, 0, 0).getTime()), '2026/2/2 08:00');
 });
 
 test('离线或无效会话不会生成摘要，异常字段会被丢弃', () => {
