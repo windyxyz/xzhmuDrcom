@@ -11,8 +11,8 @@
     "test:browser": "node scripts/run-tests.js browser",
     "test": "npm run test:unit && npm run test:browser && npm run verify:package",
     "package": "node scripts/package-extension.js",
+    "package:chrome": "node scripts/package-extension.js --chrome",
     "package:firefox": "node scripts/package-extension.js --firefox",
-    "package:cws": "node scripts/package-extension.js --cws",
     "verify:package": "node scripts/run-tests.js package",
     "verify:release": "node scripts/verify-release.js",
     "verify": "npm run check && npm test"

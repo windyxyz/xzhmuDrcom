@@ -175,7 +175,7 @@ function readVersion(projectRoot) {
 function buildPackage(options = {}) {
   const projectRoot = options.projectRoot || join(__dirname, "..");
   const outputDirectory = options.outputDirectory || join(projectRoot, "dist");
-  const target = options.target === "firefox" || options.target === "cws" ? options.target : "chrome";
+  const target = options.target === "firefox" ? "firefox" : "chrome";
   const version = readVersion(projectRoot);
   assertReleaseWhitelist(projectRoot);
   const entries = RELEASE_FILES.map((entry) => {
@@ -192,18 +192,19 @@ function buildPackage(options = {}) {
           throw new Error(`Firefox 清单版本 ${firefoxManifest.version} 与主版本 ${version} 不一致`);
         }
         content = Buffer.from(JSON.stringify(firefoxManifest, null, 2) + "\n", "utf8");
-      } else if (target === "cws") {
-        /* Chrome Web Store 上传包不允许 key（商店会分配扩展 ID 与 key） */
-        const cwsManifest = JSON.parse(content.toString("utf8"));
-        delete cwsManifest.key;
-        content = Buffer.from(JSON.stringify(cwsManifest, null, 2) + "\n", "utf8");
+      } else {
+        /* Chrome 商店上传包不允许 key（商店会分配扩展 ID 与 key）。
+           本地开发不再单独打包：直接以未打包目录加载 CRX/，其 manifest 保留 key 以维持稳定扩展 ID。 */
+        const chromeManifest = JSON.parse(content.toString("utf8"));
+        delete chromeManifest.key;
+        content = Buffer.from(JSON.stringify(chromeManifest, null, 2) + "\n", "utf8");
       }
     }
     return { ...entry, content };
   });
   const zipBuffer = createZip(entries);
   const sha256 = createHash("sha256").update(zipBuffer).digest("hex");
-  const targetLabel = target === "firefox" ? "firefox-" : target === "cws" ? "cws-" : "";
+  const targetLabel = target === "firefox" ? "firefox-" : "chrome-";
   const fileName = `drcom-xuzhou-medical-${targetLabel}${version}.zip`;
   const checksumName = `drcom-xuzhou-medical-${targetLabel}${version}.sha256`;
   const zipPath = join(outputDirectory, fileName);
@@ -217,7 +218,7 @@ function buildPackage(options = {}) {
 }
 
 if (require.main === module) {
-  const target = process.argv.includes("--firefox") ? "firefox" : process.argv.includes("--cws") ? "cws" : "chrome";
+  const target = process.argv.includes("--firefox") ? "firefox" : "chrome";
   const result = buildPackage({ target });
   console.log(`已生成 ${result.zipPath}`);
   console.log(`SHA-256 ${result.sha256}`);

@@ -756,14 +756,24 @@ node --test tests/portal-session.test.js tests/portal-ui.test.js tests/portal-di
 
 ### 14.1 构建
 
+本地开发不做打包：在 `chrome://extensions/` 以未打包目录加载 `CRX/`，仓库中的 manifest 保留开发用 `key` 以维持稳定扩展 ID。商店包从同一份源码派生并自动删除 `key`。
+
+Chrome Web Store 上传包：
+
 ~~~powershell
-npm run package
+npm run package          # 等价 npm run package:chrome
+~~~
+
+Firefox（AMO）上传包：
+
+~~~powershell
+npm run package:firefox
 ~~~
 
 输出：
 
-- dist/drcom-xuzhou-medical-1.0.3.zip
-- dist/drcom-xuzhou-medical-1.0.3.sha256
+- dist/drcom-xuzhou-medical-chrome-1.0.3.zip + .sha256（商店校验不允许 manifest 含 `key`，商店会分配扩展 ID 与 key）
+- dist/drcom-xuzhou-medical-firefox-1.0.3.zip + .sha256（基于 CRX/ 白名单，仅替换 manifest：去 key、`options_ui`、`browser_specific_settings.gecko`）
 
 ZIP 根目录直接包含 manifest.json 和 LICENSE。打包器使用显式白名单、固定顺序、1980-01-01 DOS 时间和 STORE 方法。tests/、docs/、portal-preview.*、截图和本地状态不会进入发布包。dist/ 已加入 .gitignore。
 

@@ -91,9 +91,9 @@ npm run verify
 
 ## 发布
 
-先执行 `npm run verify`，再运行 `npm run package`。产物为 `dist/drcom-xuzhou-medical-1.0.3.zip` 和对应 SHA-256 文件；ZIP 根目录直接包含 `manifest.json` 与 `LICENSE`。该包面向本地加载与自托管分发，manifest 保留开发用 `key` 以维持稳定扩展 ID。
+先执行 `npm run verify`，再按目标打包，产物在 `dist/`（ZIP + SHA-256，根目录直接包含 `manifest.json` 与 `LICENSE`）。本地开发不做打包：直接在 `chrome://extensions/` 以未打包目录加载 `CRX/`，仓库中的 manifest 保留开发用 `key` 以维持稳定扩展 ID。
 
-**上架 Chrome Web Store** 使用 `npm run package:cws`，产出 `dist/drcom-xuzhou-medical-cws-1.0.3.zip`——商店校验不允许 manifest 含 `key`（商店会为扩展分配自己的 key 与 ID），该包从主清单派生并自动删除 `key`，其余内容与普通 Chrome 包一致。
+**上架 Chrome Web Store** 使用 `npm run package`（等价 `npm run package:chrome`），产出 `dist/drcom-xuzhou-medical-chrome-1.0.3.zip`——商店校验不允许 manifest 含 `key`（商店会为扩展分配自己的 key 与 ID），该包从主清单派生并自动删除 `key`。
 
 Firefox 使用 MV3 兼容构建：`npm run package:firefox` 产出 `dist/drcom-xuzhou-medical-firefox-1.0.3.zip`。它基于同一份 `CRX/` 源码与白名单，仅替换 manifest：移除 Chrome 的 `key`、`options_page` 改用 `options_ui`、加入 `browser_specific_settings.gecko` 元数据（要求 Firefox 118+，因连接状态使用 `storage.session`）。代码中 Chrome 专有 API（如 `storage.local.setAccessLevel`）均做了能力检测，不支持时自动跳过。
 
