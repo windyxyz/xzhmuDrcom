@@ -98,50 +98,70 @@ function prunePortalDiagnosticsStore(input) {
     const removed = store.sessions.splice(0, store.sessions.length - PORTAL_DIAGNOSTICS_MAX_SESSIONS);
     store.droppedRecords += countPortalDiagnosticRecords(removed);
   }
-  while (portalDiagnosticsSerializedBytes(store) > PORTAL_DIAGNOSTICS_LIMIT_BYTES && store.sessions.length > 1) {
-    const sessions = store.sessions;
-    let low = 1;
-    let high = sessions.length - 1;
-    let firstKeptIndex = high;
-    while (low <= high) {
-      const middle = Math.floor((low + high) / 2);
-      store.sessions = sessions.slice(middle);
-      if (portalDiagnosticsSerializedBytes(store) <= PORTAL_DIAGNOSTICS_LIMIT_BYTES) {
-        firstKeptIndex = middle;
-        high = middle - 1;
-      } else {
-        low = middle + 1;
-      }
-    }
-    store.sessions = sessions.slice(firstKeptIndex);
-    store.droppedRecords += countPortalDiagnosticRecords(sessions.slice(0, firstKeptIndex));
+
+  const sessionSizes = store.sessions.map(createPortalDiagnosticsSessionSize);
+  let totalBytes = portalDiagnosticsStoreBytes(store, sessionSizes);
+
+  while (totalBytes > PORTAL_DIAGNOSTICS_LIMIT_BYTES && store.sessions.length > 1) {
+    const removed = store.sessions.shift();
+    sessionSizes.shift();
+    store.droppedRecords += countPortalDiagnosticRecords([removed]);
+    totalBytes = portalDiagnosticsStoreBytes(store, sessionSizes);
   }
+
   const current = store.sessions[0];
-  if (current && portalDiagnosticsSerializedBytes(store) > PORTAL_DIAGNOSTICS_LIMIT_BYTES && current.records.length) {
+  const currentSize = sessionSizes[0];
+  if (current && currentSize && totalBytes > PORTAL_DIAGNOSTICS_LIMIT_BYTES && current.records.length) {
     const records = current.records;
-    let low = 1;
-    let high = records.length;
     let firstKeptIndex = records.length;
-    while (low <= high) {
-      const middle = Math.floor((low + high) / 2);
-      current.records = records.slice(middle);
-      if (portalDiagnosticsSerializedBytes(store) <= PORTAL_DIAGNOSTICS_LIMIT_BYTES) {
-        firstKeptIndex = middle;
-        high = middle - 1;
-      } else {
-        low = middle + 1;
+    for (let index = 0; index <= records.length; index += 1) {
+      currentSize.bytes = currentSize.bytesFor(index, true);
+      totalBytes = portalDiagnosticsStoreBytes(store, sessionSizes);
+      if (totalBytes <= PORTAL_DIAGNOSTICS_LIMIT_BYTES) {
+        firstKeptIndex = index;
+        break;
       }
     }
     current.records = records.slice(firstKeptIndex);
-    store.droppedRecords += firstKeptIndex;
     current.truncated = true;
+    store.droppedRecords += firstKeptIndex;
+    currentSize.bytes = currentSize.bytesFor(firstKeptIndex, true);
   }
-  while (current && portalDiagnosticsSerializedBytes(store) > PORTAL_DIAGNOSTICS_LIMIT_BYTES && current.records.length) {
-    current.records.shift();
-    store.droppedRecords += 1;
+
+  if (portalDiagnosticsSerializedBytes(store) > PORTAL_DIAGNOSTICS_LIMIT_BYTES && current && current.records.length) {
+    store.droppedRecords += current.records.length;
+    current.records = [];
     current.truncated = true;
   }
   return store;
+}
+
+function createPortalDiagnosticsSessionSize(session) {
+  const records = Array.isArray(session.records) ? session.records : [];
+  const falseEmptyBytes = portalDiagnosticsSerializedBytes({ ...session, records: [] });
+  const trueEmptyBytes = portalDiagnosticsSerializedBytes({ ...session, records: [], truncated: true });
+  const recordBytes = records.map((record) => portalDiagnosticsSerializedBytes(record));
+  const suffixBytes = Array.from({ length: records.length + 1 }, () => 0);
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    suffixBytes[index] = suffixBytes[index + 1] + recordBytes[index] + (index < records.length - 1 ? 1 : 0);
+  }
+
+  return {
+    bytes: sessionBytes(falseEmptyBytes, trueEmptyBytes, suffixBytes, 0, session.truncated),
+    bytesFor(firstKeptIndex, truncated) {
+      return sessionBytes(falseEmptyBytes, trueEmptyBytes, suffixBytes, firstKeptIndex, truncated);
+    }
+  };
+}
+
+function sessionBytes(falseEmptyBytes, trueEmptyBytes, suffixBytes, firstKeptIndex, truncated) {
+  return (truncated ? trueEmptyBytes : falseEmptyBytes) + suffixBytes[firstKeptIndex];
+}
+
+function portalDiagnosticsStoreBytes(store, sessionSizes) {
+  return portalDiagnosticsSerializedBytes({ ...store, sessions: [] })
+    + sessionSizes.reduce((total, session) => total + session.bytes, 0)
+    + Math.max(0, sessionSizes.length - 1);
 }
 
 function portalDiagnosticsKeyBytes(value) {

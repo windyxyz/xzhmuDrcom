@@ -3,8 +3,9 @@
 var accountUtils = globalThis.DrcomAccountUtils;
 
 const STORAGE_KEY = "drcomAssistantState";
+const RECENT_REQUESTS_KEY = "drcomAssistantRecentRequests";
 const SESSION_KEY = "drcomAssistantSession";
-const SCHEMA_VERSION = 12;
+const SCHEMA_VERSION = 13;
 const KEEPALIVE_ALARM = "drcomAssistant.keepAlive";
 const RETRY_ALARM = "drcomAssistant.retry";
 const RECENT_REQUEST_LIMIT = 10;
@@ -95,6 +96,7 @@ const PORTAL_DIAGNOSTIC_WEB_ACTIONS = new Set([
 for (const action of PORTAL_DIAGNOSTIC_WEB_ACTIONS) WEB_PAGE_ACTIONS.add(action);
 
 let stateMutationQueue = Promise.resolve();
+let requestLogMutationQueue = Promise.resolve();
 let sessionMutationQueue = Promise.resolve();
 /* 最近一次由 setState 持久化的序列化结果；getState 用它跳过稳态下重复的整状态比较 */
 let persistedStateSerialized = null;
@@ -108,8 +110,9 @@ const DEFAULT_CONNECTION_STATE = {
 };
 
 async function getState() {
-  const stored = await chrome.storage.local.get([STORAGE_KEY, "username", "password"]);
+  const stored = await chrome.storage.local.get([STORAGE_KEY, RECENT_REQUESTS_KEY, "username", "password"]);
   const storedState = stored[STORAGE_KEY];
+  const storedRecentRequests = stored[RECENT_REQUESTS_KEY];
   let state = storedState ? clone(storedState) : null;
   const hasLegacyCredentials = Boolean(stored.username && stored.password);
 
@@ -128,16 +131,35 @@ async function getState() {
     if (!state.selectedAccountId) state.selectedAccountId = legacyAccount.id;
   }
 
-  const normalized = normalizeState(state || DEFAULT_STATE);
-  const storedSerialized = storedState ? JSON.stringify(storedState) : "";
-  const needsWrite = !storedState
+  const normalizedState = normalizeState(state || DEFAULT_STATE);
+  const normalizedRecentRequests = normalizeRecentRequests(
+    Array.isArray(storedRecentRequests)
+      ? storedRecentRequests
+      : normalizedState.recentRequests
+  );
+  const normalized = withRecentRequests(normalizedState, normalizedRecentRequests);
+  const storedMainSerialized = storedState ? JSON.stringify(stripRecentRequests(storedState)) : "";
+  const normalizedMainSerialized = JSON.stringify(stripRecentRequests(normalized));
+  const storedRecentSerialized = Array.isArray(storedRecentRequests)
+    ? JSON.stringify(normalizeRecentRequests(storedRecentRequests))
+    : "";
+  const normalizedRecentSerialized = JSON.stringify(normalizedRecentRequests);
+  const hasLegacyRecentRequests = Boolean(storedState && Object.prototype.hasOwnProperty.call(storedState, "recentRequests"));
+  const needsRecentWrite = hasLegacyRecentRequests
+    || (Array.isArray(storedRecentRequests) && storedRecentSerialized !== normalizedRecentSerialized);
+  const needsMainWrite = !storedState
     || storedState.schemaVersion !== SCHEMA_VERSION
     || hasLegacyCredentials
+    || hasLegacyRecentRequests
     || (persistedStateSerialized === null
-      ? storedSerialized !== JSON.stringify(normalized)
-      : storedSerialized !== persistedStateSerialized);
-  if (needsWrite) {
-    await setState(normalized);
+      ? storedMainSerialized !== normalizedMainSerialized
+      : storedMainSerialized !== persistedStateSerialized);
+
+  if (needsRecentWrite) {
+    await setRecentRequests(normalizedRecentRequests);
+  }
+  if (needsMainWrite) {
+    await setState(normalized, { writeRecentRequests: false });
   }
   if (hasLegacyCredentials) {
     await chrome.storage.local.remove(["username", "password"]);
@@ -146,11 +168,47 @@ async function getState() {
   return normalized;
 }
 
-async function setState(state) {
+async function setState(state, options = {}) {
   const normalized = normalizeState(state);
-  assertStateStorageBudget(normalized);
-  persistedStateSerialized = JSON.stringify(normalized);
-  await chrome.storage.local.set({ [STORAGE_KEY]: normalized });
+  const recentRequests = normalizeRecentRequests(normalized.recentRequests);
+  const persistentState = stripRecentRequests(normalized);
+  assertStateStorageBudget(persistentState);
+  persistedStateSerialized = JSON.stringify(persistentState);
+  if (options.writeRecentRequests !== false) {
+    await setRecentRequests(recentRequests);
+  }
+  await chrome.storage.local.set({ [STORAGE_KEY]: persistentState });
+  return withRecentRequests(persistentState, recentRequests);
+}
+
+function stripRecentRequests(state) {
+  const persistentState = clone(state || {});
+  delete persistentState.recentRequests;
+  return persistentState;
+}
+
+function withRecentRequests(state, recentRequests) {
+  return { ...clone(state || {}), recentRequests: normalizeRecentRequests(recentRequests) };
+}
+
+function normalizeRecentRequests(records) {
+  return Array.isArray(records)
+    ? records.map(sanitizeRequestRecord).slice(0, RECENT_REQUEST_LIMIT)
+    : [];
+}
+
+async function getRecentRequests() {
+  const stored = await chrome.storage.local.get([RECENT_REQUESTS_KEY, STORAGE_KEY]);
+  if (Array.isArray(stored[RECENT_REQUESTS_KEY])) {
+    return normalizeRecentRequests(stored[RECENT_REQUESTS_KEY]);
+  }
+  const legacyState = stored[STORAGE_KEY];
+  return normalizeRecentRequests(legacyState && legacyState.recentRequests);
+}
+
+async function setRecentRequests(records) {
+  const normalized = normalizeRecentRequests(records);
+  await chrome.storage.local.set({ [RECENT_REQUESTS_KEY]: normalized });
   return normalized;
 }
 
@@ -169,9 +227,7 @@ function normalizeState(input) {
     state.selectedAccountId = state.accounts[0] ? state.accounts[0].id : "";
   }
 
-  state.recentRequests = Array.isArray(state.recentRequests)
-    ? state.recentRequests.map(sanitizeRequestRecord).slice(0, RECENT_REQUEST_LIMIT)
-    : [];
+  state.recentRequests = normalizeRecentRequests(state.recentRequests);
 
   state.config.portalUrl = normalizeUrl(state.config.portalUrl, DEFAULT_STATE.config.portalUrl);
   state.config.apiUrl = normalizeUrl(state.config.apiUrl, DEFAULT_STATE.config.apiUrl);
@@ -300,14 +356,22 @@ function mergePatch(target, patch) {
 }
 
 async function clearRequestLog() {
-  const { state } = await mutateState((draft) => { draft.recentRequests = []; });
-  return { ok: true, state };
+  await mutateRequestLog(() => []);
+  return { ok: true, state: await getState() };
 }
 
 async function addRequestRecord(input) {
-  await mutateState((state) => {
-    state.recentRequests = [sanitizeRequestRecord(input), ...(state.recentRequests || [])].slice(0, RECENT_REQUEST_LIMIT);
+  await mutateRequestLog((records) => [sanitizeRequestRecord(input), ...records].slice(0, RECENT_REQUEST_LIMIT));
+}
+
+function mutateRequestLog(mutator) {
+  const operation = requestLogMutationQueue.then(async () => {
+    const records = await getRecentRequests();
+    const nextRecords = await mutator(records);
+    return setRecentRequests(nextRecords);
   });
+  requestLogMutationQueue = operation.then(() => undefined, () => undefined);
+  return operation;
 }
 
 async function saveConfig(patch) {
@@ -333,7 +397,7 @@ function mutateState(mutator) {
     if (value === STATE_UNCHANGED) {
       return { state: draft, value: null, changed: false };
     }
-    const state = await setState(draft);
+    const state = await setState(draft, { writeRecentRequests: false });
     return { state, value, changed: true };
   });
   stateMutationQueue = operation.then(() => undefined, () => undefined);
@@ -475,7 +539,7 @@ function normalizeUrl(value, fallback) {
 }
 
 function assertStateStorageBudget(state) {
-  const bytes = new TextEncoder().encode(JSON.stringify(state)).byteLength;
+  const bytes = new TextEncoder().encode(JSON.stringify(stripRecentRequests(state))).byteLength;
   if (bytes > MAX_STATE_BYTES) {
     throw new Error("本地存储空间不足。请清除或更换尺寸更小的自定义背景后再保存。");
   }

@@ -24,6 +24,7 @@ function loadBackground(options = {}) {
   const updatedTabs = [];
   const openedOptions = [];
   const localStore = options.localStore || {};
+  const localWrites = [];
   const sessionStore = options.sessionStore || {};
   const alarms = options.alarms || {};
   const createdAlarms = [];
@@ -44,6 +45,7 @@ function loadBackground(options = {}) {
     console: { ...console, warn(...args) { warnings.push(args.map(String).join(" ")); } },
     crypto: options.crypto || webcrypto,
     fetch: options.fetch || fetch,
+    JSON: options.JSON || JSON,
     setTimeout,
     chrome: {
       action: {
@@ -114,6 +116,7 @@ function loadBackground(options = {}) {
           },
           set: async (patch) => {
             if (options.localSetError) throw options.localSetError;
+            localWrites.push(structuredClone(patch));
             Object.assign(localStore, structuredClone(patch));
           },
           remove: async (keys) => {
@@ -178,6 +181,7 @@ function loadBackground(options = {}) {
     __createdTabs: createdTabs,
     __listeners: listeners,
     __localStore: localStore,
+    __localWrites: localWrites,
     __openedOptions: openedOptions,
     __registeredContentScripts: registeredContentScripts,
     __removedLocalKeys: removedLocalKeys,
@@ -465,7 +469,7 @@ test("旧版本配置升级后默认启用可恢复的门户接管", () => {
     }
   });
 
-  assert.equal(normalized.schemaVersion, 12);
+  assert.equal(normalized.schemaVersion, 13);
   assert.equal(normalized.config.ui.modernizePortal, true);
   assert.equal(normalized.config.ui.onlineDetailMode, "classic");
   assert.equal(normalized.config.ui.autoRefreshSettings, true);
@@ -520,9 +524,89 @@ test("schema 12 会清理历史无效账号与 UI 字段并幂等写回", async 
   assert.equal("note" in localStore.drcomAssistantState.accounts[0], false);
   assert.equal("hideOriginalPortal" in localStore.drcomAssistantState.config.ui, false);
   assert.equal(JSON.stringify(localStore.drcomAssistantState), persistedAfterFirstRead);
-  assert.deepEqual(JSON.parse(JSON.stringify(second)), JSON.parse(persistedAfterFirstRead));
+  const secondMain = JSON.parse(JSON.stringify(second));
+  delete secondMain.recentRequests;
+  assert.deepEqual(secondMain, JSON.parse(persistedAfterFirstRead));
+  assert.deepEqual(JSON.parse(JSON.stringify(second.recentRequests)), []);
 });
 
+test("schema 13 将请求记录迁移到独立键且主状态不再保留旧字段", async () => {
+  const localStore = {
+    drcomAssistantState: {
+      schemaVersion: 12,
+      selectedAccountId: "account-1",
+      accounts: [account()],
+      recentRequests: [
+        { kind: "login", message: "first" },
+        { kind: "logout", message: "second" }
+      ]
+    }
+  };
+  const background = loadBackground({ localStore });
+
+  const first = await background.getState();
+  const second = await background.getState();
+
+  assert.equal(first.schemaVersion, 13);
+  assert.deepEqual(JSON.parse(JSON.stringify(first.recentRequests.map((record) => record.kind))), ["login", "logout"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(second.recentRequests.map((record) => record.kind))), ["login", "logout"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(localStore.drcomAssistantRecentRequests.map((record) => record.kind))), ["login", "logout"]);
+  assert.equal("recentRequests" in localStore.drcomAssistantState, false);
+  assert.equal(localStore.drcomAssistantState.schemaVersion, 13);
+  assert.equal(background.__localWrites.length, 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(Object.keys(background.__localWrites[0]))), ["drcomAssistantRecentRequests"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(Object.keys(background.__localWrites[1]))), ["drcomAssistantState"]);
+});
+
+test("schema 13 请求记录迁移写入失败时不删除主状态旧日志", async () => {
+  const localStore = {
+    drcomAssistantState: {
+      schemaVersion: 12,
+      selectedAccountId: "account-1",
+      accounts: [account()],
+      recentRequests: [{ kind: "login", message: "kept" }]
+    }
+  };
+  const background = loadBackground({ localStore, localSetError: new Error("写入失败") });
+
+  await assert.rejects(background.getState(), /写入失败/);
+
+  assert.equal(localStore.drcomAssistantState.schemaVersion, 12);
+  assert.equal(localStore.drcomAssistantState.recentRequests.length, 1);
+  assert.equal(localStore.drcomAssistantRecentRequests, undefined);
+});
+
+test("新增请求记录只写独立日志键而不重写主状态", async () => {
+  const background = loadBackground();
+  const state = await background.getState();
+  state.config.ui.backgroundImage = `data:image/jpeg;base64,${"a".repeat(1900000)}`;
+  await background.setState(state);
+  background.__localWrites.length = 0;
+
+  await background.addRequestRecord({ kind: "login", message: "ok" });
+
+  assert.deepEqual(background.__localWrites.map((patch) => Object.keys(patch)), [["drcomAssistantRecentRequests"]]);
+  assert.equal(localStorageHasRecentRequests(background.__localStore.drcomAssistantState), false);
+  assert.equal(background.__localStore.drcomAssistantRecentRequests.length, 1);
+});
+
+test("清空请求记录只写独立日志键且返回兼容状态", async () => {
+  const background = loadBackground();
+  const state = await background.getState();
+  await background.setState({ ...state, recentRequests: [{ kind: "login", message: "old" }] });
+  background.__localWrites.length = 0;
+
+  const result = await background.clearRequestLog();
+
+  assert.deepEqual(background.__localWrites.map((patch) => Object.keys(patch)), [["drcomAssistantRecentRequests"]]);
+  assert.deepEqual(result.state.recentRequests, []);
+  assert.deepEqual(background.__localStore.drcomAssistantRecentRequests, []);
+  assert.equal(localStorageHasRecentRequests(background.__localStore.drcomAssistantState), false);
+});
+
+function localStorageHasRecentRequests(state) {
+  return Boolean(state && Object.prototype.hasOwnProperty.call(state, "recentRequests"));
+}
 test("schema 12 迁移成功写回后删除旧顶层凭据且重复执行保持幂等", async () => {
   const localStore = { username: " legacy-user ", password: "legacy-secret" };
   const background = loadBackground({ localStore });
@@ -531,7 +615,7 @@ test("schema 12 迁移成功写回后删除旧顶层凭据且重复执行保持�
   const firstAccountId = first.accounts[0].id;
   const second = await background.getState();
 
-  assert.equal(first.schemaVersion, 12);
+  assert.equal(first.schemaVersion, 13);
   assert.equal(first.accounts.length, 1);
   assert.equal(first.accounts[0].username, "legacy-user");
   assert.equal(second.accounts.length, 1);
@@ -1502,7 +1586,7 @@ test("账号保存与请求记录并发写入时不会互相覆盖", async () =>
 
   const saved = localStore.drcomAssistantState;
   assert.equal(saved.accounts.some((item) => item.id === "account-2"), true);
-  assert.equal(saved.recentRequests.length, 1);
+  assert.equal(localStore.drcomAssistantRecentRequests.length, 1);
 });
 
 test("标签页保护与连接状态并发写入时都会保留", async () => {
@@ -1744,6 +1828,44 @@ test("门户诊断按时间淘汰乱序旧会话且限制损坏 URL 大小", asy
   assert.ok(result.bytes <= 1048576);
 });
 
+test("门户诊断裁剪不会反复序列化完整存储", () => {
+  let storeStringifyCount = 0;
+  const countingJson = {
+    parse: JSON.parse,
+    stringify(value, ...args) {
+      if (value && Array.isArray(value.sessions) && value.sessions.some((session) => Array.isArray(session.records) && session.records.length)) storeStringifyCount += 1;
+      return JSON.stringify(value, ...args);
+    }
+  };
+  const background = loadBackground({ JSON: countingJson });
+  const records = Array.from({ length: 40 }, (_, index) => ({
+    type: "dom",
+    at: index,
+    summary: "x".repeat(60 * 1024)
+  }));
+
+  const result = background.prunePortalDiagnosticsStore({
+    enabled: true,
+    updatedAt: 1,
+    droppedRecords: 0,
+    paused: false,
+    sessions: [{
+      id: "12345678-abcd-4abc-8abc-abcdefabcdef",
+      startedAt: 1,
+      endedAt: 0,
+      origin: "http://10.10.10.2/",
+      pageKind: "login",
+      title: "login",
+      url: "http://10.10.10.2/",
+      records,
+      truncated: false
+    }]
+  });
+
+  assert.ok(storeStringifyCount <= 2, `完整诊断存储序列化次数过多：${storeStringifyCount}`);
+  assert.ok(background.portalDiagnosticsSerializedBytes(result) <= 1048576);
+  assert.equal(result.truncated || result.sessions[0].truncated, true);
+});
 test("门户诊断在一 MiB 上限内移除最早记录", async () => {
   const background = loadBackground();
   await background.setPortalDiagnosticsEnabled(true);
