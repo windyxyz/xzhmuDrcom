@@ -34,6 +34,7 @@
 
 ### 变更
 
+- 扩展更名为「xzhmu徐医校园网」：Manifest 名称与工具提示、设置/弹窗/欢迎页/门户页头的品牌文案统一更新；Firefox gecko id 保持不变以兼容既有安装。
 - 打包目标简化：移除本地 key 版 Chrome 包（本地开发直接以未打包目录加载 `CRX/`）；原 `cws` 商店包更名为 Chrome 包，`npm run package` / `package:chrome` 产出 `drcom-xuzhou-medical-chrome-*.zip`（自动删除 manifest `key`）。
 
 ## [1.0.2] - 2026-09-03

@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "徐医网络tools",
+  "name": "xzhmu徐医校园网",
   "version": "1.0.3",
   "description": "DrCOM 现代认证页、多账号登录、连接状态恢复、智能重试与脱敏请求记录。",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAhIs508LPfnBIwuZzQ9v3dJ5pfjPxS+KUkGfzNh5OxgTEb3lIizcD4IHH9L7zjBmDo87yQS9CVWvUtMyvahMgzpK9UFF+gZytZZg+2Ck3iR0F5nUWyzAcHV54q0xoMl5THmKxSrx8ZUHzZhTXs0iH7l/weDb69xOUpeCyX8nh/ROSS4B8lfNDACwGdHECSJXVYZ/N5LPyvnCs6Qq/6H/DJBnUudXbQ7o0swOAAX9SJybKaa5Q7UpM3ePY/yEvqJgFeqyZuqJejjLMODtX2cz1lTz1fPcVEFp+6VCWFUO/Zv6BSbtxDlJd2aN/wqOooeruTBYl/oc+h21CA9Cfi44ZJQIDAQAB",
   "action": {
     "default_popup": "popup.html",
-    "default_title": "徐医网络tools"
+    "default_title": "xzhmu徐医校园网"
   },
   "background": {
     "service_worker": "background.js"

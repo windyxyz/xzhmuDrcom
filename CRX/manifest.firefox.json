@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "徐医网络tools",
+  "name": "xzhmu徐医校园网",
   "version": "1.0.3",
   "description": "DrCOM 现代认证页、多账号登录、连接状态恢复、智能重试与脱敏请求记录。",
   "browser_specific_settings": {
@@ -14,7 +14,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "徐医网络tools"
+    "default_title": "xzhmu徐医校园网"
   },
   "background": {
     "scripts": [
