@@ -19,7 +19,10 @@
     }
 
     elements.cancelButton.addEventListener("click", () => finish(false));
-    elements.confirmButton.addEventListener("click", () => finish(true));
+    elements.confirmButton.addEventListener("click", (event) => {
+      if (!event.isTrusted) return;
+      finish(true);
+    });
     elements.dialog.addEventListener("cancel", (event) => {
       event.preventDefault();
       finish(false);

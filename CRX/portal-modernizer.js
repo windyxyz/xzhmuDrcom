@@ -175,7 +175,10 @@
       <span>检测到验证码或扫码登录，本次不会接管或隐藏原始控件。</span>
       <button id="drcom-captcha-dismiss" type="button" aria-label="关闭提示">关闭</button>
     `;
-    hint.querySelector("#drcom-captcha-dismiss")?.addEventListener("click", () => hint.remove());
+    hint.querySelector("#drcom-captcha-dismiss")?.addEventListener("click", (event) => {
+      if (!event.isTrusted) return;
+      hint.remove();
+    });
     document.body.append(hint);
   }
 
@@ -229,7 +232,8 @@
       passwordFocused = false;
       syncFromForm();
     });
-    toggle?.addEventListener("click", () => {
+    toggle?.addEventListener("click", (event) => {
+      if (!event.isTrusted) return;
       if (!password) return;
       const show = password.type === "password";
       password.type = show ? "text" : "password";
@@ -239,7 +243,8 @@
       if (glyph) glyph.textContent = show ? "\uE7B3" : "\uE890";
       syncFromForm();
     });
-    root.querySelector("#drcom-reset")?.addEventListener("click", () => {
+    root.querySelector("#drcom-reset")?.addEventListener("click", (event) => {
+      if (!event.isTrusted) return;
       if (toggle) {
         toggle.setAttribute("aria-pressed", "false");
         toggle.setAttribute("aria-label", "显示密码");
@@ -252,13 +257,23 @@
   }
 
   function bindPortalEvents(root, online) {
-    root.querySelector("#drcom-restore-original")?.addEventListener("click", restoreOriginalPortal);
-    root.querySelector("#drcom-open-options")?.addEventListener("click", () => {
+    root.querySelector("#drcom-restore-original")?.addEventListener("click", (event) => {
+      if (!event.isTrusted) return;
+      restoreOriginalPortal();
+    });
+    root.querySelector("#drcom-open-options")?.addEventListener("click", (event) => {
+      if (!event.isTrusted) return;
       void sendMessage({ action: "options:open" });
     });
     if (online) {
-      root.querySelector("#drcom-logout")?.addEventListener("click", () => void logoutFromPortal(root));
-      root.querySelector("#drcom-refresh-status")?.addEventListener("click", () => void refreshPortalStatus(root));
+      root.querySelector("#drcom-logout")?.addEventListener("click", (event) => {
+        if (!event.isTrusted) return;
+        void logoutFromPortal(root);
+      });
+      root.querySelector("#drcom-refresh-status")?.addEventListener("click", (event) => {
+        if (!event.isTrusted) return;
+        void refreshPortalStatus(root);
+      });
       return;
     }
     root.querySelector("#drcom-login-form")?.addEventListener("submit", (event) => {
@@ -268,6 +283,7 @@
     });
     root.querySelector("#drcom-reset")?.addEventListener("click", (event) => {
       event.preventDefault();
+      if (!event.isTrusted) return;
       const username = root.querySelector("#drcom-username");
       const suffix = root.querySelector("#drcom-suffix");
       const password = root.querySelector("#drcom-password");

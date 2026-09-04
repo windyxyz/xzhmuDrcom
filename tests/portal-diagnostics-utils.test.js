@@ -21,6 +21,13 @@ test("诊断文本删除账号、IP、MAC 和凭据", () => {
   assert.doesNotMatch(result, /202600000001|192\.0\.2\.15|00:11:22:33:44:55|fake-secret/);
 });
 
+test("诊断文本删除中文密码、口令、账号、学号和凭据字段", () => {
+  const result = utils.sanitizeText(
+    "密码=秘密值 口令: another-secret 账号=202513010318 学号:202513010319 凭据=BearerValue"
+  );
+  assert.doesNotMatch(result, /秘密值|another-secret|202513010318|202513010319|BearerValue/);
+});
+
 test("控件描述保留结构但忽略 value", () => {
   assert.deepEqual(utils.sanitizeTarget({
     tag: "INPUT",

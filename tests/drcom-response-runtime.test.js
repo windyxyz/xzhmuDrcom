@@ -11,6 +11,7 @@ function loadDrcomClient() {
     AbortController,
     TextDecoder,
     URL,
+    URLSearchParams,
     Uint8Array,
     atob,
     clearTimeout,
@@ -98,4 +99,27 @@ test("DrCOM 日志 URL 和文本不保留具体 IP 或 MAC", () => {
     assert.equal(safeText.includes(sensitive), false, sensitive);
   }
   assert.match(safeUrl, /a=login/);
+});
+
+test("URL 脱敏覆盖大小写、重复参数、别名、fragment 和双重编码键", () => {
+  const background = loadDrcomClient();
+  const safe = background.redactSensitiveUrl(
+    "http://10.10.10.2/eportal/?USER_PASSWORD=first&user_password=second&passwd=third&%2575ser_password=fourth&User_Account=202513010318%40telecom#password=fifth&账号=202513010318"
+  );
+  for (const secret of ["first", "second", "third", "fourth", "fifth", "202513010318"]) {
+    assert.equal(safe.includes(secret), false, secret);
+  }
+  assert.match(safe, /\*\*\*|redacted/i);
+});
+
+test("find_mac 日志 URL 使用统一敏感 URL 脱敏", () => {
+  const background = loadDrcomClient();
+  const config = {
+    apiUrl: "http://10.10.10.2:801/eportal/",
+    login: { loginMethod: "1", jsVersion: "3.3.2" },
+    network: { wlanUserIp: "192.0.2.46" }
+  };
+  const request = background.buildFindMacRequest({ username: "202513010318", suffix: "@telecom", network: {} }, config);
+  assert.doesNotMatch(request.redactedUrl, /202513010318|192\.0\.2\.46/);
+  assert.match(request.redactedUrl, /\*\*\*|redacted/i);
 });

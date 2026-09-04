@@ -60,7 +60,7 @@ test("危险确认默认聚焦取消按钮，并在取消时返回 false", async
   assert.equal(elements.message.textContent, "将删除账号“主账号”。");
   assert.equal(elements.confirmButton.textContent, "删除账号");
 
-  elements.cancelButton.emit("click");
+  elements.cancelButton.emit("click", { isTrusted: true });
   assert.equal(await answer, false);
   assert.equal(elements.dialog.open, false);
 });
@@ -70,11 +70,23 @@ test("危险确认支持 Escape 取消和显式确认", async () => {
   const controller = createController(elements);
   const cancelled = controller.ask({ title: "清空记录？", message: "将清空 3 条记录。" });
   let prevented = false;
-  elements.dialog.emit("cancel", { preventDefault() { prevented = true; } });
+  elements.dialog.emit("cancel", { isTrusted: true, preventDefault() { prevented = true; } });
   assert.equal(await cancelled, false);
   assert.equal(prevented, true);
 
   const confirmed = controller.ask({ title: "恢复默认？", message: "将重置设置。" });
-  elements.confirmButton.emit("click");
+  elements.confirmButton.emit("click", { isTrusted: true });
   assert.equal(await confirmed, true);
+});
+
+test("危险确认拒绝合成确认点击", async () => {
+  const elements = createElements();
+  const controller = createController(elements);
+  let settled = false;
+  const answer = controller.ask({ title: "保存？" }).then((value) => { settled = true; return value; });
+  elements.confirmButton.emit("click", { isTrusted: false });
+  await Promise.resolve();
+  assert.equal(settled, false);
+  elements.cancelButton.emit("click", { isTrusted: true });
+  assert.equal(await answer, false);
 });

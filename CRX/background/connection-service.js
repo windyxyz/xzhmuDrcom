@@ -228,6 +228,7 @@ async function recordLoginOutcome(result, options = {}) {
       message: result.message || "登录成功。",
       updatedAt: now
     });
+    await setupAutomation(await getState());
     return { ...publicResult, phase: "online", retryable: false, retryAt: 0 };
   }
 
@@ -458,7 +459,7 @@ async function keepAliveTick() {
 }
 
 async function setupAutomation(state) {
-  const automation = state.config.automation;
+  const automation = (state.config && state.config.automation) || DEFAULT_STATE.config.automation;
   if (!automation.keepAlive) {
     await chrome.alarms.clear(KEEPALIVE_ALARM);
     return;

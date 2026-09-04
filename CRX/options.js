@@ -81,6 +81,7 @@ function bindEvents() {
   $("save-parsed-account").addEventListener("click", runAsync(saveParsedAccount));
   $("reset-config").addEventListener("click", runAsync(resetConfig));
   $("clear-request-log").addEventListener("click", runAsync(clearRequestLog));
+  ["portal-url", "api-url"].forEach((id) => $(id).addEventListener("input", renderGatewaySecurityWarning));
   $("settings-form").addEventListener("submit", runAsync(saveSettings));
   ["input", "change"].forEach((type) => {
     $("settings-form").addEventListener(type, (event) => {
@@ -1400,6 +1401,16 @@ function markSettingsAutoSaved() {
 async function autoSaveSettings({ announce = false } = {}) {
   if (!settingsFormDirty || !state) return false;
   const config = readConfig();
+  const gatewayWarning = gatewaySecurityWarning(state.config, config);
+  if (gatewayWarning) {
+    const confirmed = await globalThis.DrcomConfirmDialog.ask({
+      title: "使用自定义 HTTP 网关？",
+      message: gatewayWarning,
+      confirmLabel: "仍然保存",
+      danger: true
+    });
+    if (!confirmed) return false;
+  }
   await requestGatewayAccess(config);
   if (config.ui.background === "daily" && !await ensureWallpaperPermission()) {
     throw new Error("需要允许访问必应，才能使用每日壁纸背景");
@@ -1419,6 +1430,30 @@ async function autoSaveSettings({ announce = false } = {}) {
   }
   if (announce) markSettingsAutoSaved();
   return true;
+}
+
+function gatewaySecurityWarning(previous, next) {
+  const previousUrls = [previous && previous.portalUrl, previous && previous.apiUrl].map((value) => String(value || "").trim());
+  const nextUrls = [next && next.portalUrl, next && next.apiUrl].map((value) => String(value || "").trim());
+  if (previousUrls.every((value, index) => value === nextUrls[index])) return "";
+  const insecureCustom = nextUrls.some((value) => {
+    try {
+      const url = new URL(value);
+      return url.protocol === "http:" && url.hostname !== "10.10.10.2";
+    } catch (error) {
+      return false;
+    }
+  });
+  return insecureCustom
+    ? "该自定义 HTTP 网关会以明文传输账号、密码等凭据。仅在你确认信任此网关时继续。"
+    : "";
+}
+
+function renderGatewaySecurityWarning() {
+  const element = $("gateway-security-warning");
+  if (!element) return;
+  const next = { portalUrl: $("portal-url").value, apiUrl: $("api-url").value };
+  element.hidden = !gatewaySecurityWarning(state && state.config, next);
 }
 
 async function resetConfig() {

@@ -157,6 +157,13 @@ test("门户界面转义可配置标题并始终提供恢复原页面操作", ()
   assert.match(markup, /aria-live="polite"/);
 });
 
+test("在线模板在最终 HTML sink 转义标题", () => {
+  const { renderPortalMarkup } = require(portalUiPath);
+  const markup = renderPortalMarkup({ title: '<svg onload="alert(1)">', online: true });
+  assert.doesNotMatch(markup, /<svg/);
+  assert.match(markup, /&lt;svg/);
+});
+
 test("门户界面显示当前自定义网关而不是写死默认地址", () => {
   const { renderPortalMarkup } = require(portalUiPath);
   const markup = renderPortalMarkup({ host: "gateway.example:8443" });

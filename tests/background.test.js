@@ -29,6 +29,7 @@ function loadBackground(options = {}) {
   const createdAlarms = [];
   const badgeUpdates = [];
   const storageAccessLevels = [];
+  const warnings = [];
   const registeredContentScripts = [];
   const removedLocalKeys = [];
   const grantedOrigins = new Set(options.grantedOrigins || []);
@@ -40,7 +41,7 @@ function loadBackground(options = {}) {
     Uint8Array,
     atob,
     clearTimeout,
-    console,
+    console: { ...console, warn(...args) { warnings.push(args.map(String).join(" ")); } },
     crypto: options.crypto || webcrypto,
     fetch: options.fetch || fetch,
     setTimeout,
@@ -122,8 +123,9 @@ function loadBackground(options = {}) {
               delete localStore[key];
             }
           },
-          setAccessLevel: async (options) => {
-            storageAccessLevels.push(structuredClone(options));
+          setAccessLevel: async (accessOptions) => {
+            storageAccessLevels.push({ area: "local", ...structuredClone(accessOptions) });
+            if (typeof options.localAccessGate === "function") await options.localAccessGate();
           },
           getBytesInUse: async (keys) => {
             if (typeof options.bytesInUse === "function") return options.bytesInUse(keys, localStore);
@@ -148,6 +150,10 @@ function loadBackground(options = {}) {
           remove: async (keys) => {
             const names = Array.isArray(keys) ? keys : [keys];
             for (const key of names) delete sessionStore[key];
+          },
+          setAccessLevel: async (accessOptions) => {
+            storageAccessLevels.push({ area: "session", ...structuredClone(accessOptions) });
+            if (typeof options.sessionAccessGate === "function") await options.sessionAccessGate();
           }
         }
       },
@@ -177,7 +183,8 @@ function loadBackground(options = {}) {
     __removedLocalKeys: removedLocalKeys,
     __sessionStore: sessionStore,
     __storageAccessLevels: storageAccessLevels,
-    __updatedTabs: updatedTabs
+    __updatedTabs: updatedTabs,
+    __warnings: warnings
   });
 
   context.importScripts = (...paths) => {
@@ -1556,14 +1563,56 @@ test("保存自定义门户后会为已授权来源注册现代认证内容脚�
   }]);
 });
 
-test("后台启动时把包含密码的本地存储限制为可信扩展上下文", async () => {
+test("后台启动时把 local 和 session 存储限制为可信扩展上下文", async () => {
   const background = loadBackground();
   await Promise.resolve();
   await Promise.resolve();
 
   assert.deepEqual(JSON.parse(JSON.stringify(background.__storageAccessLevels)), [
-    { accessLevel: "TRUSTED_CONTEXTS" }
+    { area: "local", accessLevel: "TRUSTED_CONTEXTS" },
+    { area: "session", accessLevel: "TRUSTED_CONTEXTS" }
   ]);
+});
+
+test("后台在 local 和 session 访问级别收紧完成前不处理消息", async () => {
+  let releaseLocal;
+  let releaseSession;
+  const localGate = new Promise((resolve) => { releaseLocal = resolve; });
+  const sessionGate = new Promise((resolve) => { releaseSession = resolve; });
+  const background = loadBackground({
+    localAccessGate: () => localGate,
+    sessionAccessGate: () => sessionGate
+  });
+  let response;
+  background.__listeners.message[0]({ action: "connection:get" }, {
+    id: "test-extension-id", url: "chrome-extension://test/popup.html"
+  }, (value) => { response = value; });
+  await Promise.resolve();
+  assert.equal(response, undefined);
+  releaseLocal();
+  await Promise.resolve();
+  assert.equal(response, undefined);
+  releaseSession();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(response.ok, true);
+});
+
+test("存储访问级别限制失败只记录无敏感信息警告并继续工作", async () => {
+  const background = loadBackground({
+    localAccessGate: async () => { throw new Error("password=do-not-log"); },
+    sessionAccessGate: async () => { throw new Error("token=do-not-log"); }
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(background.__warnings.length, 1);
+  assert.match(background.__warnings[0], /存储访问级别/);
+  assert.doesNotMatch(background.__warnings[0], /do-not-log|password|token/);
+});
+
+test("登录成功后按当前配置重建已被注销清除的保活闹钟", async () => {
+  const alarms = {};
+  const background = loadBackground({ alarms });
+  await background.recordLoginOutcome({ success: true, online: true, message: "登录成功" });
+  assert.equal(alarms["drcomAssistant.keepAlive"].periodInMinutes, 3);
 });
 
 test("带标点的引号密码会被完整脱敏", () => {

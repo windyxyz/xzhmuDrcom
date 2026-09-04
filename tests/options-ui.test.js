@@ -670,6 +670,23 @@ test("自定义网关只请求对应来源并在现代界面启用时请求脚�
   }]);
 });
 
+test("仅地址变化到自定义 HTTP 网关时显示强警告", () => {
+  const context = vm.createContext({
+    clearTimeout, console,
+    document: { addEventListener() {}, getElementById() { return null; } },
+    setTimeout, URL
+  });
+  loadOptions(context);
+  const original = { portalUrl: "http://10.10.10.2/", apiUrl: "http://10.10.10.2:801/eportal/" };
+  assert.equal(context.gatewaySecurityWarning(original, original), "");
+  assert.equal(context.gatewaySecurityWarning(original, {
+    portalUrl: "https://gateway.example/login", apiUrl: "https://gateway.example/eportal/"
+  }), "");
+  assert.match(context.gatewaySecurityWarning(original, {
+    portalUrl: "http://gateway.example/login", apiUrl: "http://gateway.example:801/eportal/"
+  }), /明文|HTTP|凭据/);
+});
+
 test("设置状态尚未加载时打开认证页不会崩溃或误跳默认地址", () => {
   const opened = [];
   const toastElement = { hidden: true, textContent: "" };

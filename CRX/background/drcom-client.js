@@ -60,7 +60,7 @@ function buildStatusRequest(config) {
   const url = new URL("/drcom/chkstatus", `${portalOrigin}/`);
   url.searchParams.set("callback", `${config.login.callbackPrefix || "dr"}1001`);
   url.searchParams.set("v", createNonce());
-  return { url: url.toString(), redactedUrl: url.toString() };
+  return { url: url.toString(), redactedUrl: redactSensitiveUrl(url.toString()) };
 }
 
 async function queryPortalSessionStatus(config) {
@@ -159,7 +159,7 @@ function buildFindMacRequest(account, config, options = {}) {
   url.searchParams.set("wlan_user_ip", network.wlanUserIp || "");
   url.searchParams.set("jsVersion", config.login.jsVersion || "3.3.2");
   url.searchParams.set("v", createNonce());
-  return { url: url.toString(), redactedUrl: url.toString() };
+  return { url: url.toString(), redactedUrl: redactSensitiveUrl(url.toString()) };
 }
 
 function buildUnbindRequest(account, config, networkOverride = null) {
@@ -482,26 +482,56 @@ function redactSensitiveUrl(value) {
   }
   try {
     const url = new URL(raw);
-    for (const key of ["user_password", "password", "upass", "0MKKey"]) {
-      if (url.searchParams.has(key)) {
-        url.searchParams.set(key, "******");
-      }
-    }
-    for (const key of ["wlan_user_ip", "wlanuserip", "userip", "wlan_user_ipv6", "wlan_user_mac", "wlan_ac_ip", "wlan_ac_name"]) {
-      if (url.searchParams.has(key)) {
-        url.searchParams.set(key, "******");
-      }
-    }
-    if (url.searchParams.has("user_account")) {
-      const current = url.searchParams.get("user_account") || "";
-      const parsed = accountUtils.parse(current);
-      const hasPrefix = accountUtils.decode(current).trim().startsWith(",0,");
-      url.searchParams.set("user_account", `${hasPrefix ? ",0," : ""}${accountUtils.mask(parsed.username)}${parsed.suffix}`);
-    }
+    url.username = "";
+    url.password = "";
+    url.search = redactUrlParameters(url.search.slice(1));
+    if (url.hash) url.hash = redactUrlParameters(url.hash.slice(1));
     return url.toString();
   } catch (error) {
-    return redactNetworkIdentifiers(raw.replace(/(user_password|password|upass|0MKKey)=([^&\s]+)/gi, "$1=******"));
+    return redactNetworkIdentifiers(redactSensitiveText(raw).replace(/(user_password|password|upass|0MKKey)=([^&\s]+)/gi, "$1=******"));
   }
+}
+
+function redactUrlParameters(input) {
+  const result = new URLSearchParams();
+  const params = new URLSearchParams(String(input || ""));
+  for (const [rawKey, rawValue] of params) {
+    const key = decodeUrlLayer(rawKey).toLowerCase();
+    if (isPasswordKey(key) || isNetworkKey(key)) {
+      result.append(rawKey, "******");
+      continue;
+    }
+    if (isAccountKey(key)) {
+      result.append(rawKey, "******");
+      continue;
+    }
+    result.append(rawKey, rawValue);
+  }
+  return result.toString();
+}
+
+function decodeUrlLayer(value) {
+  let decoded = String(value || "");
+  for (let depth = 0; depth < 2; depth += 1) {
+    try {
+      const next = decodeURIComponent(decoded.replace(/\+/g, " "));
+      if (next === decoded) break;
+      decoded = next;
+    } catch (error) { break; }
+  }
+  return decoded;
+}
+
+function isPasswordKey(key) {
+  return ["user_password", "password", "passwd", "pwd", "upass", "0mkkey", "token", "secret", "credential", "credentials", "密码", "口令", "凭据"].includes(key);
+}
+
+function isAccountKey(key) {
+  return ["user_account", "account", "username", "user", "uid", "studentid", "student_id", "账号", "学号"].includes(key);
+}
+
+function isNetworkKey(key) {
+  return ["wlan_user_ip", "wlanuserip", "userip", "wlan_user_ipv6", "wlan_user_mac", "wlan_ac_ip", "wlan_ac_name"].includes(key);
 }
 
 function redactSensitiveText(value) {

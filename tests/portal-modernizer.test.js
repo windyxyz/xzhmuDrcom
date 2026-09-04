@@ -338,7 +338,7 @@ test("现代登录界面挂载后可以立即恢复原始页面", async () => {
   assert.ok(harness.document.getElementById("drcom-modern-root"));
 
   const restore = harness.document.getElementById("drcom-restore-original");
-  await restore.emit("click");
+  await restore.emit("click", { isTrusted: true });
 
   assert.equal(harness.document.documentElement.classList.contains("drcom-modern-active"), false);
   assert.equal(harness.document.getElementById("drcom-modern-root"), null);
@@ -377,6 +377,22 @@ test("现代登录表单拒绝合成提交事件", async () => {
   assert.equal(harness.messages.some((message) => message.action === "drcom:login"), false);
 });
 
+test("门户注销、恢复原页和打开设置拒绝合成点击", async () => {
+  const harness = createHarness({ online: true });
+  await loadModernizer(harness);
+  await harness.flush();
+  const logout = harness.document.getElementById("drcom-logout");
+  const restore = harness.document.getElementById("drcom-restore-original");
+  const optionsButton = harness.document.getElementById("drcom-open-options");
+  await logout.emit("click", { isTrusted: false });
+  await restore.emit("click", { isTrusted: false });
+  await optionsButton.emit("click", { isTrusted: false });
+  await harness.flush();
+  assert.equal(harness.confirmations.length, 0);
+  assert.ok(harness.document.getElementById("drcom-modern-root"));
+  assert.equal(harness.messages.some((message) => message.action === "options:open"), false);
+});
+
 test("在线页面读取脱敏会话并支持手动刷新详情", async () => {
   const harness = createHarness({ online: true });
   await loadModernizer(harness);
@@ -394,7 +410,7 @@ test("在线页面读取脱敏会话并支持手动刷新详情", async () => {
     checkedAt: Date.UTC(2026, 8, 2, 1, 3),
     session: { usedMinutes: 126, totalKilobytes: 2048 }
   };
-  await harness.document.getElementById("drcom-refresh-status").emit("click");
+  await harness.document.getElementById("drcom-refresh-status").emit("click", { isTrusted: true });
   await harness.flush();
 
   root = harness.document.getElementById("drcom-modern-root");
@@ -408,7 +424,7 @@ test("取消注销确认不会调用后台下线", async () => {
   await loadModernizer(harness);
   await harness.flush();
 
-  await harness.document.getElementById("drcom-logout").emit("click");
+  await harness.document.getElementById("drcom-logout").emit("click", { isTrusted: true });
   await harness.flush();
 
   assert.equal(harness.confirmations.length, 1);
@@ -426,7 +442,7 @@ test("下线认证失败时门户界面保持在线并显示错误", async () =>
   await loadModernizer(harness);
 
   const logout = harness.document.getElementById("drcom-logout");
-  await logout.emit("click");
+  await logout.emit("click", { isTrusted: true });
   await new Promise((resolve) => setImmediate(resolve));
 
   const root = harness.document.getElementById("drcom-modern-root");
@@ -446,7 +462,7 @@ test("重置按钮清空现代登录表单并恢复保存选项", async () => {
   password.value = "masked";
   remember.checked = false;
 
-  await harness.document.getElementById("drcom-reset").emit("click", { preventDefault() {} });
+  await harness.document.getElementById("drcom-reset").emit("click", { isTrusted: true, preventDefault() {} });
 
   assert.equal(username.value, "");
   assert.equal(suffix.value, "");
@@ -499,7 +515,7 @@ test("自定义背景只写入 closed Shadow DOM 且个性化按钮打开设置"
   const personalize = harness.document.getElementById("drcom-open-options");
   assert.equal(personalize.getAttribute("aria-label"), "个性化");
   assert.equal(personalize.getAttribute("title"), "个性化");
-  await personalize.emit("click");
+  await personalize.emit("click", { isTrusted: true });
   assert.equal(harness.messages.at(-1).action, "options:open");
 });
 
@@ -538,7 +554,7 @@ test("用户恢复原始页后延迟登录成功也不会再次接管", async ()
   harness.document.getElementById("drcom-password").value = "masked";
   await harness.document.getElementById("drcom-login-form").emit("submit", { isTrusted: true, preventDefault() {} });
   await harness.flush();
-  await harness.document.getElementById("drcom-restore-original").emit("click");
+  await harness.document.getElementById("drcom-restore-original").emit("click", { isTrusted: true });
   harness.resolveDeferred("drcom:login");
   await harness.flush();
 
@@ -655,7 +671,7 @@ test("用户恢复原始页后页面状态变化不会重新挂载或重连就�
   const harness = createHarness({ pageState: "login" });
   await loadModernizer(harness);
 
-  await harness.document.getElementById("drcom-restore-original").emit("click");
+  await harness.document.getElementById("drcom-restore-original").emit("click", { isTrusted: true });
   harness.setPageState("online");
   harness.triggerMutation();
   await harness.flush();

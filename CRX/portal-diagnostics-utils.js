@@ -64,6 +64,8 @@
 
   function sanitizeText(value, maxBytes = 4096) {
     const text = String(value ?? "")
+      .replace(/(?:密码|口令|凭据)\s*[:=]\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^&\r\n\s]+)/g, (match) => `${match.split(/[:=]/)[0]}=[redacted]`)
+      .replace(/(?:账号|学号)\s*[:=]\s*[^\s&]+/g, (match) => `${match.split(/[:=]/)[0]}=[redacted]`)
       .replace(/\b(password|passwd|pwd|token|secret|authorization|cookie)\s*[:=]\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^&\r\n]*)/gi, "$1=[redacted]")
       .replace(/\b(uid|user(?:name|_account)?|account)\s*[:=]\s*[^\s&]+/gi, "$1=[redacted]")
       .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted-ip]")

@@ -14,15 +14,15 @@ async function validateDefaultPortalDiagnosticsSender(sender) {
     throw new Error("门户诊断只允许默认校园网认证页");
   }
 }
-async function restrictLocalStorageAccess() {
-  const storage = chrome.storage && chrome.storage.local;
-  if (!storage || typeof storage.setAccessLevel !== "function") return false;
-  try {
-    await storage.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
-    return true;
-  } catch (error) {
-    return false;
-  }
+async function restrictStorageAccess() {
+  const areas = [chrome.storage && chrome.storage.local, chrome.storage && chrome.storage.session]
+    .filter((storage) => storage && typeof storage.setAccessLevel === "function");
+  const results = await Promise.allSettled(areas.map((storage) => (
+    storage.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" })
+  )));
+  const ok = results.every((result) => result.status === "fulfilled");
+  if (!ok) console.warn("未能完成全部存储访问级别限制；敏感错误详情已省略。");
+  return ok;
 }
 
 async function handleMessage(message, sender) {

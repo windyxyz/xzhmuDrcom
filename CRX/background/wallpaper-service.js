@@ -66,13 +66,27 @@ async function fetchWallpaperImage(imageUrl) {
     if (!response.ok) return null;
     const blob = await response.blob();
     if (!blob || blob.size > WALLPAPER_IMAGE_MAX_BYTES || !blob.size) return null;
-    const type = /^image\/(png|jpe?g|webp)$/i.test(blob.type) ? blob.type : "image/jpeg";
-    return `data:${type};base64,${bytesToBase64(await blob.arrayBuffer())}`;
+    const buffer = await blob.arrayBuffer();
+    if (!buffer.byteLength || buffer.byteLength > WALLPAPER_IMAGE_MAX_BYTES) return null;
+    const type = wallpaperMimeFromSignature(new Uint8Array(buffer));
+    if (!type) return null;
+    return `data:${type};base64,${bytesToBase64(buffer)}`;
   } catch (error) {
     return null;
   } finally {
     done();
   }
+}
+
+function wallpaperMimeFromSignature(bytes) {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes.length >= 8 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((value, index) => bytes[index] === value)) {
+    return "image/png";
+  }
+  if (bytes.length >= 12
+      && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF"
+      && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP") return "image/webp";
+  return "";
 }
 
 async function fetchDailyWallpaper(now = new Date()) {
@@ -87,8 +101,9 @@ async function fetchDailyWallpaper(now = new Date()) {
     const entry = payload && Array.isArray(payload.images) ? payload.images[0] : null;
     const urlbase = entry && typeof entry.urlbase === "string" ? entry.urlbase : "";
     if (!urlbase) return null;
-    const base = urlbase.startsWith("http") ? urlbase : `https://cn.bing.com${urlbase}`;
-    return await fetchWallpaperImage(`${base}_1920x1080.jpg`);
+    const base = new URL(urlbase, "https://cn.bing.com/");
+    if (base.origin !== "https://cn.bing.com") return null;
+    return await fetchWallpaperImage(`${base.toString()}_1920x1080.jpg`);
   } catch (error) {
     return null;
   } finally {
@@ -138,6 +153,7 @@ if (typeof module === "object" && module.exports) {
     clearWallpaperCache,
     fetchDailyWallpaper,
     requestDailyWallpaper,
+    wallpaperMimeFromSignature,
     wallpaperToday
   };
 }

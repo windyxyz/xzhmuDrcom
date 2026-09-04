@@ -1,7 +1,7 @@
 "use strict";
 
 const { createHash } = require("node:crypto");
-const { existsSync, mkdirSync, readFileSync, writeFileSync } = require("node:fs");
+const { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
 
 const FIXED_DOS_TIME = 0;
@@ -42,6 +42,38 @@ const RELEASE_FILES = [
   ["CRX/welcome.css", "welcome.css"],
   ["CRX/welcome.js", "welcome.js"]
 ].map(([sourcePath, archivePath]) => ({ sourcePath, archivePath }));
+
+const RELEASE_EXCLUSIONS = new Set([
+  "CRX/manifest.firefox.json",
+  "CRX/portal-preview.html",
+  "CRX/portal-preview.js"
+]);
+
+function listCrxFiles(projectRoot, directory = "CRX") {
+  const absoluteDirectory = join(projectRoot, ...directory.split("/"));
+  const files = [];
+
+  for (const entry of readdirSync(absoluteDirectory, { withFileTypes: true })) {
+    const relativePath = `${directory}/${entry.name}`;
+    if (entry.isDirectory()) {
+      files.push(...listCrxFiles(projectRoot, relativePath));
+    } else if (entry.isFile()) {
+      files.push(relativePath);
+    }
+  }
+
+  return files;
+}
+
+function assertReleaseWhitelist(projectRoot) {
+  const releaseSources = new Set(RELEASE_FILES.map((entry) => entry.sourcePath));
+  const unexpectedFiles = listCrxFiles(projectRoot)
+    .filter((sourcePath) => !releaseSources.has(sourcePath) && !RELEASE_EXCLUSIONS.has(sourcePath));
+
+  if (unexpectedFiles.length > 0) {
+    throw new Error(`打包白名单未覆盖：${unexpectedFiles.join(", ")}`);
+  }
+}
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, index) => {
   let value = index;
@@ -141,6 +173,7 @@ function buildPackage(options = {}) {
   const outputDirectory = options.outputDirectory || join(projectRoot, "dist");
   const target = options.target === "firefox" || options.target === "cws" ? options.target : "chrome";
   const version = readVersion(projectRoot);
+  assertReleaseWhitelist(projectRoot);
   const entries = RELEASE_FILES.map((entry) => {
     let absolutePath = join(projectRoot, ...entry.sourcePath.split("/"));
     if (!existsSync(absolutePath)) {
@@ -189,7 +222,9 @@ if (require.main === module) {
 module.exports = {
   FIXED_DOS_DATE,
   FIXED_DOS_TIME,
+  RELEASE_EXCLUSIONS,
   RELEASE_FILES,
+  assertReleaseWhitelist,
   buildPackage,
   createZip,
   crc32

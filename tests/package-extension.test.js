@@ -1,9 +1,9 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { mkdtempSync, readFileSync, rmSync } = require("node:fs");
+const { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require("node:fs");
 const { tmpdir } = require("node:os");
-const { join } = require("node:path");
+const { dirname, join } = require("node:path");
 const test = require("node:test");
 
 const {
@@ -71,6 +71,31 @@ test("扩展 ZIP 只包含固定顺序的运行白名单并排除预览与源码
     assert.ok(entries.some((entry) => entry.name === "LICENSE"), "分发包必须随附 GPL-3.0 许可证");
     assert.match(readFileSync(result.checksumPath, "utf8"), new RegExp(`^[a-f0-9]{64}  ${result.fileName}\\n$`));
   } finally {
+    rmSync(outputDirectory, { recursive: true, force: true });
+  }
+});
+test("CRX 目录出现未列入分发白名单的文件时拒绝打包", () => {
+  const sourceRoot = join(__dirname, "..");
+  const projectRoot = mkdtempSync(join(tmpdir(), "drcom-package-source-"));
+  const outputDirectory = mkdtempSync(join(tmpdir(), "drcom-package-"));
+  const unexpectedPath = join(projectRoot, "CRX", "accidental-secret.txt");
+
+  try {
+    copyFileSync(join(sourceRoot, "package.json"), join(projectRoot, "package.json"));
+    for (const entry of RELEASE_FILES) {
+      const sourcePath = join(sourceRoot, ...entry.sourcePath.split("/"));
+      const fixturePath = join(projectRoot, ...entry.sourcePath.split("/"));
+      mkdirSync(dirname(fixturePath), { recursive: true });
+      copyFileSync(sourcePath, fixturePath);
+    }
+    writeFileSync(unexpectedPath, "must not ship\n", "utf8");
+
+    assert.throws(
+      () => buildPackage({ projectRoot, outputDirectory }),
+      /打包白名单未覆盖：CRX\/accidental-secret\.txt/
+    );
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true });
     rmSync(outputDirectory, { recursive: true, force: true });
   }
 });

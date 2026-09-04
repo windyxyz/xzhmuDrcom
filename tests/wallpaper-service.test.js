@@ -80,7 +80,7 @@ test("已授权时获取必应每日图并写入缓存", async () => {
       }
       return {
         ok: true,
-        blob: async () => ({ size: 2048, type: "image/jpeg", arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer })
+        blob: async () => ({ size: 4, type: "application/octet-stream", arrayBuffer: async () => new Uint8Array([0xff, 0xd8, 0xff, 0x00]).buffer })
       };
     }
   });
@@ -93,6 +93,50 @@ test("已授权时获取必应每日图并写入缓存", async () => {
   assert.ok(imageCall, "应请求 1920x1080 规格图片");
   assert.equal(service.localStore.drcomDailyWallpaper.day, service.context.wallpaperToday());
   assert.equal(service.localStore.drcomDailyWallpaper.dataUrl, result.dataUrl);
+});
+
+test("壁纸元数据拒绝非必应来源和伪装图片内容", async () => {
+  for (const fixture of [
+    {
+      metadata: { images: [{ urlbase: "https://evil.example/collect" }] },
+      image: null
+    },
+    {
+      metadata: { images: [{ urlbase: "https://cn.bing.com.evil.example/collect" }] },
+      image: null
+    },
+    {
+      metadata: { images: [{ urlbase: "/th?id=OHR.Fake" }] },
+      image: { ok: true, blob: async () => ({ size: 5, type: "image/jpeg", arrayBuffer: async () => new TextEncoder().encode("<html").buffer }) }
+    }
+  ]) {
+    const service = loadWallpaperService({ fetch: async (url) => {
+      if (String(url).includes("HPImageArchive")) return jsonResponse(fixture.metadata);
+      if (!fixture.image) throw new Error("不应请求非必应图片");
+      return fixture.image;
+    } });
+    const result = await service.context.requestDailyWallpaper();
+    assert.equal(result.ok, false);
+    assert.equal(service.localStore.drcomDailyWallpaper, undefined);
+    assert.equal(service.fetchCalls.every((call) => new URL(call.url).origin === "https://cn.bing.com"), true);
+  }
+});
+
+test("壁纸按文件签名识别 PNG、JPEG 和 WebP", async () => {
+  const signatures = [
+    { bytes: [0xff, 0xd8, 0xff, 0x00], type: "image/jpeg" },
+    { bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], type: "image/png" },
+    { bytes: [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50], type: "image/webp" }
+  ];
+  for (const signature of signatures) {
+    const service = loadWallpaperService({ fetch: async (url) => {
+      if (String(url).includes("HPImageArchive")) return jsonResponse({ images: [{ urlbase: "/th?id=OHR.Valid" }] });
+      const bytes = new Uint8Array(signature.bytes);
+      return { ok: true, blob: async () => ({ size: bytes.byteLength, type: "", arrayBuffer: async () => bytes.buffer }) };
+    } });
+    const result = await service.context.requestDailyWallpaper();
+    assert.match(result.dataUrl, new RegExp(`^data:${signature.type.replace("/", "\\/")};base64,`));
+  }
 });
 
 test("未授权时不发起任何网络请求", async () => {

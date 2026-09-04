@@ -22,11 +22,12 @@
   );
 })();
 
-void restrictLocalStorageAccess();
+const backgroundReady = restrictStorageAccess();
 
 chrome.runtime.onInstalled.addListener(handleInstalled);
 
 async function handleInstalled(details = {}) {
+  await backgroundReady;
   const state = await getState();
   await setupAutomation(state);
   await syncPortalContentScript(state);
@@ -36,6 +37,7 @@ async function handleInstalled(details = {}) {
 }
 
 chrome.runtime.onStartup.addListener(async () => {
+  await backgroundReady;
   const state = await getState();
   await setupAutomation(state);
   await syncPortalContentScript(state);
@@ -44,7 +46,8 @@ chrome.runtime.onStartup.addListener(async () => {
   }
 });
 
-chrome.alarms.onAlarm.addListener((alarm) => {
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  await backgroundReady;
   if (alarm.name === KEEPALIVE_ALARM) {
     void keepAliveTick();
   }
@@ -54,7 +57,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  handleMessage(message, sender)
+  backgroundReady.then(() => handleMessage(message, sender))
     .then((payload) => sendResponse(payload))
     .catch((error) => sendResponse({
       ok: false,
@@ -65,6 +68,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.url) {
-    void handleTabRedirect(tabId, changeInfo.url);
+    void backgroundReady.then(() => handleTabRedirect(tabId, changeInfo.url));
   }
 });

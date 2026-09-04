@@ -101,6 +101,7 @@
   }
 
   function renderOnlineContent({ title, session = null, onlineDetailMode = "classic", statusMessage = "", checkedAt = 0 }) {
+    const finalTitle = escapeHtml(title);
     const mode = ["classic", "full", "minimal", "hidden"].includes(onlineDetailMode)
       ? onlineDetailMode
       : "classic";
@@ -127,7 +128,7 @@
       <section class="drcom-state-view" aria-labelledby="drcom-state-title">
         <span class="drcom-status-mark" aria-hidden="true"></span>
         <h1 id="drcom-state-title">已经连接校园网</h1>
-        <p>当前设备已通过 ${title} 认证，可以正常访问网络。</p>
+        <p>当前设备已通过 ${finalTitle} 认证，可以正常访问网络。</p>
         ${summary}
         ${details}
         ${showTools ? `<div class="drcom-online-tools">
@@ -154,7 +155,7 @@
     const safeHost = escapeHtml(host || "认证网关");
     const content = online
       ? renderOnlineContent({
-        title: safeTitle,
+        title,
         session,
         onlineDetailMode,
         statusMessage,
