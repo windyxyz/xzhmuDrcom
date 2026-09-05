@@ -137,9 +137,18 @@ function response(body, url) {
   };
 }
 
-test("空网络账号首次登录使用门户实时 IP 和 find_mac 返回 MAC", async () => {
+test("校园网登录只使用门户实时 IP，不把历史网络身份或 find_mac 结果带入认证请求", async () => {
   const requests = [];
-  const saved = account();
+  const saved = account({
+    suffix: "",
+    network: {
+      wlanUserIp: "192.0.2.99",
+      wlanUserIpv6: "2001:db8::99",
+      wlanUserMac: "112233445566",
+      wlanAcIp: "192.0.2.1",
+      wlanAcName: "stale-ac"
+    }
+  });
   const background = loadConnectionRuntime({
     fetch: async (input) => {
       const url = new URL(String(input));
@@ -151,7 +160,7 @@ test("空网络账号首次登录使用门户实时 IP 和 find_mac 返回 MAC",
         return response('<script>var v4ip="192.0.2.46";</script>', url.toString());
       }
       if (url.searchParams.get("a") === "find_mac") {
-        return response('dr1004({"result":1,"wlan_user_mac":"AA-BB-CC-DD-EE-FF"})', url.toString());
+        return response('dr1004({"result":1,"list":[{"online_mac":"AA-BB-CC-DD-EE-FF"}]})', url.toString());
       }
       return response('dr1002({"result":1,"msg":"login success"})', url.toString());
     }
@@ -166,11 +175,15 @@ test("空网络账号首次登录使用门户实时 IP 和 find_mac 返回 MAC",
   const login = requests.find((url) => url.searchParams.get("a") === "login");
 
   assert.equal(result.success, true);
-  assert.equal(findMac.searchParams.get("wlan_user_ip"), "192.0.2.46");
+  assert.equal(findMac, undefined);
+  assert.equal(login.searchParams.get("user_account"), ",0,student");
   assert.equal(login.searchParams.get("wlan_user_ip"), "192.0.2.46");
-  assert.equal(login.searchParams.get("wlan_user_mac"), "AABBCCDDEEFF");
+  assert.equal(login.searchParams.get("wlan_user_mac"), "000000000000");
+  assert.equal(login.searchParams.get("wlan_user_ipv6"), "");
+  assert.equal(login.searchParams.get("wlan_ac_ip"), "");
+  assert.equal(login.searchParams.get("wlan_ac_name"), "");
   assert.equal(background.__sessionStore.drcomAssistantSession.activeIdentity.network.wlanUserIp, "192.0.2.46");
-  assert.equal(background.__sessionStore.drcomAssistantSession.activeIdentity.network.wlanUserMac, "AABBCCDDEEFF");
+  assert.equal(background.__sessionStore.drcomAssistantSession.activeIdentity.network.wlanUserMac, "000000000000");
 });
 
 test("登录前确认已经在线时不获取上下文也不发送密码", async () => {
@@ -392,6 +405,47 @@ test("活动身份缺失时从 chkstatus 的 uid 与 ss4 解析身份走 unbind_
   assert.equal(unbind.searchParams.get("wlan_user_ip"), "172.28.180.144");
   assert.equal(actions.includes("find_mac"), false);
   assert.equal(actions.includes("logout"), false);
+});
+
+test("chkstatus 缺少 ss4 时用完整在线账号查询生产 find_mac 响应后注销", async () => {
+  const requests = [];
+  const sessionStore = activeSession();
+  sessionStore.drcomAssistantSession.activeIdentity = null;
+  let chkstatusCount = 0;
+  const background = loadConnectionRuntime({
+    sessionStore,
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      requests.push(url);
+      const action = url.searchParams.get("a");
+      if (url.pathname === "/drcom/chkstatus") {
+        chkstatusCount += 1;
+        return chkstatusCount === 1
+          ? response('dr1001({"result":1,"uid":"student@telecom","v46ip":"172.28.180.144","ss4":"000000000000"})', url.toString())
+          : response('dr1001({"result":0})', url.toString());
+      }
+      if (url.port !== "801") return response('<script>var v4ip="172.28.180.144";</script>', url.toString());
+      if (action === "find_mac") {
+        return response('dr1004({"result":1,"msg":"success","list":[{"online_mac":"58:02:05:DC:58:C2","user_account":"student@telecom"}]})', url.toString());
+      }
+      if (action === "unbind_mac") return response('dr1002({"result":1,"msg":"unbind success"})', url.toString());
+      return response('dr1002({"result":1,"msg":"logout success"})', url.toString());
+    }
+  });
+  background.getState = async () => structuredClone(stateWithAccount(account()));
+  background.addRequestRecord = async () => undefined;
+  background.waitForLogoutDelay = async () => undefined;
+
+  const result = await background.logout();
+  const findMacRequests = requests.filter((url) => url.searchParams.get("a") === "find_mac");
+  const unbind = requests.find((url) => url.searchParams.get("a") === "unbind_mac");
+  const fullLogout = requests.find((url) => url.searchParams.get("a") === "logout");
+
+  assert.equal(result.success, true);
+  assert.equal(findMacRequests.length, 1);
+  assert.equal(findMacRequests[0].searchParams.get("user_account"), "student@telecom");
+  assert.equal(unbind.searchParams.get("wlan_user_mac"), "580205DC58C2");
+  assert.equal(fullLogout, undefined);
 });
 
 test("网关现场解析不到在线身份时仍走完整 Portal/logout 兜底", async () => {

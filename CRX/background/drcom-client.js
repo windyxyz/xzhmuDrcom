@@ -624,8 +624,14 @@ function isUsableMac(value) {
 function extractMacFromResponse(data, raw) {
   const candidates = [];
   if (data && typeof data === "object") {
-    for (const key of ["mac", "user_mac", "wlan_user_mac", "wlanUserMac", "online_user_mac", "onlineUserMac"]) {
-      if (data[key]) candidates.push(data[key]);
+    const records = [data];
+    if (Array.isArray(data.list)) {
+      records.push(...data.list.filter((item) => item && typeof item === "object"));
+    }
+    for (const record of records) {
+      for (const key of ["mac", "user_mac", "wlan_user_mac", "wlanUserMac", "online_mac", "onlineMac", "online_user_mac", "onlineUserMac"]) {
+        if (record[key]) candidates.push(record[key]);
+      }
     }
   }
   candidates.push(raw);

@@ -206,7 +206,7 @@ activeIdentity 不保存密码，也不依赖长期账号中的历史 IP；它�
 
 ### 6.4 下线与删除
 
-下线只使用 activeIdentity，绝不回退到界面当前选择或调用参数中的其他账号。后台先尝试取得当前门户 IP，失败时才使用 activeIdentity 中的本次会话网络。存在有效 MAC 时先调用 unbind_mac；没有 MAC、解绑失败、复核仍在线或状态未知时，改用包含协议占位字段和当前网络参数的完整 Portal/logout。
+下线不回退到界面当前选择或调用参数中的其他账号。后台先取得当前门户 IP，并从 `chkstatus` 的 `uid` 与 `ss4` 解析真实在线身份；`ss4` 缺失时只用该完整在线账号查询一次 `find_mac`，从真实响应的 `list[].online_mac` 读取 MAC。存在有效 MAC 时先调用 unbind_mac；没有 MAC、解绑失败、复核仍在线或状态未知时，改用包含协议占位字段和当前网络参数的完整 Portal/logout。
 
 unbind_mac 或 Portal/logout 返回成功并不等于最终成功。后台按 300ms、800ms、1500ms 复核 `/drcom/chkstatus`；只有明确 offline 才清除重试/保活 Alarm、清空 activeIdentity，并把连接状态原子设置为 offline。状态 online 或 unknown 时保留真实状态与活动身份，并返回可理解错误。
 
@@ -228,7 +228,7 @@ unbind_mac 或 Portal/logout 返回成功并不等于最终成功。后台按 30
 /drcom/chkstatus 明确在线 -> 直接成功，不发送密码
 离线或未知 -> 获取当前门户运行上下文
 无有效 IP -> 失败，不构造含 user_password 的请求
-有有效 IP -> 可选 find_mac，并采用其有效 MAC -> Portal/login
+有有效 IP -> 固定全零 MAC、空 IPv6/AC 字段 -> Portal/login
 result=1 -> 成功
 result=0 + ret_code=2 + 已在线语义 -> 再查状态，只有 online 才成功
 其他明确失败或未知响应 -> 失败
@@ -271,11 +271,6 @@ sequenceDiagram
     C->>X: resolvePortalRuntimeContext(config, portalPageUrl)
     X->>G: GET 门户首页
     X-->>C: 当前网络上下文
-    opt 已启用 findMacBeforeLogin
-      C->>D: buildFindMacRequest() + fetchDrcom()
-      D->>G: GET Portal/find_mac
-      G-->>C: 可用 MAC 或安全回退
-    end
     C->>D: buildLoginRequest() + fetchDrcom()
     D->>G: GET Portal/login
     G-->>D: JSON、JSONP 或兼容键值响应
@@ -322,13 +317,12 @@ await chrome.runtime.sendMessage({
 | --- | --- | --- |
 | 1 | `loginAccount(accountId, transientAccount, options)` | 进入全局 `drcom-login` single-flight；手工登录清除旧重试，自动登录先检查 `blocked` 和 `nextRetryAt`；连接阶段改为 `authenticating`。 |
 | 2 | `performLoginAccount(...)` | 读取保存账号或清理临时账号；没有可用账号时立即失败。 |
-| 3 | `queryPortalSessionStatus(config)` | 请求 `/drcom/chkstatus`。明确在线直接成功，后续上下文、`find_mac` 和密码请求全部跳过。 |
+| 3 | `queryPortalSessionStatus(config)` | 请求 `/drcom/chkstatus`。明确在线直接成功，后续上下文和密码请求全部跳过。 |
 | 4 | `resolvePortalRuntimeContext(config, portalPageUrl)` | 请求门户首页，并结合可信页面 URL 静态解析本次 IPv4；失败且没有合法全局 IP 时终止，返回“密码尚未发送”。 |
-| 5 | `mergeRuntimeLoginNetwork(...)` | 用实时 IP 建立最终网络参数；MAC、IPv6 和 AC 参数才允许按当前上下文、账号兼容字段、全局设置的顺序补齐。 |
-| 6 | `buildFindMacRequest()` / `fetchDrcom()` | 可选步骤。取得有效 IP 后先尝试纯学号，再尝试带后缀账号；仅采用格式合法的返回 MAC。 |
-| 7 | `buildLoginRequest()` / `fetchDrcom()` | 构造并发送唯一包含真实密码的 `Portal/login` 请求；解析 HTTP、JSON/JSONP/兼容键值和协议字段。 |
-| 8 | `normalizeDrcomResult()` | 把网关响应归一为明确成功、待状态复核、明确失败或未知失败。 |
-| 9 | `recordLoginOutcome()` | 成功时写入 `online` 和活动身份；失败时分类为可重试网络问题或需人工处理的问题，并更新 Alarm 与连接阶段。 |
+| 5 | `createRuntimeLoginNetwork(...)` | 用实时 IP 建立最终网络参数；MAC 固定为 `000000000000`，IPv6 和 AC 字段固定为空，不读取账号或全局设置中的历史网络身份。 |
+| 6 | `buildLoginRequest()` / `fetchDrcom()` | 构造并发送唯一包含真实密码的 `Portal/login` 请求；解析 HTTP、JSON/JSONP/兼容键值和协议字段。 |
+| 7 | `normalizeDrcomResult()` | 把网关响应归一为明确成功、待状态复核、明确失败或未知失败。 |
+| 8 | `recordLoginOutcome()` | 成功时写入 `online` 和活动身份；失败时分类为可重试网络问题或需人工处理的问题，并更新 Alarm 与连接阶段。 |
 
 `performLoginAccount()` 在发送认证请求后返回候选 `authenticatedIdentity`，但 `recordLoginOutcome()` 只在结果成功时才把它写入 Session。登录前检查已经明确在线时不会凭空构造新的活动身份；已有会话身份也不会被当前界面所选账号替换。
 
@@ -338,7 +332,7 @@ await chrome.runtime.sendMessage({
 | --- | --- | --- | --- | --- |
 | 状态检查 | 门户 origin 的 `/drcom/chkstatus` | `callback`、随机值 | 否 | 区分 `online`、`offline`、`unknown`。 |
 | 上下文获取 | `config.portalUrl` | 浏览器同源 Cookie；无账号查询参数 | 否 | 从页面 URL 或静态变量取得当前 IP。 |
-| MAC 查询 | `config.apiUrl`，`c=Portal&a=find_mac` | 学号/完整账号、当前 IP、协议版本 | 否 | 尽力取得本次会话 MAC；失败不会单独判定登录失败。 |
+| MAC 查询 | `config.apiUrl`，`c=Portal&a=find_mac` | `chkstatus` 返回的完整在线账号、当前 IP、协议版本 | 否 | 仅在注销且 `ss4` 无有效 MAC 时查询一次；读取 `list[].online_mac`，失败后进入完整注销兜底。 |
 | 实际认证 | `config.apiUrl`，`c=Portal&a=login` | 完整账号、密码、当前网络参数和协议字段 | **是** | 唯一会发送真实密码的网络请求。 |
 
 这些调用均为 GET。`credentials: "include"` 只用于门户状态和上下文关联现有校园网页会话，不会把密码写入 Cookie。由于学校接口是 HTTP，`Portal/login` 的查询参数在网络层不是端到端加密；日志脱敏只能保护扩展输出，不能保护传输链路。
@@ -350,8 +344,8 @@ await chrome.runtime.sendMessage({
 | `user_account` | `accountPrefix`（默认 `,0,`）+ 规范化用户名 + 小写运营商后缀。 |
 | `user_password` | 当前保存账号或临时账号的密码；只在最终登录请求构造时读取。 |
 | `wlan_user_ip` | 当前页面 URL/门户静态变量解析结果；都缺失时才允许使用设置页明确填写的合法全局 IP。账号历史 IP 不参与。 |
-| `wlan_user_mac` | 当前上下文或有效 `find_mac` 结果 → 账号兼容字段 → 全局设置 → `000000000000`。 |
-| IPv6、AC IP、AC 名称 | 当前上下文 → 账号兼容字段 → 全局设置。 |
+| `wlan_user_mac` | 登录固定为 `000000000000`，与学校生产请求一致；不使用历史字段或 `find_mac` 结果。 |
+| IPv6、AC IP、AC 名称 | 登录固定为空，与学校生产请求一致。 |
 | `login_method`、`jsVersion` | 登录配置；缺失时分别使用 `1` 和 `3.3.2`。 |
 | `callback`、`v` | 每次请求生成的 JSONP 回调名和随机值，用于协议兼容与避免缓存。 |
 
@@ -372,9 +366,9 @@ await chrome.runtime.sendMessage({
 
 默认 API 为 http://10.10.10.2:801/eportal/。登录前由 portal-context.js 使用 `credentials: "include"`、`cache: "no-store"` 和 8 秒超时请求门户首页。IP 优先级为当前页面 URL 的 `ip`、`wlanuserip`、`wlan_user_ip`、`userip`、`user-ip`、`UserIP`、`uip`、`station_ip`，随后依次为页面静态字符串变量 `v46ip`、`ss5`、`v4ip`、按原门户算法解码的 `ss3`，最后才是设置页明确填写且验证有效的全局 IP。解析器只接受白名单变量、简单字符串字面量和合法 IPv4，不使用 eval、Function 或脚本注入。
 
-登录使用 GET，并写入 Portal/login、callback、login_method、user_account、user_password、本次网络参数、jsVersion 和随机值。启用 findMacBeforeLogin 时，取得有效 IP 后依次用纯学号和带后缀账号调用 find_mac；返回的有效 MAC 会进入最终登录请求。
+登录使用 GET，并写入 Portal/login、callback、login_method、user_account、user_password、本次 IPv4、全零 MAC、空 IPv6/AC 字段、jsVersion 和随机值。`findMacBeforeLogin` 继续保留在旧配置结构中，但认证通道不再读取它，也不会在登录前调用 `find_mac`。
 
-完整 Portal/logout 写入 `login_method`、协议占位 `user_account=drcom`、`user_password=123`、`ac_logout=1`、`register_mode=1`、当前 IP/IPv6/MAC/AC 参数、空 VLAN、jsVersion、callback 和随机值。请求日志中的 URL 会隐藏占位密码及其他敏感查询参数。
+完整 Portal/logout 写入 `login_method`、协议占位 `user_account=drcom`、`user_password=123`、`ac_logout=1`、`register_mode=1`、当前 IP/IPv6/MAC/AC 参数、`wlan_vlan_id=1`、jsVersion、callback 和随机值。请求日志中的 URL 会隐藏占位密码及其他敏感查询参数。
 
 ### 7.5 响应解析优先级
 
