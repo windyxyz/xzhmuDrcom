@@ -593,6 +593,15 @@ function stringValue(value) {
   return value === undefined || value === null ? "" : String(value);
 }
 
+function firstDefinedKey(source, keys) {
+  const input = source && typeof source === "object" ? source : {};
+  for (const key of keys) {
+    const value = stringValue(input[key]).trim();
+    if (value) return value;
+  }
+  return "";
+}
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }

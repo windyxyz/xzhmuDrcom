@@ -353,6 +353,71 @@ test("没有活动身份时注销不回退到传入或界面选中的账号", as
   assert.equal(actions.includes("logout"), true);
 });
 
+test("活动身份缺失时向网关现场解析在线身份与 MAC 走 unbind_mac 注销", async () => {
+  const requests = [];
+  const sessionStore = activeSession();
+  sessionStore.drcomAssistantSession.activeIdentity = null;
+  let chkstatusCount = 0;
+  const background = loadConnectionRuntime({
+    sessionStore,
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      requests.push(url);
+      const action = url.searchParams.get("a");
+      if (url.pathname === "/drcom/chkstatus") {
+        chkstatusCount += 1;
+        return chkstatusCount === 1
+          ? response('dr1001({"result":1,"uid":"100002025011","v46ip":"172.28.180.144"})', url.toString())
+          : response('dr1001({"result":0})', url.toString());
+      }
+      if (url.port !== "801") return response("<script>var v4ip=\"172.28.180.144\";</script>", url.toString());
+      if (action === "find_mac") return response('dr1004({"result":1,"mac":"580205DC58C2"})', url.toString());
+      if (action === "unbind_mac") return response('dr1002({"result":1,"msg":"unbind success"})', url.toString());
+      return response('dr1002({"result":1,"msg":"logout success"})', url.toString());
+    }
+  });
+  background.getState = async () => structuredClone(stateWithAccount(account()));
+  background.addRequestRecord = async () => undefined;
+  background.waitForLogoutDelay = async () => undefined;
+
+  const result = await background.logout();
+  const actions = requests.map((url) => url.searchParams.get("a")).filter(Boolean);
+  const unbind = requests.find((url) => url.searchParams.get("a") === "unbind_mac");
+
+  assert.equal(result.success, true);
+  assert.equal(actions.includes("unbind_mac"), true);
+  assert.equal(unbind.searchParams.get("user_account"), "100002025011");
+  assert.equal(unbind.searchParams.get("wlan_user_mac"), "580205DC58C2");
+  assert.equal(unbind.searchParams.get("wlan_user_ip"), "172.28.180.144");
+  assert.equal(actions.includes("logout"), false);
+});
+
+test("网关现场解析不到在线身份时仍走完整 Portal/logout 兜底", async () => {
+  const requests = [];
+  const sessionStore = activeSession();
+  sessionStore.drcomAssistantSession.activeIdentity = null;
+  const background = loadConnectionRuntime({
+    sessionStore,
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      requests.push(url);
+      if (url.pathname === "/drcom/chkstatus") return response('dr1001({"result":0})', url.toString());
+      if (url.port !== "801") return response('<script>var v4ip="192.0.2.46";</script>', url.toString());
+      return response('dr1002({"result":1,"msg":"logout success"})', url.toString());
+    }
+  });
+  background.getState = async () => structuredClone(stateWithAccount(account()));
+  background.addRequestRecord = async () => undefined;
+  background.waitForLogoutDelay = async () => undefined;
+
+  const result = await background.logout();
+  const actions = requests.map((url) => url.searchParams.get("a")).filter(Boolean);
+
+  assert.equal(result.success, true);
+  assert.equal(actions.includes("unbind_mac"), false);
+  assert.equal(actions.includes("logout"), true);
+});
+
 test("没有有效 MAC 时直接完整 Portal/logout 并在确认离线后清理会话", async () => {
   const requests = [];
   const sessionStore = activeSession("000000000000");

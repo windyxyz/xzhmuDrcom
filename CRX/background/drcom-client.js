@@ -63,7 +63,7 @@ function buildStatusRequest(config) {
   return { url: url.toString(), redactedUrl: redactSensitiveUrl(url.toString()) };
 }
 
-async function queryPortalSessionStatus(config) {
+async function fetchPortalSessionStatus(config) {
   const request = buildStatusRequest(config);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
@@ -86,39 +86,67 @@ async function queryPortalSessionStatus(config) {
         : "unknown";
     return {
       ok: response.ok && state !== "unknown",
-      success: state === "online",
-      online: state === "online",
       state,
-      session: state === "online" && portalSession
-        ? portalSession.normalizeSession(parsed)
-        : null,
+      resultCode,
+      parsed,
       statusCode: response.status,
-      message: state === "online"
-        ? "当前校园网会话在线。"
-        : state === "offline"
-          ? "当前需要登录校园网。"
-          : "校园网会话状态不明确。",
-      diagnostic: { statusCode: response.status, resultCode },
-      url: request.redactedUrl,
-      raw: ""
+      aborted: false,
+      redactedUrl: request.redactedUrl
     };
   } catch (error) {
     return {
       ok: false,
-      success: false,
-      online: false,
       state: "unknown",
+      resultCode: "",
+      parsed: {},
       statusCode: 0,
-      message: error && error.name === "AbortError"
-        ? "校园网状态检查超时。"
-        : "无法确认校园网会话状态。",
-      diagnostic: { statusCode: 0, resultCode: "" },
-      url: request.redactedUrl,
-      raw: ""
+      aborted: Boolean(error && error.name === "AbortError"),
+      redactedUrl: request.redactedUrl
     };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function queryPortalSessionStatus(config) {
+  const core = await fetchPortalSessionStatus(config);
+  const state = core.state;
+  return {
+    ok: core.ok,
+    success: state === "online",
+    online: state === "online",
+    state,
+    session: state === "online" && portalSession
+      ? portalSession.normalizeSession(core.parsed)
+      : null,
+    statusCode: core.statusCode,
+    message: state === "online"
+      ? "当前校园网会话在线。"
+      : state === "offline"
+        ? "当前需要登录校园网。"
+        : core.aborted
+          ? "校园网状态检查超时。"
+          : "校园网会话状态不明确。",
+    diagnostic: { statusCode: core.statusCode, resultCode: core.resultCode },
+    url: core.redactedUrl,
+    raw: ""
+  };
+}
+
+/* 仅限后台内部使用：返回网关当前会话的原始身份（uid/ip），不进入任何网页可见结果。 */
+async function queryPortalSessionIdentity(config) {
+  const core = await fetchPortalSessionStatus(config);
+  if (core.state !== "online") return { state: core.state, uid: "", ip: "" };
+  return {
+    state: core.state,
+    uid: stringValue(core.parsed.uid).trim(),
+    ip: liveStatusIp(core.parsed)
+  };
+}
+
+function liveStatusIp(parsed) {
+  const value = firstDefinedKey(parsed, ["v46ip", "wlan_user_ip", "user_ip", "v4ip"]);
+  return isValidPortalIpv4(value) ? value : "";
 }
 
 function buildLoginRequest(account, config, networkOverride = null) {

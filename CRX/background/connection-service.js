@@ -265,9 +265,23 @@ async function recordLoginOutcome(result, options = {}) {
 async function logout() {
   const state = await getState();
   const session = await getSessionState();
-  const account = session.activeIdentity;
+  let account = session.activeIdentity;
+  let network = await resolveCurrentLogoutNetwork(account, state.config);
 
-  const network = await resolveCurrentLogoutNetwork(account, state.config);
+  /* 会话可能不是扩展建立的（例如在学校原始页登录、扩展重装或换机后），activeIdentity
+     可能为空或已过期。此时向网关现场解析当前在线身份（chkstatus uid）与绑定 MAC
+     （find_mac），走与学校原始页一致的 unbind_mac 通道，而不是依赖 a=logout 兜底。 */
+  const live = await resolveLiveLogoutIdentity(state.config, network);
+  if (live.username) {
+    account = { username: live.username, suffix: live.suffix, network: {} };
+  }
+  if (isUsableMac(live.wlanUserMac)) {
+    network = { ...network, wlanUserMac: live.wlanUserMac };
+  }
+  if (!stringValue(network.wlanUserIp).trim() && stringValue(live.wlanUserIp).trim()) {
+    network = { ...network, wlanUserIp: live.wlanUserIp };
+  }
+
   let unbindResult = null;
   let confirmation = null;
 
@@ -333,8 +347,44 @@ async function recordLogoutOutcome(result, confirmation) {
   };
 }
 
-async function resolveCurrentLogoutNetwork(account, config) {
-  const stored = account && account.network || {};
+async function resolveLiveLogoutIdentity(config, network) {
+  const empty = { username: "", suffix: "", wlanUserMac: "", wlanUserIp: "" };
+  try {
+    const identity = await queryPortalSessionIdentity(config);
+    if (identity.state !== "online") return empty;
+    const parsed = accountUtils.parse(stringValue(identity.uid).trim());
+    if (!parsed.username) return empty;
+    const live = {
+      username: parsed.username,
+      suffix: parsed.suffix,
+      wlanUserMac: "",
+      wlanUserIp: stringValue(identity.ip).trim()
+    };
+    const probeNetwork = {
+      ...network,
+      wlanUserIp: stringValue(network.wlanUserIp).trim() || live.wlanUserIp
+    };
+    for (const includeSuffix of [false, true]) {
+      try {
+        const probe = await fetchDrcom(buildFindMacRequest({
+          username: live.username,
+          suffix: live.suffix,
+          network: {}
+        }, config, { networkOverride: probeNetwork, includeSuffix }), "find_mac");
+        const mac = extractMacFromResponse(probe.data, probe.raw);
+        if (isUsableMac(mac)) {
+          live.wlanUserMac = mac;
+          break;
+        }
+      } catch (error) {}
+    }
+    return live;
+  } catch (error) {
+    return empty;
+  }
+}
+
+async function resolveCurrentLogoutNetwork(account, config) {  const stored = account && account.network || {};
   const configured = config && config.network || {};
   let fresh = {};
   try {
