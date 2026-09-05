@@ -133,20 +133,28 @@ async function queryPortalSessionStatus(config) {
   };
 }
 
-/* 仅限后台内部使用：返回网关当前会话的原始身份（uid/ip），不进入任何网页可见结果。 */
+/* 仅限后台内部使用：返回网关当前会话的原始身份，不进入任何网页可见结果。
+   字段来源与学校原始页 a41.js 一致：uid→term.account、ss4→term.mac、v46ip/ss5→term.ip。 */
 async function queryPortalSessionIdentity(config) {
   const core = await fetchPortalSessionStatus(config);
-  if (core.state !== "online") return { state: core.state, uid: "", ip: "" };
+  if (core.state !== "online") return { state: core.state, uid: "", ip: "", mac: "" };
   return {
     state: core.state,
     uid: stringValue(core.parsed.uid).trim(),
-    ip: liveStatusIp(core.parsed)
+    ip: liveStatusIp(core.parsed),
+    mac: liveStatusMac(core.parsed)
   };
 }
 
 function liveStatusIp(parsed) {
   const value = firstDefinedKey(parsed, ["v46ip", "wlan_user_ip", "user_ip", "v4ip"]);
   return isValidPortalIpv4(value) ? value : "";
+}
+
+function liveStatusMac(parsed) {
+  const value = firstDefinedKey(parsed, ["ss4", "olmac", "wlan_user_mac", "online_mac"]);
+  const normalized = accountUtils.normalizeMac(value);
+  return isUsableMac(normalized) ? normalized : "";
 }
 
 function buildLoginRequest(account, config, networkOverride = null) {
@@ -222,7 +230,8 @@ function buildPortalLogoutRequest(config, networkOverride = null) {
   url.searchParams.set("register_mode", "1");
   url.searchParams.set("wlan_user_ip", network.wlanUserIp || "");
   url.searchParams.set("wlan_user_ipv6", network.wlanUserIpv6 || "");
-  url.searchParams.set("wlan_vlan_id", "");
+  /* 学校原始页 term.vlan 默认 1（a41.js），网关用它定位会话；发空值会导致 a=logout 静默无效 */
+  url.searchParams.set("wlan_vlan_id", "1");
   url.searchParams.set("wlan_user_mac", accountUtils.normalizeMac(network.wlanUserMac) || "000000000000");
   url.searchParams.set("wlan_ac_ip", network.wlanAcIp || "");
   url.searchParams.set("wlan_ac_name", network.wlanAcName || "");

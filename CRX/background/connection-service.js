@@ -357,26 +357,29 @@ async function resolveLiveLogoutIdentity(config, network) {
     const live = {
       username: parsed.username,
       suffix: parsed.suffix,
-      wlanUserMac: "",
+      /* chkstatus 的 ss4 就是学校页面 term.mac 的来源（a41.js），优先于 find_mac 猜测 */
+      wlanUserMac: stringValue(identity.mac).trim(),
       wlanUserIp: stringValue(identity.ip).trim()
     };
-    const probeNetwork = {
-      ...network,
-      wlanUserIp: stringValue(network.wlanUserIp).trim() || live.wlanUserIp
-    };
-    for (const includeSuffix of [false, true]) {
-      try {
-        const probe = await fetchDrcom(buildFindMacRequest({
-          username: live.username,
-          suffix: live.suffix,
-          network: {}
-        }, config, { networkOverride: probeNetwork, includeSuffix }), "find_mac");
-        const mac = extractMacFromResponse(probe.data, probe.raw);
-        if (isUsableMac(mac)) {
-          live.wlanUserMac = mac;
-          break;
-        }
-      } catch (error) {}
+    if (!isUsableMac(live.wlanUserMac)) {
+      const probeNetwork = {
+        ...network,
+        wlanUserIp: stringValue(network.wlanUserIp).trim() || live.wlanUserIp
+      };
+      for (const includeSuffix of [false, true]) {
+        try {
+          const probe = await fetchDrcom(buildFindMacRequest({
+            username: live.username,
+            suffix: live.suffix,
+            network: {}
+          }, config, { networkOverride: probeNetwork, includeSuffix }), "find_mac");
+          const mac = extractMacFromResponse(probe.data, probe.raw);
+          if (isUsableMac(mac)) {
+            live.wlanUserMac = mac;
+            break;
+          }
+        } catch (error) {}
+      }
     }
     return live;
   } catch (error) {
