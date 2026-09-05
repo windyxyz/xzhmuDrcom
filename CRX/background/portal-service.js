@@ -84,6 +84,31 @@ async function handleTabRedirect(tabId, targetUrl) {
   });
 }
 
+/* 扩展更新/重载后，已打开的门户标签页里的内容脚本会孤儿化（消息全部失效）。
+   刷新这些标签页让内容脚本重新注入，用户无需了解"要手动 F5"。 */
+async function reloadPortalTabs() {
+  const state = await getState();
+  const patterns = [...new Set([
+    "http://10.10.10.2/*",
+    portalMatchPattern(state.config.portalUrl)
+  ].filter(Boolean))];
+  let tabs = [];
+  try {
+    tabs = await chrome.tabs.query({ url: patterns });
+  } catch (error) {
+    return 0;
+  }
+  let reloaded = 0;
+  for (const tab of tabs) {
+    if (typeof tab.id !== "number") continue;
+    try {
+      await chrome.tabs.reload(tab.id);
+      reloaded += 1;
+    } catch (error) {}
+  }
+  return reloaded;
+}
+
 async function markSenderTab(sender) {
   if (!sender || !sender.tab || typeof sender.tab.id !== "number") {
     return;

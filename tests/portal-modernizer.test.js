@@ -240,6 +240,10 @@ function createHarness(options = {}) {
       runtime: {
         lastError: null,
         sendMessage(message, callback) {
+          if ((options.throwingActions || []).includes(message.action)) {
+            /* 模拟扩展重载后已开页面孤儿化：chrome.runtime 调用同步抛错 */
+            throw new Error("Extension context invalidated.");
+          }
           messages.push(message);
           if (deferredActions.has(message.action)) {
             const callbacks = pendingCallbacks.get(message.action) || [];
@@ -431,6 +435,21 @@ test("取消注销确认不会调用后台下线", async () => {
   assert.equal(harness.confirmations.length, 1);
   assert.match(harness.confirmations[0].message, /注销并解绑 MAC/);
   assert.equal(harness.messages.some((message) => message.action === "drcom:logout"), false);
+});
+
+test("扩展重载孤儿化后摘除现代界面并显示刷新引导", async () => {
+  const harness = createHarness({ online: true, throwingActions: ["drcom:logout"] });
+  await loadModernizer(harness);
+  await harness.flush();
+  assert.ok(harness.document.getElementById("drcom-modern-root"));
+
+  await harness.document.getElementById("drcom-logout").emit("click", { isTrusted: true });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(harness.confirmations.length, 1);
+  assert.equal(harness.document.getElementById("drcom-modern-root"), null);
+  assert.ok(harness.document.getElementById("drcom-context-lost-hint"));
+  assert.equal(harness.document.documentElement.classList.contains("drcom-modern-active"), false);
 });
 
 test("下线认证失败时门户界面保持在线并显示错误", async () => {

@@ -449,20 +449,57 @@
   }
 
 
+  /* 扩展重载/更新后，已开门户页里的内容脚本会孤儿化：chrome.runtime 不可用，
+     任何消息都会抛 "Extension context invalidated"。此时摘除现代界面并给出明确的
+     刷新引导，避免用户面对"点击无响应"的假死界面。 */
+  let contextLostHandled = false;
+
+  function handleExtensionContextLost() {
+    if (contextLostHandled) return;
+    contextLostHandled = true;
+    try {
+      removeModernPortal();
+      if (document.getElementById("drcom-context-lost-hint")) return;
+      const hint = document.createElement("div");
+      hint.id = "drcom-context-lost-hint";
+      hint.setAttribute("role", "alert");
+      hint.innerHTML = '<span>徐医网络tools 已更新，请刷新页面以恢复登录界面。</span>'
+        + '<button id="drcom-context-lost-refresh" type="button">立即刷新</button>';
+      hint.style.cssText = "position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:12px;padding:10px 16px;background:#1a1a1a;color:#fff;font:13px/1.5 system-ui,sans-serif;border:1px solid rgba(255,255,255,.2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);";
+      hint.querySelector("#drcom-context-lost-refresh")?.addEventListener("click", (event) => {
+        if (!event.isTrusted) return;
+        window.location.reload();
+      });
+      document.body.append(hint);
+    } catch (error) {}
+  }
+
   function sendMessage(message) {
     return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(message, (response) => {
-        const error = chrome.runtime.lastError;
-        if (error) {
-          reject(new Error(error.message));
+      try {
+        chrome.runtime.sendMessage(message, (response) => {
+          const error = chrome.runtime.lastError;
+          if (error) {
+            if (/context invalidated|Extension context/i.test(error.message || "")) {
+              handleExtensionContextLost();
+            }
+            reject(new Error(error.message));
+            return;
+          }
+          if (!response || response.ok === false) {
+            reject(new Error(response && response.error ? response.error : "后台服务没有返回结果"));
+            return;
+          }
+          resolve(response);
+        });
+      } catch (error) {
+        if (/context invalidated|Extension context|Cannot read/i.test(String(error && error.message))) {
+          handleExtensionContextLost();
+          reject(new Error("扩展已更新，请刷新页面后重试。"));
           return;
         }
-        if (!response || response.ok === false) {
-          reject(new Error(response && response.error ? response.error : "后台服务没有返回结果"));
-          return;
-        }
-        resolve(response);
-      });
+        reject(error);
+      }
     });
   }
 

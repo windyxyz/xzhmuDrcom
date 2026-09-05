@@ -34,6 +34,12 @@ async function handleInstalled(details = {}) {
   if (details.reason === "install") {
     chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
   }
+  if (details.reason === "update") {
+    /* 内容脚本不会注入更新前已打开的门户页；刷新它们避免旧脚本孤儿化后点击无响应。 */
+    try {
+      await reloadPortalTabs();
+    } catch (error) {}
+  }
 }
 
 chrome.runtime.onStartup.addListener(async () => {

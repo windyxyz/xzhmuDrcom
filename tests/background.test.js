@@ -24,6 +24,7 @@ function loadBackground(options = {}) {
   const updatedTabs = [];
   const openedOptions = [];
   const broadcasted = [];
+  const reloadedTabs = [];
   const localStore = options.localStore || {};
   const localWrites = [];
   const sessionStore = options.sessionStore || {};
@@ -176,6 +177,18 @@ function loadBackground(options = {}) {
         update(tabId, options, callback) {
           updatedTabs.push({ tabId, options });
           if (callback) callback();
+        },
+        async query(filter) {
+          const wanted = new Set((filter && filter.url) || []);
+          const available = options.currentTabs ? Object.values(options.currentTabs) : [];
+          /* host 含端口，与 chrome 匹配模式行为一致：http://10.10.10.2/* 不匹配 :801 */
+          return structuredClone(available.filter((tab) => {
+            const url = new URL(tab.url);
+            return wanted.has(`${url.protocol}//${url.host}/*`);
+          }));
+        },
+        async reload(tabId) {
+          reloadedTabs.push(tabId);
         }
       }
     },
@@ -184,6 +197,7 @@ function loadBackground(options = {}) {
     __broadcasted: broadcasted,
     __createdAlarms: createdAlarms,
     __createdTabs: createdTabs,
+    __reloadedTabs: reloadedTabs,
     __listeners: listeners,
     __localStore: localStore,
     __localWrites: localWrites,
@@ -395,6 +409,24 @@ test("首次安装会打开欢迎页，扩展更新不会重复打开", async ()
   background.__createdTabs.length = 0;
   await onInstalled({ reason: "update" });
   assert.deepEqual(JSON.parse(JSON.stringify(background.__createdTabs)), []);
+});
+
+test("扩展更新后自动刷新已打开的门户标签页以重新注入内容脚本", async () => {
+  const background = loadBackground({
+    currentTabs: {
+      1: { id: 1, url: "http://10.10.10.2/some?page=1" },
+      2: { id: 2, url: "https://www.xzhmu.edu.cn/" },
+      3: { id: 3, url: "http://10.10.10.2:801/eportal/" }
+    }
+  });
+  const [onInstalled] = background.__listeners.installed;
+
+  await onInstalled({ reason: "install" });
+  assert.deepEqual(background.__reloadedTabs, []);
+
+  await onInstalled({ reason: "update" });
+  /* 只有匹配门户模式的标签页会刷新；官网与 801 端口不在匹配范围内 */
+  assert.deepEqual(background.__reloadedTabs, [1]);
 });
 
 test("门户安全配置不携带背景数据且专用外观接口单独返回完整配置", async () => {
