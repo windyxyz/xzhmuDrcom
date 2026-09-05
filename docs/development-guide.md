@@ -206,9 +206,9 @@ activeIdentity 不保存密码，也不依赖长期账号中的历史 IP；它�
 
 ### 6.4 下线与删除
 
-下线不回退到界面当前选择或调用参数中的其他账号。后台先取得当前门户 IP，并从 `chkstatus` 的 `uid` 与 `ss4` 解析真实在线身份；`ss4` 缺失时只用该完整在线账号查询一次 `find_mac`，从真实响应的 `list[].online_mac` 读取 MAC。存在有效 MAC 时先调用 unbind_mac；没有 MAC、解绑失败、复核仍在线或状态未知时，改用包含协议占位字段和当前网络参数的完整 Portal/logout。
+下线不回退到界面当前选择或调用参数中的其他账号。后台先取得当前门户 IP，并从 `chkstatus` 的 `uid` 与 `ss4` 解析真实在线身份；全零和全一 MAC 都是学校使用的无效占位值。`ss4` 缺失或为占位值时，只用该完整在线账号查询一次 `find_mac`，严格选择 `list[].online_ip` 等于当前门户 IP 的记录，再读取本机 `online_mac`。没有匹配记录时不使用其他终端的 MAC。存在有效 MAC 时先调用 unbind_mac；没有 MAC、解绑失败、复核仍在线或状态未知时，改用包含协议占位字段和当前网络参数的完整 Portal/logout。
 
-unbind_mac 或 Portal/logout 返回成功并不等于最终成功。后台按 300ms、800ms、1500ms 复核 `/drcom/chkstatus`；只有明确 offline 才清除重试/保活 Alarm、清空 activeIdentity，并把连接状态原子设置为 offline。状态 online 或 unknown 时保留真实状态与活动身份，并返回可理解错误。
+unbind_mac 或 Portal/logout 返回成功并不等于最终成功。学校页面在解绑成功后固定等待 5 秒再刷新，生产抓包中的下一次状态检查也均发生在约 5.7–5.9 秒后；后台因此先等待 5 秒复核 `/drcom/chkstatus`，必要时再等待 1.5 秒复核一次。只有明确 offline 才清除重试/保活 Alarm、清空 activeIdentity，并把连接状态原子设置为 offline。状态 online 或 unknown 时保留真实状态与活动身份，并返回可理解错误。
 
 删除账号前显示具体名称和脱敏账号，默认焦点在取消按钮，Escape 可以取消。删除只影响选定账号；设置重置明确保留账号。
 
@@ -332,7 +332,7 @@ await chrome.runtime.sendMessage({
 | --- | --- | --- | --- | --- |
 | 状态检查 | 门户 origin 的 `/drcom/chkstatus` | `callback`、随机值 | 否 | 区分 `online`、`offline`、`unknown`。 |
 | 上下文获取 | `config.portalUrl` | 浏览器同源 Cookie；无账号查询参数 | 否 | 从页面 URL 或静态变量取得当前 IP。 |
-| MAC 查询 | `config.apiUrl`，`c=Portal&a=find_mac` | `chkstatus` 返回的完整在线账号、当前 IP、协议版本 | 否 | 仅在注销且 `ss4` 无有效 MAC 时查询一次；读取 `list[].online_mac`，失败后进入完整注销兜底。 |
+| MAC 查询 | `config.apiUrl`，`c=Portal&a=find_mac` | `chkstatus` 返回的完整在线账号、当前 IP、协议版本 | 否 | 仅在注销且 `ss4` 无有效 MAC 时查询一次；用 `list[].online_ip` 匹配当前 IP 后读取 `online_mac`，失败后进入完整注销兜底。 |
 | 实际认证 | `config.apiUrl`，`c=Portal&a=login` | 完整账号、密码、当前网络参数和协议字段 | **是** | 唯一会发送真实密码的网络请求。 |
 
 这些调用均为 GET。`credentials: "include"` 只用于门户状态和上下文关联现有校园网页会话，不会把密码写入 Cookie。由于学校接口是 HTTP，`Portal/login` 的查询参数在网络层不是端到端加密；日志脱敏只能保护扩展输出，不能保护传输链路。

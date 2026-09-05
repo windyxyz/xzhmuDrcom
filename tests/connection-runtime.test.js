@@ -407,7 +407,7 @@ test("活动身份缺失时从 chkstatus 的 uid 与 ss4 解析身份走 unbind_
   assert.equal(actions.includes("logout"), false);
 });
 
-test("chkstatus 缺少 ss4 时用完整在线账号查询生产 find_mac 响应后注销", async () => {
+test("校园网 ss4 无效时用无后缀在线账号查询本机 MAC 后注销", async () => {
   const requests = [];
   const sessionStore = activeSession();
   sessionStore.drcomAssistantSession.activeIdentity = null;
@@ -421,12 +421,12 @@ test("chkstatus 缺少 ss4 时用完整在线账号查询生产 find_mac 响应�
       if (url.pathname === "/drcom/chkstatus") {
         chkstatusCount += 1;
         return chkstatusCount === 1
-          ? response('dr1001({"result":1,"uid":"student@telecom","v46ip":"172.28.180.144","ss4":"000000000000"})', url.toString())
+          ? response('dr1001({"result":1,"uid":"student","v46ip":"172.28.180.144","ss4":"111111111111"})', url.toString())
           : response('dr1001({"result":0})', url.toString());
       }
       if (url.port !== "801") return response('<script>var v4ip="172.28.180.144";</script>', url.toString());
       if (action === "find_mac") {
-        return response('dr1004({"result":1,"msg":"success","list":[{"online_mac":"58:02:05:DC:58:C2","user_account":"student@telecom"}]})', url.toString());
+        return response('dr1004({"result":1,"msg":"success","list":[{"online_ip":"172.28.180.99","online_mac":"11:11:11:11:11:11","user_account":"student"},{"online_ip":"172.28.180.144","online_mac":"58:02:05:DC:58:C2","user_account":"student"}]})', url.toString());
       }
       if (action === "unbind_mac") return response('dr1002({"result":1,"msg":"unbind success"})', url.toString());
       return response('dr1002({"result":1,"msg":"logout success"})', url.toString());
@@ -443,9 +443,26 @@ test("chkstatus 缺少 ss4 时用完整在线账号查询生产 find_mac 响应�
 
   assert.equal(result.success, true);
   assert.equal(findMacRequests.length, 1);
-  assert.equal(findMacRequests[0].searchParams.get("user_account"), "student@telecom");
+  assert.equal(findMacRequests[0].searchParams.get("user_account"), "student");
+  assert.equal(unbind.searchParams.get("user_account"), "student");
   assert.equal(unbind.searchParams.get("wlan_user_mac"), "580205DC58C2");
   assert.equal(fullLogout, undefined);
+});
+
+test("注销状态复核至少覆盖学校页面的五秒生效窗口", async () => {
+  const background = loadConnectionRuntime();
+  let elapsed = 0;
+  background.waitForLogoutDelay = async (delay) => {
+    elapsed += delay;
+  };
+  background.queryPortalSessionStatus = async () => ({
+    state: elapsed >= 5000 ? "offline" : "online"
+  });
+
+  const result = await background.confirmPortalOffline(stateWithAccount(account()).config);
+
+  assert.equal(result.state, "offline");
+  assert.ok(elapsed >= 5000);
 });
 
 test("网关现场解析不到在线身份时仍走完整 Portal/logout 兜底", async () => {

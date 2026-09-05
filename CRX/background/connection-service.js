@@ -353,7 +353,7 @@ async function resolveLiveLogoutIdentity(config, network) {
           suffix: live.suffix,
           network: {}
         }, config, { networkOverride: probeNetwork, includeSuffix: true }), "find_mac");
-        const mac = extractMacFromResponse(probe.data, probe.raw);
+        const mac = extractMacFromResponse(probe.data, probe.raw, probeNetwork.wlanUserIp);
         if (isUsableMac(mac)) live.wlanUserMac = mac;
       } catch (error) {}
     }
@@ -385,7 +385,8 @@ async function resolveCurrentLogoutNetwork(account, config) {  const stored = ac
 
 async function confirmPortalOffline(config) {
   let status = { state: "unknown" };
-  for (const delay of [300, 800, 1500]) {
+  /* 学校页面在 unbind_mac 成功后固定等待 5 秒才刷新；提前复核会把生效中的解绑误判为失败。 */
+  for (const delay of [5000, 1500]) {
     await waitForLogoutDelay(delay);
     status = await queryPortalSessionStatus(config);
     if (status.state === "offline") return status;

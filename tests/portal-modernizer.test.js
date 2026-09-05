@@ -452,11 +452,16 @@ test("扩展重载孤儿化后摘除现代界面并显示刷新引导", async ()
   assert.equal(harness.document.documentElement.classList.contains("drcom-modern-active"), false);
 });
 
-test("下线认证失败时门户界面保持在线并显示错误", async () => {
+test("后台返回 ok=false 时门户界面显示真实注销错误而不是伪报无响应", async () => {
   const harness = createHarness({
     online: true,
     responses: {
-      "drcom:logout": { ok: true, success: false, online: true, message: "下线失败" }
+      "drcom:logout": {
+        ok: false,
+        success: false,
+        online: true,
+        message: "注销未完成，校园网会话仍然在线。"
+      }
     }
   });
   await loadModernizer(harness);
@@ -467,7 +472,10 @@ test("下线认证失败时门户界面保持在线并显示错误", async () =>
 
   const root = harness.document.getElementById("drcom-modern-root");
   assert.match(root.innerHTML, /已经连接校园网/);
-  assert.equal(harness.document.getElementById("drcom-form-status").textContent, "下线失败");
+  assert.equal(
+    harness.document.getElementById("drcom-form-status").textContent,
+    "注销未完成，校园网会话仍然在线。"
+  );
 });
 
 test("重置按钮清空现代登录表单并恢复保存选项", async () => {
