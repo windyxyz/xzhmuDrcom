@@ -42,24 +42,28 @@ async function handleInstalled(details = {}) {
   }
 }
 
-chrome.runtime.onStartup.addListener(async () => {
-  await backgroundReady;
-  const state = await getState();
-  await setupAutomation(state);
-  await syncPortalContentScript(state);
-  if (state.config.automation.loginOnStartup) {
-    await loginSelectedAccount("浏览器启动自动登录", { automatic: true });
-  }
+chrome.runtime.onStartup.addListener(() => {
+  void (async () => {
+    await backgroundReady;
+    const state = await getState();
+    await setupAutomation(state);
+    await syncPortalContentScript(state);
+    if (state.config.automation.loginOnStartup) {
+      await loginSelectedAccount("浏览器启动自动登录", { automatic: true });
+    }
+  })().catch(() => console.warn("后台启动任务失败。"));
 });
 
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  await backgroundReady;
-  if (alarm.name === KEEPALIVE_ALARM) {
-    void keepAliveTick();
-  }
-  if (alarm.name === RETRY_ALARM) {
-    void loginSelectedAccount("网络失败自动重试", { automatic: true });
-  }
+chrome.alarms.onAlarm.addListener((alarm) => {
+  void (async () => {
+    await backgroundReady;
+    if (alarm.name === KEEPALIVE_ALARM) {
+      await keepAliveTick();
+    }
+    if (alarm.name === RETRY_ALARM) {
+      await loginSelectedAccount("网络失败自动重试", { automatic: true });
+    }
+  })().catch(() => console.warn("后台定时任务失败。"));
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

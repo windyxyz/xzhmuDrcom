@@ -932,9 +932,11 @@ function setupPaneToggle() {
   button.addEventListener("pointerdown", () => {
     button.querySelector(".animated-icon-hamburger")?.classList.add("pressing");
   });
-  button.addEventListener("pointerup", () => {
+  const releasePointer = () => {
     button.querySelector(".animated-icon-hamburger")?.classList.remove("pressing");
-  });
+  };
+  button.addEventListener("pointerup", releasePointer);
+  button.addEventListener("pointercancel", releasePointer);
   button.addEventListener("click", () => {
     const next = !layout.classList.contains("nav-compact");
     apply(next);

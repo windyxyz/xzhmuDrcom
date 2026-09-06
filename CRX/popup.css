@@ -1,5 +1,6 @@
 /* 快捷弹窗 — WinUI 3 控件与卡片（420px 固定宽度） */
 
+[hidden] { display: none !important; }
 * { box-sizing: border-box; }
 html { width: 420px; min-width: 0; max-height: 100vh; max-height: 100dvh; color-scheme: light dark; background: var(--solid-bg-base); -webkit-text-size-adjust: 100%; }
 body { width: 100%; min-width: 0; min-height: min(600px, 100vh); min-height: min(600px, 100dvh); max-height: 100vh; max-height: 100dvh; margin: 0; overflow-y: auto; color: var(--text-primary); background: var(--solid-bg-base); font-family: var(--font-ui); }

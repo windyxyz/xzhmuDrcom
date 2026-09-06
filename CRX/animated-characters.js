@@ -88,15 +88,16 @@
 
     const centers = {};
     const face = { purple: { x: 0, y: 0, skew: 0 }, black: { x: 0, y: 0, skew: 0 }, orange: { x: 0, y: 0, skew: 0 }, yellow: { x: 0, y: 0, skew: 0 } };
-    let timers = [];
+    const timers = new Set();
     let rafId = 0;
     let lookRafId = 0;
 
     function later(fn, ms) {
       const id = setTimeout(() => {
+        timers.delete(id);
         if (!destroyed) fn();
       }, ms);
-      timers.push(id);
+      timers.add(id);
       return id;
     }
 
@@ -359,11 +360,12 @@
       destroy() {
         destroyed = true;
         timers.forEach((id) => clearTimeout(id));
+        timers.clear();
         if (rafId) cancelAnimationFrame(rafId);
         if (lookRafId) cancelAnimationFrame(lookRafId);
         resizeObserver?.disconnect();
-        if (interactive && typeof window !== "undefined") {
-          window.removeEventListener("mousemove", onMouseMove);
+        if (typeof window !== "undefined") {
+          if (interactive) window.removeEventListener("mousemove", onMouseMove);
           window.removeEventListener("resize", handleResize);
         }
         frame.innerHTML = "";

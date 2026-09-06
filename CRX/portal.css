@@ -1,5 +1,6 @@
 /* 门户现代认证页 — WinUI 控件 + 动画角色品牌面板 */
 
+[hidden] { display: none !important; }
 html.drcom-modern-active, html.drcom-modern-active body { min-height: 100% !important; min-height: 100dvh !important; margin: 0 !important; overflow: auto !important; color-scheme: light dark; background: var(--solid-bg-base) !important; }
 html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appearance):not(.confirm-dialog) { display: none !important; }
 #drcom-private-appearance { position: fixed; z-index: 2147483646; inset: 0; display: block !important; overflow: hidden; pointer-events: none; }

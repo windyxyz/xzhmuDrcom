@@ -266,3 +266,35 @@ test("弹窗状态更新可被辅助技术感知且刷新操作有明确名称",
     /<button[^>]*id="refresh-status"[^>]*aria-label="刷新连接状态"/
   );
 });
+
+test("异步壁纸回调、门户孤儿提示和清理逻辑保持防御性", () => {
+  const welcome = readExtensionFile("welcome.js");
+  const modernizer = readExtensionFile("portal-modernizer.js");
+  assert.ok(welcome.includes("chrome.runtime.lastError"));
+  assert.ok(modernizer.includes("xzhmu徐医校园网 已更新"));
+  assert.equal(modernizer.includes("context invalidated|Extension context|Cannot read"), false);
+  const removeModernPortal = modernizer.slice(
+    modernizer.indexOf("function removeModernPortal()"),
+    modernizer.indexOf("function showCaptchaFallbackHint()")
+  );
+  assert.ok(removeModernPortal.includes("clearTimeout(sadRevertTimer)"));
+});
+
+test("动画和侧栏交互会完整清理临时状态", () => {
+  const characters = readExtensionFile("animated-characters.js");
+  const options = readExtensionFile("options.js");
+  assert.ok(characters.includes("timers.delete(id)"));
+  assert.ok(characters.includes("timers.clear()"));
+  assert.ok(
+    characters.includes(
+      'if (typeof window !== "undefined") {\n          if (interactive) window.removeEventListener("mousemove", onMouseMove);\n          window.removeEventListener("resize", handleResize);\n        }'
+    )
+  );
+  assert.ok(options.includes('button.addEventListener("pointercancel"'));
+});
+
+test("会切换 hidden 属性的页面都提供强制隐藏样式", () => {
+  for (const fileName of ["popup.css", "welcome.css", "portal.css"]) {
+    assert.ok(readExtensionFile(fileName).includes("[hidden] { display: none !important; }"), fileName);
+  }
+});

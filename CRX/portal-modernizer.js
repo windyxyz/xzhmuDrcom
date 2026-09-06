@@ -154,6 +154,10 @@
   }
 
   function removeModernPortal() {
+    if (sadRevertTimer) {
+      clearTimeout(sadRevertTimer);
+      sadRevertTimer = 0;
+    }
     document.documentElement.classList.remove("drcom-modern-active");
     document.getElementById("drcom-modern-root")?.remove();
     document.getElementById("drcom-private-appearance")?.remove();
@@ -465,7 +469,7 @@
       const hint = document.createElement("div");
       hint.id = "drcom-context-lost-hint";
       hint.setAttribute("role", "alert");
-      hint.innerHTML = '<span>徐医网络tools 已更新，请刷新页面以恢复登录界面。</span>'
+      hint.innerHTML = '<span>xzhmu徐医校园网 已更新，请刷新页面以恢复登录界面。</span>'
         + '<button id="drcom-context-lost-refresh" type="button">立即刷新</button>';
       hint.style.cssText = "position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:12px;padding:10px 16px;background:#1a1a1a;color:#fff;font:13px/1.5 system-ui,sans-serif;border:1px solid rgba(255,255,255,.2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);";
       hint.querySelector("#drcom-context-lost-refresh")?.addEventListener("click", (event) => {
@@ -499,7 +503,7 @@
           resolve(response);
         });
       } catch (error) {
-        if (/context invalidated|Extension context|Cannot read/i.test(String(error && error.message))) {
+        if (/context invalidated|Extension context/i.test(String(error && error.message))) {
           handleExtensionContextLost();
           reject(new Error("扩展已更新，请刷新页面后重试。"));
           return;

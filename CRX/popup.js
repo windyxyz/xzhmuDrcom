@@ -99,6 +99,7 @@ function applyAppearance(ui) {
   const appearance = globalThis.DrcomAppearance.applyToRoot(document.documentElement, ui);
   if (ui.background !== "daily") return appearance;
   chrome.runtime.sendMessage({ action: "wallpaper:get" }, (response) => {
+    if (chrome.runtime.lastError) return;
     const wallpaper = response && response.wallpaper;
     if (wallpaper && wallpaper.ok && wallpaper.dataUrl) {
       globalThis.DrcomAppearance.applyToRoot(document.documentElement, {
@@ -173,13 +174,16 @@ async function saveCurrentAccount() {
 async function login() {
   setBusy(true);
   try {
+    const account = readAccountForm();
+    if (!account.username) throw new Error("请输入账号");
+    if (!account.password) throw new Error("请输入密码");
     let result;
     if ($("remember").checked) {
-      const saved = await sendMessage({ action: "account:save", account: readAccountForm() });
+      const saved = await sendMessage({ action: "account:save", account });
       result = await sendMessage({ action: "drcom:login", accountId: saved.account.id });
       await loadState();
     } else {
-      result = await sendMessage({ action: "drcom:login", account: readAccountForm() });
+      result = await sendMessage({ action: "drcom:login", account });
     }
     renderResult(result);
   } catch (error) {

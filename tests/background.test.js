@@ -261,6 +261,35 @@ test("后台入口只负责依赖加载和事件注册", () => {
     assert.doesNotThrow(() => readFileSync(join(__dirname, "..", "CRX", modulePath), "utf8"));
   }
 });
+
+test("启动回调内部失败会被捕获且不会返回拒绝 Promise", async () => {
+  const background = loadBackground();
+  background.getState = async () => {
+    throw new Error("injected startup failure");
+  };
+
+  const returned = background.__listeners.startup[0]();
+  returned?.catch(() => {});
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(returned, undefined);
+  assert.ok(background.__warnings.some((warning) => /启动.*失败/.test(warning)));
+});
+
+test("闹钟回调内部失败会被捕获且不会返回拒绝 Promise", async () => {
+  const background = loadBackground();
+  background.keepAliveTick = () => {
+    throw new Error("injected alarm failure");
+  };
+
+  const returned = background.__listeners.alarm[0]({ name: "drcomAssistant.keepAlive" });
+  returned?.catch(() => {});
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(returned, undefined);
+  assert.ok(background.__warnings.some((warning) => /定时任务.*失败/.test(warning)));
+});
+
 test('在线状态结果携带脱敏会话摘要', async () => {
   const payload = JSON.stringify({
     result: '1',
@@ -1168,6 +1197,10 @@ test("自动登录在退避时间到达前会跳过，到达后恢复", () => {
 test("浏览器启动登录使用自动模式并遵守退避状态", async () => {
   const background = loadBackground();
   let invocation = null;
+  let resolveInvocation;
+  const invoked = new Promise((resolve) => {
+    resolveInvocation = resolve;
+  });
   background.getState = async () => ({
     selectedAccountId: "account-1",
     config: {
@@ -1180,10 +1213,12 @@ test("浏览器启动登录使用自动模式并遵守退避状态", async () =>
   });
   background.loginSelectedAccount = async (reason, options) => {
     invocation = { reason, options };
+    resolveInvocation();
     return { success: true };
   };
 
-  await background.__listeners.startup[0]();
+  background.__listeners.startup[0]();
+  await invoked;
 
   assert.deepEqual(JSON.parse(JSON.stringify(invocation)), {
     reason: "浏览器启动自动登录",

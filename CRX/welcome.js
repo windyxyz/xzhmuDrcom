@@ -14,6 +14,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         globalThis.DrcomAppearance.applyToRoot(document.documentElement, ui);
         if (ui.background === "daily") {
           chrome.runtime.sendMessage({ action: "wallpaper:get" }, (wallpaperResponse) => {
+            if (chrome.runtime.lastError) return;
             const wallpaper = wallpaperResponse && wallpaperResponse.wallpaper;
             if (wallpaper && wallpaper.ok && wallpaper.dataUrl) {
               globalThis.DrcomAppearance.applyToRoot(document.documentElement, {

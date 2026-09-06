@@ -17,7 +17,8 @@ function loadPopup(options = {}) {
     ["account-list", {
       innerHTML: "",
       append(element) { createdElements.push(element); }
-    }]
+    }],
+    ...(options.elements || [])
   ]);
   const context = vm.createContext({
     URL,
@@ -26,6 +27,7 @@ function loadPopup(options = {}) {
     console,
     document: {
       addEventListener() {},
+      body: { dataset: {} },
       createElement() {
         const element = { className: "", innerHTML: "" };
         createdElements.push(element);
@@ -33,7 +35,9 @@ function loadPopup(options = {}) {
       },
       getElementById(id) {
         return elements.get(id) || null;
-      }
+      },
+      documentElement: {},
+      querySelectorAll() { return []; }
     },
     setTimeout
   });
@@ -161,4 +165,62 @@ test("弹窗状态尚未加载时打开认证页不会崩溃或误跳默认地�
   new vm.Script('state = { config: { portalUrl: "https://gateway.example/login" } }').runInContext(context);
   assert.equal(context.openConfiguredPortal(), true);
   assert.deepEqual(opened, [{ url: "https://gateway.example/login" }]);
+});
+
+test("每日壁纸回调遇到 runtime.lastError 时不应用无效结果", () => {
+  let appearanceCalls = 0;
+  const chrome = {
+    runtime: {
+      lastError: { message: "扩展上下文已失效" },
+      sendMessage(message, callback) {
+        callback({ wallpaper: { ok: true, dataUrl: "data:image/png;base64,AAAA" } });
+      }
+    }
+  };
+  const { context } = loadPopup({ chrome });
+  context.DrcomAppearance = {
+    applyToRoot() {
+      appearanceCalls += 1;
+      return {};
+    }
+  };
+
+  context.applyAppearance({ background: "daily" });
+
+  assert.equal(appearanceCalls, 1);
+});
+
+test("登录前统一校验账号和密码且不会保存不完整账号", async () => {
+  const messages = [];
+  const fields = new Map([
+    ["account-select", { disabled: false }],
+    ["label", { value: "" }],
+    ["username", { value: "" }],
+    ["suffix", { value: "" }],
+    ["password", { value: "secret" }],
+    ["wlan-user-ip", { value: "" }],
+    ["wlan-user-mac", { value: "" }],
+    ["remember", { checked: true }]
+  ]);
+  const chrome = {
+    runtime: {
+      lastError: null,
+      sendMessage(message, callback) {
+        messages.push(structuredClone(message));
+        callback({ ok: true });
+      }
+    }
+  };
+  const { context, elements } = loadPopup({ chrome, elements: fields });
+  new vm.Script("state = { selectedAccountId: '', accounts: [], config: {} }").runInContext(context);
+
+  await context.login();
+  assert.equal(messages.length, 0);
+  assert.match(elements.get("status-message").textContent, /账号/);
+
+  fields.get("username").value = "student";
+  fields.get("password").value = "";
+  await context.login();
+  assert.equal(messages.length, 0);
+  assert.match(elements.get("status-message").textContent, /密码/);
 });

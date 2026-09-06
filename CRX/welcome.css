@@ -1,5 +1,6 @@
 /* 欢迎页 — 动画角色品牌面板 + WinUI 引导内容 */
 
+[hidden] { display: none !important; }
 * { box-sizing: border-box; }
 html { color-scheme: light dark; min-width: 0; background: var(--solid-bg-base); -webkit-text-size-adjust: 100%; }
 body {
