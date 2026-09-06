@@ -478,6 +478,33 @@ test("后台返回 ok=false 时门户界面显示真实注销错误而不是伪�
   );
 });
 
+test("门户注销进行中禁用操作且失败后恢复", async () => {
+  const harness = createHarness({
+    online: true,
+    deferredActions: ["drcom:logout"]
+  });
+  await loadModernizer(harness);
+  await harness.flush();
+
+  const logout = harness.document.getElementById("drcom-logout");
+  const pending = logout.emit("click", { isTrusted: true });
+  await harness.flush();
+
+  assert.equal(logout.disabled, true);
+  harness.resolveDeferred("drcom:logout", {
+    ok: false,
+    success: false,
+    message: "注销未完成，校园网会话仍然在线。"
+  });
+  await pending;
+
+  assert.equal(logout.disabled, false);
+  assert.equal(
+    harness.document.getElementById("drcom-form-status").textContent,
+    "注销未完成，校园网会话仍然在线。"
+  );
+});
+
 test("重置按钮清空现代登录表单并恢复保存选项", async () => {
   const harness = createHarness();
   await loadModernizer(harness);

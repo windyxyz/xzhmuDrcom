@@ -465,6 +465,50 @@ test("注销状态复核至少覆盖学校页面的五秒生效窗口", async ()
   assert.ok(elapsed >= 5000);
 });
 
+test("并发注销共用同一后台任务且只发送一次解绑请求", async () => {
+  const requests = [];
+  let releaseUnbind;
+  let unbindCompleted = false;
+  const unbindGate = new Promise((resolve) => {
+    releaseUnbind = resolve;
+  });
+  const background = loadConnectionRuntime({
+    sessionStore: activeSession(),
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      requests.push(url);
+      const action = url.searchParams.get("a");
+      if (url.pathname === "/drcom/chkstatus") {
+        return response(unbindCompleted
+          ? 'dr1001({"result":0})'
+          : 'dr1001({"result":1,"uid":"student@telecom","v46ip":"192.0.2.46","ss4":"AABBCCDDEEFF"})', url.toString());
+      }
+      if (url.port !== "801") {
+        return response('<script>var v4ip="192.0.2.46";</script>', url.toString());
+      }
+      if (action === "unbind_mac") {
+        await unbindGate;
+        unbindCompleted = true;
+        return response('dr1002({"result":1,"msg":"unbind success"})', url.toString());
+      }
+      return response('dr1002({"result":1,"msg":"logout success"})', url.toString());
+    }
+  });
+  background.getState = async () => structuredClone(stateWithAccount(account()));
+  background.addRequestRecord = async () => undefined;
+  background.waitForLogoutDelay = async () => undefined;
+
+  const first = background.logout();
+  const second = background.logout();
+  await new Promise((resolve) => setImmediate(resolve));
+  releaseUnbind();
+  const [firstResult, secondResult] = await Promise.all([first, second]);
+
+  assert.equal(firstResult.success, true);
+  assert.deepEqual(firstResult, secondResult);
+  assert.equal(requests.filter((url) => url.searchParams.get("a") === "unbind_mac").length, 1);
+});
+
 test("网关现场解析不到在线身份时仍走完整 Portal/logout 兜底", async () => {
   const requests = [];
   const sessionStore = activeSession();

@@ -243,7 +243,19 @@ async function recordLoginOutcome(result, options = {}) {
   };
 }
 
-async function logout() {
+function logout() {
+  if (logoutFlight) return logoutFlight;
+
+  const pending = Promise.resolve().then(performLogout);
+  logoutFlight = pending;
+  const cleanup = () => {
+    if (logoutFlight === pending) logoutFlight = null;
+  };
+  pending.then(cleanup, cleanup);
+  return pending;
+}
+
+async function performLogout() {
   const state = await getState();
   const session = await getSessionState();
   let account = session.activeIdentity;

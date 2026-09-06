@@ -391,13 +391,15 @@
       confirmLabel: "注销并解绑 MAC"
     });
     if (!confirmed) return;
-    setPortalStatus(root, "正在下线…", "progress");
+    setPortalBusy(root, true, "正在下线…");
     try {
       const result = await sendMessage({ action: "drcom:logout" });
       if (!result.success) throw new Error(result.error || result.message || "下线失败");
       mountPortal(activePortalConfig || {}, false);
     } catch (error) {
       setPortalStatus(root, error.message || String(error), "error");
+    } finally {
+      setPortalBusy(root, false);
     }
   }
 
