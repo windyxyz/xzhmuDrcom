@@ -49,6 +49,7 @@ async function syncPortalContentScript(state) {
       "account-utils.js",
       "portal-session.js",
       "appearance.js",
+      "animated-characters.js",
       "portal-ui.js",
       "portal-capture.js",
       "confirm-dialog.js",
@@ -79,7 +80,9 @@ async function handleTabRedirect(tabId, targetUrl) {
 
   // 只防一次“登录后的自动离开网关页”，防完立即解除；不再做长期外站拦截。
   await setTabGuard(tabId, null);
-  chrome.tabs.update(tabId, { url: `${state.config.portalUrl}?drcom_kept=1` }, () => {
+  const portalUrl = new URL(state.config.portalUrl);
+  portalUrl.searchParams.set("drcom_kept", "1");
+  chrome.tabs.update(tabId, { url: portalUrl.toString() }, () => {
     void chrome.runtime.lastError;
   });
 }

@@ -71,6 +71,18 @@ test("manifest 引用的本地入口文件都存在", () => {
   assert.deepEqual(missing, []);
 });
 
+test("默认门户可读取扩展内置图标字体且公开范围仅限网关", () => {
+  const expected = [{
+    resources: ["fonts/segoe-fluent-icons.ttf"],
+    matches: ["http://10.10.10.2/*", "https://10.10.10.2/*"]
+  }];
+  for (const fileName of ["manifest.json", "manifest.firefox.json"]) {
+    const manifest = JSON.parse(readExtensionFile(fileName));
+    assert.deepEqual(manifest.web_accessible_resources, expected, fileName);
+  }
+  assert.equal(existsSync(join(extensionRoot, "fonts", "segoe-fluent-icons.ttf")), true);
+});
+
 test("扩展版本与开发元数据保持一致", () => {
   const manifest = JSON.parse(readExtensionFile("manifest.json"));
   const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));

@@ -1072,6 +1072,23 @@ test("后台重启后仍能从 session 恢复短时间跳转保护", async () =>
   ]);
 });
 
+test("登录后返回带查询参数的门户时只追加一个保留标记", async () => {
+  const background = loadBackground();
+  background.getState = async () => ({
+    config: {
+      portalUrl: "http://10.10.10.2/login?lang=zh",
+      redirect: { returnToPortal: true, guardSeconds: 4 }
+    }
+  });
+
+  await background.markSenderTab({ tab: { id: 9 } });
+  await background.handleTabRedirect(9, "https://example.com/");
+
+  assert.deepEqual(JSON.parse(JSON.stringify(background.__updatedTabs)), [
+    { tabId: 9, options: { url: "http://10.10.10.2/login?lang=zh&drcom_kept=1" } }
+  ]);
+});
+
 test("保活任务已经匹配配置时不会清除并重复创建", async () => {
   const alarms = {
     "drcomAssistant.keepAlive": {
@@ -1683,6 +1700,7 @@ test("保存自定义门户后会为已授权来源注册现代认证内容脚�
       "account-utils.js",
       "portal-session.js",
       "appearance.js",
+      "animated-characters.js",
       "portal-ui.js",
       "portal-capture.js",
       "confirm-dialog.js",

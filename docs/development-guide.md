@@ -137,14 +137,16 @@ flowchart LR
 account-utils.js
   -> portal-session.js
   -> appearance.js
+  -> animated-characters.js
   -> portal-ui.js
+  -> portal-capture.js
   -> confirm-dialog.js
   -> portal-diagnostics-utils.js
   -> portal-diagnostics.js
-  -> portal-capture.js / portal-modernizer.js
+  -> portal-modernizer.js
 ~~~
 
-`portal-ui.js` 在浏览器中依赖前两个共享模块，在 CommonJS 测试中则通过 `require()` 加载；`portal-capture.js` 先安装原页面可信捕获与暂存通道，`portal-modernizer.js` 最后执行，负责组合界面、确认对话框、诊断和后台消息。该顺序同时维护在 `manifest.json`、`background/portal-service.js` 的自定义门户注册列表、浏览器 fixture 和打包白名单中，修改任一入口时必须同步更新对应合约测试。
+`portal-ui.js` 在浏览器中依赖前面的共享模块，在 CommonJS 测试中则通过 `require()` 加载；`portal-capture.js` 先安装原页面可信捕获与暂存通道，`portal-modernizer.js` 最后执行，负责组合界面、确认对话框、诊断和后台消息。默认门户额外加载两项诊断模块；动态注册的自定义门户不启用诊断，但同样必须在 `portal-ui.js` 前加载 `animated-characters.js`。该顺序同时维护在 `manifest.json`、`background/portal-service.js` 的自定义门户注册列表、浏览器 fixture 和打包白名单中，修改任一入口时必须同步更新对应合约测试。
 
 ## 5. 扩展生命周期
 
