@@ -108,8 +108,7 @@ async function fetchPortalSessionStatus(config) {
   }
 }
 
-async function queryPortalSessionStatus(config) {
-  const core = await fetchPortalSessionStatus(config);
+function portalSessionStatusFromCore(core) {
   const state = core.state;
   return {
     ok: core.ok,
@@ -133,10 +132,7 @@ async function queryPortalSessionStatus(config) {
   };
 }
 
-/* 仅限后台内部使用：返回网关当前会话的原始身份，不进入任何网页可见结果。
-   字段来源与学校原始页 a41.js 一致：uid→term.account、ss4→term.mac、v46ip/ss5→term.ip。 */
-async function queryPortalSessionIdentity(config) {
-  const core = await fetchPortalSessionStatus(config);
+function portalSessionIdentityFromCore(core) {
   if (core.state !== "online") return { state: core.state, uid: "", ip: "", mac: "" };
   return {
     state: core.state,
@@ -144,6 +140,25 @@ async function queryPortalSessionIdentity(config) {
     ip: liveStatusIp(core.parsed),
     mac: liveStatusMac(core.parsed)
   };
+}
+
+/* 登录前的状态与身份必须来自同一次 chkstatus，避免两次请求之间会话切换。 */
+async function queryPortalSessionSnapshot(config) {
+  const core = await fetchPortalSessionStatus(config);
+  return {
+    status: portalSessionStatusFromCore(core),
+    identity: portalSessionIdentityFromCore(core)
+  };
+}
+
+async function queryPortalSessionStatus(config) {
+  return (await queryPortalSessionSnapshot(config)).status;
+}
+
+/* 仅限后台内部使用：返回网关当前会话的原始身份，不进入任何网页可见结果。
+   字段来源与学校原始页 a41.js 一致：uid→term.account、ss4→term.mac、v46ip/ss5→term.ip。 */
+async function queryPortalSessionIdentity(config) {
+  return (await queryPortalSessionSnapshot(config)).identity;
 }
 
 function liveStatusIp(parsed) {

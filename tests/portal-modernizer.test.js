@@ -368,6 +368,35 @@ test("现代登录表单只在可信提交时交互保存账号并发起认证",
   assert.match(harness.document.getElementById("drcom-modern-root").innerHTML, /已经连接校园网/);
 });
 
+test("后台报告其他账号在线时现代登录页不会误显示登录成功", async () => {
+  const harness = createHarness({
+    responses: {
+      "drcom:login": {
+        ok: true,
+        success: false,
+        online: true,
+        accountMismatch: true,
+        message: "当前在线的是另一账号，请先注销再登录。"
+      }
+    }
+  });
+  await loadModernizer(harness);
+
+  harness.document.getElementById("drcom-username").value = "202513010318";
+  harness.document.getElementById("drcom-password").value = "masked";
+  await harness.document.getElementById("drcom-login-form").emit("submit", {
+    isTrusted: true,
+    preventDefault() {}
+  });
+  await harness.flush();
+
+  assert.match(harness.document.getElementById("drcom-modern-root").innerHTML, /登录校园网/);
+  assert.equal(
+    harness.document.getElementById("drcom-form-status").textContent,
+    "当前在线的是另一账号，请先注销再登录。"
+  );
+});
+
 test("现代登录表单拒绝合成提交事件", async () => {
   const harness = createHarness();
   await loadModernizer(harness);
@@ -614,6 +643,32 @@ test("用户恢复原始页后延迟登录成功也不会再次接管", async ()
   await harness.flush();
 
   assert.equal(harness.document.getElementById("drcom-modern-root"), null);
+});
+
+test("用户恢复原始页后延迟注销成功也不会再次挂载现代登录页", async () => {
+  const harness = createHarness({
+    pageState: "online",
+    deferredActions: ["drcom:logout"]
+  });
+  await loadModernizer(harness);
+  await harness.flush();
+  const initialMountCount = harness.modernRootMountCount();
+
+  const pending = harness.document.getElementById("drcom-logout").emit("click", { isTrusted: true });
+  await harness.flush();
+  await harness.document.getElementById("drcom-restore-original").emit("click", { isTrusted: true });
+  harness.resolveDeferred("drcom:logout", {
+    ok: true,
+    success: true,
+    online: false,
+    message: "已下线"
+  });
+  await pending;
+  await harness.flush();
+
+  assert.equal(harness.document.getElementById("drcom-modern-root"), null);
+  assert.equal(harness.document.documentElement.classList.contains("drcom-modern-active"), false);
+  assert.equal(harness.modernRootMountCount(), initialMountCount);
 });
 
 test("模板早于配置响应渲染时仍只读取一次配置并接管", async () => {

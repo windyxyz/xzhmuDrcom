@@ -193,7 +193,7 @@ test("登录前确认已经在线时不获取上下文也不发送密码", async
     fetch: async (input) => {
       const url = new URL(String(input));
       requests.push(url);
-      return response('dr1001({"result":1,"user_name":"student"})', url.toString());
+      return response('dr1001({"result":1,"uid":"student@telecom","v46ip":"192.0.2.46","ss4":"AA-BB-CC-DD-EE-FF"})', url.toString());
     }
   });
   background.getState = async () => structuredClone(stateWithAccount(saved));
@@ -208,6 +208,72 @@ test("登录前确认已经在线时不获取上下文也不发送密码", async
   assert.equal(requests.length, 1);
   assert.equal(requests[0].pathname, "/drcom/chkstatus");
   assert.equal(requests.some((url) => url.searchParams.has("user_password")), false);
+  assert.equal(background.__sessionStore.drcomAssistantSession.activeIdentity.username, "student");
+  assert.equal(background.__sessionStore.drcomAssistantSession.activeIdentity.suffix, "@telecom");
+});
+
+test("登录前在线账号与所选账号不一致时保留在线状态且拒绝冒充成功", async () => {
+  const requests = [];
+  const alarms = {};
+  const saved = account();
+  const background = loadConnectionRuntime({
+    alarms,
+    sessionStore: activeSession(),
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      requests.push(url);
+      return response('dr1001({"result":1,"uid":"other@telecom","v46ip":"192.0.2.46"})', url.toString());
+    }
+  });
+  background.getState = async () => structuredClone(stateWithAccount(saved));
+  background.addRequestRecord = async () => undefined;
+
+  const result = await background.loginAccount(saved.id, null, {
+    portalPageUrl: "http://10.10.10.2/"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.online, true);
+  assert.equal(result.success, false);
+  assert.equal(result.accountMismatch, true);
+  assert.equal(result.phase, "online");
+  assert.equal(result.retryable, false);
+  assert.equal(result.retryAt, 0);
+  assert.doesNotMatch(result.message, /other/);
+  assert.equal(result.session, null);
+  assert.equal(JSON.stringify(result).includes("other@telecom"), false);
+  assert.equal(JSON.stringify(result).includes("ot***er"), false);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].pathname, "/drcom/chkstatus");
+  assert.equal(background.__sessionStore.drcomAssistantSession.activeIdentity, null);
+  assert.equal(alarms["drcom-retry"], undefined);
+});
+
+test("登录前已有在线会话但缺少账号身份时不把所选账号记为已登录", async () => {
+  const requests = [];
+  const saved = account();
+  const background = loadConnectionRuntime({
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      requests.push(url);
+      return response('dr1001({"result":1,"v46ip":"192.0.2.46"})', url.toString());
+    }
+  });
+  background.getState = async () => structuredClone(stateWithAccount(saved));
+  background.addRequestRecord = async () => undefined;
+
+  const result = await background.loginAccount(saved.id, null, {
+    portalPageUrl: "http://10.10.10.2/"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.online, true);
+  assert.equal(result.success, false);
+  assert.equal(result.identityVerified, false);
+  assert.equal(result.phase, "online");
+  assert.equal(result.retryable, false);
+  assert.equal(result.session, null);
+  assert.equal(background.__sessionStore.drcomAssistantSession.activeIdentity, null);
 });
 
 test("缺少实时或全局 IP 时历史账号 IP 不会触发密码请求", async () => {
@@ -248,7 +314,7 @@ test("ret_code=2 的已在线提示只有复核在线后才完成登录", async 
         statusChecks += 1;
         return response(statusChecks === 1
           ? 'dr1001({"result":0})'
-          : 'dr1001({"result":1})', url.toString());
+          : 'dr1001({"result":1,"uid":"student@telecom","v46ip":"192.0.2.46"})', url.toString());
       }
       if (url.port !== "801") {
         return response('<script>var v4ip="192.0.2.46";</script>', url.toString());
@@ -267,6 +333,42 @@ test("ret_code=2 的已在线提示只有复核在线后才完成登录", async 
   assert.equal(result.online, true);
   assert.equal(statusChecks, 2);
   assert.equal(background.__sessionStore.drcomAssistantSession.activeIdentity.username, "student");
+});
+
+test("ret_code=2 复核到其他在线账号时不记录请求账号身份", async () => {
+  let statusChecks = 0;
+  const saved = account();
+  const currentState = stateWithAccount(saved);
+  currentState.config.login.findMacBeforeLogin = false;
+  const background = loadConnectionRuntime({
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/drcom/chkstatus") {
+        statusChecks += 1;
+        return response(statusChecks === 1
+          ? 'dr1001({"result":0})'
+          : 'dr1001({"result":1,"uid":"other@telecom","v46ip":"192.0.2.46"})', url.toString());
+      }
+      if (url.port !== "801") {
+        return response('<script>var v4ip="192.0.2.46";</script>', url.toString());
+      }
+      return response('dr1002({"result":0,"ret_code":2,"msg":"已经在线"})', url.toString());
+    }
+  });
+  background.getState = async () => structuredClone(currentState);
+  background.addRequestRecord = async () => undefined;
+
+  const result = await background.loginAccount(saved.id, null, {
+    portalPageUrl: "http://10.10.10.2/"
+  });
+
+  assert.equal(result.online, true);
+  assert.equal(result.success, false);
+  assert.equal(result.accountMismatch, true);
+  assert.equal(result.phase, "online");
+  assert.equal(result.retryable, false);
+  assert.equal(statusChecks, 2);
+  assert.equal(background.__sessionStore.drcomAssistantSession.activeIdentity, null);
 });
 
 test("ret_code=2 的已在线提示在复核离线时保持失败且不保存活动身份", async () => {

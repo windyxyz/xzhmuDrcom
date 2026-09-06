@@ -365,7 +365,7 @@
         result = await sendMessage({ action: "drcom:login", account });
       }
 
-      if (result.online || result.success) {
+      if (result.success) {
         mountPortal(activePortalConfig || {}, true);
         setCharacterMode(document.getElementById("drcom-modern-root"), "happy");
         return;

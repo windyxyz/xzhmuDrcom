@@ -59,15 +59,15 @@ async function performLoginAccount(accountId, transientAccount, options = {}) {
     throw new Error("请先保存或选择账号");
   }
 
-  const currentStatus = await queryPortalSessionStatus(state.config);
+  const currentSnapshot = await queryPortalSessionSnapshot(state.config);
+  const currentStatus = currentSnapshot.status;
   if (currentStatus.state === "online") {
-    return {
-      ...currentStatus,
-      ok: true,
-      success: true,
-      online: true,
-      message: "账号已经在线，无需重复登录。"
-    };
+    return evaluateOnlineAccount(
+      currentStatus,
+      currentSnapshot.identity,
+      account,
+      isTransient
+    );
   }
 
   const portalContext = await resolvePortalRuntimeContext(state.config, options.portalPageUrl || "");
@@ -87,24 +87,88 @@ async function performLoginAccount(accountId, transientAccount, options = {}) {
   const request = buildLoginRequest(account, state.config, network);
   let result = await fetchDrcom(request, "login");
   if (result.requiresStatusConfirmation) {
-    const confirmed = await queryPortalSessionStatus(state.config);
-    result = confirmed.state === "online"
-      ? { ...result, success: true, online: true, message: "账号已经在线，无需重复登录。" }
+    const confirmed = await queryPortalSessionSnapshot(state.config);
+    result = confirmed.status.state === "online"
+      ? evaluateOnlineAccount(
+        { ...result, ok: true, state: "online", online: true },
+        confirmed.identity,
+        account,
+        isTransient,
+        network
+      )
       : { ...result, success: false, online: false, message: "网关提示账号可能在线，但状态复核未确认在线。" };
   }
+
+  const authenticatedIdentity = result.success
+    ? result.authenticatedIdentity || createAuthenticatedIdentity(account, isTransient, network)
+    : null;
+  return { ...result, authenticatedIdentity };
+}
+
+function evaluateOnlineAccount(baseResult, identity, account, isTransient, fallbackNetwork = {}) {
+  const onlineAccount = accountUtils.parse(stringValue(identity && identity.uid).trim());
+  const result = {
+    ...baseResult,
+    ok: true,
+    online: true,
+    state: "online"
+  };
+
+  if (!onlineAccount.username) {
+    return {
+      ...result,
+      success: false,
+      identityVerified: false,
+      session: null,
+      message: "校园网已有会话在线，但无法确认账号。"
+    };
+  }
+
+  if (accountUtils.naturalKey(onlineAccount) !== accountUtils.naturalKey(account)) {
+    return {
+      ...result,
+      success: false,
+      identityVerified: true,
+      accountMismatch: true,
+      session: null,
+      message: "当前在线的是另一账号，请先注销再登录。"
+    };
+  }
+
   return {
     ...result,
-    authenticatedIdentity: sanitizeActiveIdentity({
-      accountId: isTransient ? "" : account.id,
-      username: account.username,
-      suffix: account.suffix,
-      network,
-      source: isTransient ? "transient" : "saved",
-      authenticatedAt: Date.now()
-    })
+    success: true,
+    identityVerified: true,
+    message: "账号已经在线，无需重复登录。",
+    authenticatedIdentity: createAuthenticatedIdentity(
+      account,
+      isTransient,
+      mergeVerifiedNetwork(fallbackNetwork, identity)
+    )
   };
 }
 
+function mergeVerifiedNetwork(fallbackNetwork, identity) {
+  const fallback = fallbackNetwork || {};
+  return {
+    wlanUserIp: stringValue(identity && identity.ip).trim() || stringValue(fallback.wlanUserIp).trim(),
+    wlanUserIpv6: stringValue(fallback.wlanUserIpv6).trim(),
+    wlanUserMac: stringValue(identity && identity.mac).trim() || stringValue(fallback.wlanUserMac).trim(),
+    wlanAcIp: stringValue(fallback.wlanAcIp).trim(),
+    wlanAcName: stringValue(fallback.wlanAcName).trim()
+  };
+}
+
+function createAuthenticatedIdentity(account, isTransient, network) {
+  return sanitizeActiveIdentity({
+    accountId: isTransient ? "" : account.id,
+    username: account.username,
+    suffix: account.suffix,
+    network,
+    source: isTransient ? "transient" : "saved",
+    authenticatedAt: Date.now()
+  });
+}
 
 function createRuntimeLoginNetwork(runtimeNetwork) {
   const fresh = runtimeNetwork || {};
@@ -207,6 +271,21 @@ async function recordLoginOutcome(result, options = {}) {
       nextRetryAt: 0,
       blocked: false,
       message: result.message || "登录成功。",
+      updatedAt: now
+    });
+    await setupAutomation(await getState());
+    return { ...publicResult, phase: "online", retryable: false, retryAt: 0 };
+  }
+
+  if (result && result.online && (result.accountMismatch || result.identityVerified === false)) {
+    await chrome.alarms.clear(RETRY_ALARM);
+    await setActiveIdentity(null);
+    await setConnectionState({
+      phase: "online",
+      attempt: 0,
+      nextRetryAt: 0,
+      blocked: false,
+      message: result.message,
       updatedAt: now
     });
     await setupAutomation(await getState());
