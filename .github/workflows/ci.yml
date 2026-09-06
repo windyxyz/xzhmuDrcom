@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -28,6 +29,8 @@ jobs:
         run: npm run verify:package
       - name: Build release assets
         run: npm run package
+      - name: Build Firefox release asset
+        run: npm run package:firefox
       - name: Upload verified package
         uses: actions/upload-artifact@v4
         with:

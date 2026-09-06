@@ -71,6 +71,27 @@ test("manifest 引用的本地入口文件都存在", () => {
   assert.deepEqual(missing, []);
 });
 
+test("Firefox manifest 引用的全部本地文件都存在", () => {
+  const manifest = JSON.parse(readExtensionFile("manifest.firefox.json"));
+  const paths = [
+    manifest.action.default_popup,
+    manifest.options_ui.page,
+    ...manifest.background.scripts,
+    ...manifest.content_scripts.flatMap((script) => [...script.css, ...script.js])
+  ];
+  assert.deepEqual(paths.filter((path) => !existsSync(join(extensionRoot, path))), []);
+});
+
+test("welcome.js 引用的必需元素都存在于欢迎页", () => {
+  const source = readExtensionFile("welcome.js");
+  const referenced = new Set(Array.from(
+    source.matchAll(/getElementById[(]"([^"]+)"[)]/g),
+    (match) => match[1]
+  ));
+  const declared = declaredElementIds(readExtensionFile("welcome.html"));
+  assert.deepEqual(Array.from(referenced).filter((id) => !declared.has(id)), []);
+});
+
 test("默认门户可读取扩展内置图标字体且公开范围仅限网关", () => {
   const expected = [{
     resources: ["fonts/segoe-fluent-icons.ttf"],

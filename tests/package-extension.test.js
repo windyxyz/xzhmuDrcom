@@ -31,6 +31,23 @@ function readCentralDirectory(zipBuffer) {
   return entries;
 }
 
+function readStoredZipEntry(zipBuffer, wantedName) {
+  for (let offset = 0; offset <= zipBuffer.length - 30;) {
+    if (zipBuffer.readUInt32LE(offset) !== 0x04034b50) break;
+    const contentLength = zipBuffer.readUInt32LE(offset + 18);
+    const nameLength = zipBuffer.readUInt16LE(offset + 26);
+    const extraLength = zipBuffer.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    const contentStart = nameStart + nameLength + extraLength;
+    const name = zipBuffer.subarray(nameStart, nameStart + nameLength).toString("utf8");
+    if (name === wantedName) {
+      return zipBuffer.subarray(contentStart, contentStart + contentLength);
+    }
+    offset = contentStart + contentLength;
+  }
+  throw new Error("ZIP 中缺少文件：" + wantedName);
+}
+
 test("诊断运行时模块以依赖顺序进入分发白名单", () => {
   const archivePaths = RELEASE_FILES.map((entry) => entry.archivePath);
   const expected = [
@@ -115,5 +132,25 @@ test("相同源码重复打包会生成逐字节一致的 ZIP 与 SHA-256", () =
   } finally {
     rmSync(firstDirectory, { recursive: true, force: true });
     rmSync(secondDirectory, { recursive: true, force: true });
+  }
+});
+
+test("Chrome 与 Firefox 分发包使用各自的安全清单", () => {
+  const projectRoot = join(__dirname, "..");
+  const outputDirectory = mkdtempSync(join(tmpdir(), "drcom-browser-manifests-"));
+
+  try {
+    const chromePackage = buildPackage({ projectRoot, outputDirectory, target: "chrome" });
+    const firefoxPackage = buildPackage({ projectRoot, outputDirectory, target: "firefox" });
+    const chromeManifest = JSON.parse(readStoredZipEntry(readFileSync(chromePackage.zipPath), "manifest.json"));
+    const firefoxManifest = JSON.parse(readStoredZipEntry(readFileSync(firefoxPackage.zipPath), "manifest.json"));
+
+    assert.equal(Object.hasOwn(chromeManifest, "key"), false);
+    assert.equal(Object.hasOwn(firefoxManifest, "key"), false);
+    assert.equal(Object.hasOwn(firefoxManifest, "options_page"), false);
+    assert.equal(firefoxManifest.options_ui.page, "options.html");
+    assert.equal(firefoxManifest.browser_specific_settings.gecko.id, "xzhmu-campus-net@xzhmu.local");
+  } finally {
+    rmSync(outputDirectory, { recursive: true, force: true });
   }
 });

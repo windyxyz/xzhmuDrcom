@@ -10,6 +10,7 @@ const read = (path) => readFileSync(join(projectRoot, path), "utf8");
 
 test("开发指南覆盖最终架构、生命周期、接口、测试、打包和安全边界", () => {
   const guide = read("docs/development-guide.md");
+  const version = JSON.parse(read("CRX/manifest.json")).version;
   for (const term of [
     "background/state-store.js",
     "background/portal-context.js",
@@ -23,8 +24,8 @@ test("开发指南覆盖最终架构、生命周期、接口、测试、打包�
     "npm run test:browser",
     "npm run verify:package",
     "npm run package",
-    "drcom-xuzhou-medical-chrome-1.1.0.zip",
-    "drcom-xuzhou-medical-firefox-1.1.0.zip",
+    "drcom-xuzhou-medical-chrome-" + version + ".zip",
+    "drcom-xuzhou-medical-firefox-" + version + ".zip",
     "SHA-256",
     "设备失陷",
     "删除文件前"

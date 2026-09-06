@@ -54,7 +54,7 @@
 
 ## 开发
 
-项目不依赖第三方 npm 包。需要 Node.js 20 或更高版本：
+项目不依赖第三方 npm 包。浏览器测试使用原生 WebSocket，需要 Node.js 22 或更高版本：
 
 ```powershell
 npm run verify

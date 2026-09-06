@@ -11,20 +11,21 @@ const {
   verifyRelease
 } = require("../scripts/verify-release.js");
 
-test("发布标签必须与 Manifest 和 package.json 的 1.1.0 版本一致", () => {
+test("发布标签必须与 Manifest 和 package.json 的当前版本一致", () => {
   const projectRoot = join(__dirname, "..");
+  const version = JSON.parse(readFileSync(join(projectRoot, "CRX", "manifest.json"), "utf8")).version;
   const outputDirectory = mkdtempSync(join(tmpdir(), "drcom-release-"));
   try {
-    const result = verifyRelease({ projectRoot, outputDirectory, tag: "v1.1.0" });
-    assert.equal(result.version, "1.1.0");
-    assert.match(readFileSync(result.notesPath, "utf8"), /^## \[1.1.0\]/);
+    const result = verifyRelease({ projectRoot, outputDirectory, tag: "v" + version });
+    assert.equal(result.version, version);
+    assert.ok(readFileSync(result.notesPath, "utf8").startsWith("## [" + version + "]"));
     assert.throws(
-      () => verifyRelease({ projectRoot, outputDirectory, tag: "v1.0.2" }),
-      /标签.*Manifest.*不一致/
+      () => verifyRelease({ projectRoot, outputDirectory, tag: "v0.0.0" }),
+      (error) => error.message.includes("标签") && error.message.includes("Manifest")
     );
     assert.throws(
-      () => verifyRelease({ projectRoot, outputDirectory, tag: "1.1.0" }),
-      /v1\.1\.0/
+      () => verifyRelease({ projectRoot, outputDirectory, tag: version }),
+      (error) => error.message.includes("v" + version)
     );
   } finally {
     rmSync(outputDirectory, { recursive: true, force: true });
@@ -42,9 +43,9 @@ test("变更说明只提取目标版本，不混入其他版本", () => {
     "## [2.5.2] - 2026-08-01",
     "",
     "- 旧版本"
-  ].join("\n");
+  ].join(String.fromCharCode(10));
 
   const section = extractChangelogSection(changelog, "2.5.3");
-  assert.match(section, /当前版本/);
-  assert.doesNotMatch(section, /旧版本/);
+  assert.ok(section.includes("当前版本"));
+  assert.equal(section.includes("旧版本"), false);
 });
