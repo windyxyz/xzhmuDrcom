@@ -618,17 +618,32 @@ function redactNetworkIdentifiers(value) {
 
 function isUsableMac(value) {
   const mac = accountUtils.normalizeMac(value);
-  return /^[0-9A-F]{12}$/.test(mac) && mac !== "000000000000";
+  return /^[0-9A-F]{12}$/.test(mac)
+    && mac !== "000000000000"
+    && mac !== "111111111111";
 }
 
-function extractMacFromResponse(data, raw) {
+function extractMacFromResponse(data, raw, expectedIp = "") {
   const candidates = [];
+  let hasStructuredList = false;
   if (data && typeof data === "object") {
-    for (const key of ["mac", "user_mac", "wlan_user_mac", "wlanUserMac", "online_user_mac", "onlineUserMac"]) {
-      if (data[key]) candidates.push(data[key]);
+    const records = [data];
+    if (Array.isArray(data.list)) {
+      hasStructuredList = true;
+      const list = data.list.filter((item) => item && typeof item === "object");
+      const currentIp = stringValue(expectedIp).trim();
+      records.push(...(currentIp
+        ? list.filter((item) => stringValue(item.online_ip).trim() === currentIp)
+        : list));
+    }
+    for (const record of records) {
+      for (const key of ["mac", "user_mac", "wlan_user_mac", "wlanUserMac", "online_mac", "onlineMac", "online_user_mac", "onlineUserMac"]) {
+        if (record[key]) candidates.push(record[key]);
+      }
     }
   }
-  candidates.push(raw);
+  /* 有结构化终端列表且指定当前 IP 时，不再从整个原文抓取其他设备的 MAC。 */
+  if (!hasStructuredList || !stringValue(expectedIp).trim()) candidates.push(raw);
 
   for (const candidate of candidates) {
     const text = stringValue(candidate);

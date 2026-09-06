@@ -1,8 +1,8 @@
 # xzhmu徐医校园网
 
-这是一个 Chrome Manifest V3 扩展，用于徐州医科大学 DrCOM 校园网网关。扩展默认仅访问 `10.10.10.2`，提供首次安装引导、可恢复的现代认证页、多账号管理、登录/下线、原认证请求暂存并确认、浏览器启动自动登录、定时保活、短时防跳转和脱敏请求日志。1.0.3 修复账号投毒、响应解析与资源耗尽、低风险安全项和请求日志写放大，并完成主要模块拆分；1.0.2 完成全部界面的 WinUI 3 重构与个性化体系：连接状态机、全局单通道登录、智能退避重试、后台重启恢复、强调色取色器、材质与遮罩调节、必应每日壁纸和动画角色登录页。1.0.2 起，门户登录/在线页表面的遮罩与文字颜色始终跟随整体浅/深主题，不再按背景图片亮度自动判定。欢迎页、弹窗、设置页与认证页均适配窄屏、横屏、触控操作和带安全区的移动设备，并共享跟随系统、浅色、深色和自定义背景外观。
+这是一个 Chrome Manifest V3 扩展，用于徐州医科大学 DrCOM 校园网网关。扩展默认仅访问 `10.10.10.2`，提供首次安装引导、可恢复的现代认证页、多账号管理、登录/下线、原认证请求暂存并确认、浏览器启动自动登录、定时保活、短时防跳转和脱敏请求日志。1.1.0 依据生产抓包恢复学校网关实际使用的登录身份参数与校园网终端解绑流程，并修复解绑结果提示；1.0.3 修复账号投毒、响应解析与资源耗尽、低风险安全项和请求日志写放大，并完成主要模块拆分；1.0.2 完成全部界面的 WinUI 3 重构与个性化体系：连接状态机、全局单通道登录、智能退避重试、后台重启恢复、强调色取色器、材质与遮罩调节、必应每日壁纸和动画角色登录页。1.0.2 起，门户登录/在线页表面的遮罩与文字颜色始终跟随整体浅/深主题，不再按背景图片亮度自动判定。欢迎页、弹窗、设置页与认证页均适配窄屏、横屏、触控操作和带安全区的移动设备，并共享跟随系统、浅色、深色和自定义背景外观。
 
-当前仓库只维护 `CRX` 中的稳定版 1.0.3。完整功能、架构、数据结构、消息流、测试和发布方式见 [`docs/development-guide.md`](docs/development-guide.md)，产品体验约束见 [`docs/product-design.md`](docs/product-design.md)。贡献前请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，整改与版本变化见 [`CHANGELOG.md`](CHANGELOG.md)。
+当前仓库只维护 `CRX` 中的稳定版 1.1.0。完整功能、架构、数据结构、消息流、测试和发布方式见 [`docs/development-guide.md`](docs/development-guide.md)，产品体验约束见 [`docs/product-design.md`](docs/product-design.md)。贡献前请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，整改与版本变化见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 安装与使用
 
@@ -37,17 +37,17 @@
 
 ## 登录原理与连接恢复
 
-所有界面都把登录交给后台的同一条认证通道，页面本身不直接调用 DrCOM。一次登录依次执行：检查当前会话、解析本次门户 IP、可选查询 MAC、发送 `Portal/login`、结构化解析响应并写入连接状态。只有最后一步会把密码放入学校既有的 HTTP GET 请求；状态检查、门户上下文获取和 `find_mac` 都不包含密码。
+所有界面都把登录交给后台的同一条认证通道，页面本身不直接调用 DrCOM。一次登录依次执行：检查当前会话、解析本次门户 IP、按学校原页面格式发送 `Portal/login`、结构化解析响应并写入连接状态。只有认证请求会把密码放入学校既有的 HTTP GET 请求；状态检查和门户上下文获取不包含密码。
 
 现代门户选择“保存账号”时先保存账号再按 `accountId` 登录；取消保存时使用仅存在于本次调用中的临时账号。登录成功后，后台只把不含密码的实际认证身份与本次网络上下文保存到 `storage.session`，供正确下线使用。完整函数调用、请求参数来源和结果判定表见开发指南的[登录原理与调用链](docs/development-guide.md#73-登录原理与调用链)。
 
 - 登录先查询 `/drcom/chkstatus`；已在线时直接返回，不读取门户上下文，也不发送密码。
-- 首次登录从当前门户 URL 或首页的 `v46ip`、`ss5`、`v4ip`、`ss3` 静态变量取得实时 IP；没有有效实时/全局 IP 时停止认证，历史账号 IP 不会触发密码请求。启用 `find_mac` 时，有效返回 MAC 会真正进入最终登录请求。
+- 首次登录从当前门户 URL 或首页的 `v46ip`、`ss5`、`v4ip`、`ss3` 静态变量取得实时 IP；没有有效实时/全局 IP 时停止认证，历史账号 IP 不会触发密码请求。登录请求固定使用当前 IP、全零 MAC 和空 IPv6/AC 字段，不再在认证前查询或注入 `find_mac`；旧配置项 `findMacBeforeLogin` 仅为兼容保留。
 - 弹窗区分检查中、需要登录、登录中、等待重试、需要处理和已在线。
 - 任意两个入口同时触发登录时只执行一个真实 DrCOM 请求。
 - 临时网络错误从 30 秒开始指数退避，最长等待 5 分钟；密码或账号错误会停止自动重试并提示人工检查。
 - 跳转保护、连接恢复状态和本次实际认证身份保存在 `storage.session`，后台服务被 Chrome 回收后不会立即丢失。注销不回退到界面选择的其他账号；只有状态复核明确离线才清除身份。
-- 注销使用当前活动身份和本次网络上下文：有有效 MAC 时先请求 `unbind_mac`，未能确认离线则回退完整 `Portal/logout`，并按 300、800、1500 毫秒复核；接口返回成功但状态仍为在线或未知时不会伪造离线。
+- 注销优先从 `chkstatus` 读取当前在线账号与 `ss4` MAC；缺少有效 `ss4` 时只用该完整在线账号查询一次 `find_mac`，按 `list[].online_ip` 匹配当前门户 IP 后读取本机 `online_mac`，不会把多终端列表中的其他设备当成本机。取得有效 MAC 后先请求 `unbind_mac`，按学校页面行为等待 5 秒再复核，仍未离线才回退完整 `Portal/logout` 并再次确认；接口返回成功但状态仍为在线或未知时不会伪造离线。
 - 保活只在状态明确为离线时恢复登录；超时、网络错误和异步门户空壳均保持未知状态，不发送凭据。
 - 保活任务在浏览器启动和扩展更新时自检，配置未变化时不会重复清除和创建。
 - 自定义背景与每日壁纸保存上限约 1.9 MB（受浏览器内联样式单值上限约束）；超限原图会从高质量档开始多轮压缩并逐级缩放，完整扩展状态超过安全预算时会在写入前给出明确提示。
@@ -93,14 +93,14 @@ npm run verify
 
 先执行 `npm run verify`，再按目标打包，产物在 `dist/`（ZIP + SHA-256，根目录直接包含 `manifest.json` 与 `LICENSE`）。本地开发不做打包：直接在 `chrome://extensions/` 以未打包目录加载 `CRX/`，仓库中的 manifest 保留开发用 `key` 以维持稳定扩展 ID。
 
-**上架 Chrome Web Store** 使用 `npm run package`（等价 `npm run package:chrome`），产出 `dist/drcom-xuzhou-medical-chrome-1.0.3.zip`——商店校验不允许 manifest 含 `key`（商店会为扩展分配自己的 key 与 ID），该包从主清单派生并自动删除 `key`。
+**上架 Chrome Web Store** 使用 `npm run package`（等价 `npm run package:chrome`），产出 `dist/drcom-xuzhou-medical-chrome-1.1.0.zip`——商店校验不允许 manifest 含 `key`（商店会为扩展分配自己的 key 与 ID），该包从主清单派生并自动删除 `key`。
 
-Firefox 使用 MV3 兼容构建：`npm run package:firefox` 产出 `dist/drcom-xuzhou-medical-firefox-1.0.3.zip`。它基于同一份 `CRX/` 源码与白名单，仅替换 manifest：移除 Chrome 的 `key`、`options_page` 改用 `options_ui`、加入 `browser_specific_settings.gecko` 元数据（要求 Firefox 128+，因连接状态使用 `storage.session`）。代码中 Chrome 专有 API（如 `storage.local.setAccessLevel`）均做了能力检测，不支持时自动跳过。
+Firefox 使用 MV3 兼容构建：`npm run package:firefox` 产出 `dist/drcom-xuzhou-medical-firefox-1.1.0.zip`。它基于同一份 `CRX/` 源码与白名单，仅替换 manifest：移除 Chrome 的 `key`、`options_page` 改用 `options_ui`、加入 `browser_specific_settings.gecko` 元数据（要求 Firefox 128+，因连接状态使用 `storage.session`）。代码中 Chrome 专有 API（如 `storage.local.setAccessLevel`）均做了能力检测，不支持时自动跳过。
 
 创建本地标签或未来接入标签工作流前运行：
 
 ```powershell
-npm run verify:release -- v1.0.3
+npm run verify:release -- v1.1.0
 ```
 
 ## 许可证

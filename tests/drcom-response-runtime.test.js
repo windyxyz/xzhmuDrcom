@@ -123,3 +123,37 @@ test("find_mac 日志 URL 使用统一敏感 URL 脱敏", () => {
   assert.doesNotMatch(request.redactedUrl, /202513010318|192\.0\.2\.46/);
   assert.match(request.redactedUrl, /\*\*\*|redacted/i);
 });
+
+test("find_mac 从生产响应的 list.online_mac 提取 MAC", () => {
+  const background = loadDrcomClient();
+  const mac = background.extractMacFromResponse({
+    result: 1,
+    list: [{
+      online_mac: "58:02:05:DC:58:C2",
+      user_account: "student@telecom"
+    }]
+  }, "");
+
+  assert.equal(mac, "580205DC58C2");
+});
+
+test("find_mac 多终端响应只提取与当前门户 IP 匹配的 MAC", () => {
+  const background = loadDrcomClient();
+  const mac = background.extractMacFromResponse({
+    result: 1,
+    list: [
+      { online_ip: "172.28.180.99", online_mac: "11:11:11:11:11:11" },
+      { online_ip: "172.28.180.144", online_mac: "58:02:05:DC:58:C2" }
+    ]
+  }, "", "172.28.180.144");
+
+  assert.equal(mac, "580205DC58C2");
+});
+
+test("学校的全零和全一占位 MAC 都不视为可解绑设备", () => {
+  const background = loadDrcomClient();
+
+  assert.equal(background.isUsableMac("000000000000"), false);
+  assert.equal(background.isUsableMac("111111111111"), false);
+  assert.equal(background.isUsableMac("580205DC58C2"), true);
+});

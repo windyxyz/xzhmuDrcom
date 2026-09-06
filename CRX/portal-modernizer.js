@@ -486,8 +486,12 @@
             reject(new Error(error.message));
             return;
           }
-          if (!response || response.ok === false) {
-            reject(new Error(response && response.error ? response.error : "后台服务没有返回结果"));
+          if (!response) {
+            reject(new Error("后台服务没有返回结果"));
+            return;
+          }
+          if (response.ok === false) {
+            reject(new Error(response.error || response.message || "后台请求失败"));
             return;
           }
           resolve(response);

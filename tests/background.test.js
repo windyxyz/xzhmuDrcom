@@ -1280,11 +1280,16 @@ test("不同入口同时触发登录时也只发送一个 DrCOM 请求", async (
 test("临时登录身份跨后台重启保留且退出不会误用当前选中账号", async () => {
   const sessionStore = {};
   const requests = [];
+  let chkstatusCount = 0;
   const fetchStub = async (input) => {
     const url = new URL(String(input));
     requests.push(url);
     if (url.pathname === "/drcom/chkstatus") {
-      return { ok: true, status: 200, url: url.toString(), async text() { return 'dr1001({"result":0})'; } };
+      chkstatusCount += 1;
+      const body = chkstatusCount === 2
+        ? 'dr1001({"result":1,"uid":"temporary-user@unicom","v46ip":"10.0.0.99","ss4":"AABBCCDDEEFF"})'
+        : 'dr1001({"result":0})';
+      return { ok: true, status: 200, url: url.toString(), async text() { return body; } };
     }
     if (url.port !== "801") {
       return { ok: true, status: 200, url: url.toString(), async text() { return '<script>var v4ip="10.0.0.99";</script>'; } };

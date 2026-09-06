@@ -82,23 +82,7 @@ async function performLoginAccount(accountId, transientAccount, options = {}) {
     };
   }
 
-  const network = mergeRuntimeLoginNetwork(account, state.config, portalContext.network);
-
-  if (state.config.login.findMacBeforeLogin !== false) {
-    for (const includeSuffix of [false, true]) {
-      try {
-        const probe = await fetchDrcom(buildFindMacRequest(account, state.config, {
-          networkOverride: network,
-          includeSuffix
-        }), "find_mac");
-        const mac = extractMacFromResponse(probe.data, probe.raw);
-        if (isUsableMac(mac)) {
-          network.wlanUserMac = accountUtils.normalizeMac(mac);
-          break;
-        }
-      } catch (error) {}
-    }
-  }
+  const network = createRuntimeLoginNetwork(portalContext.network);
 
   const request = buildLoginRequest(account, state.config, network);
   let result = await fetchDrcom(request, "login");
@@ -122,19 +106,16 @@ async function performLoginAccount(accountId, transientAccount, options = {}) {
 }
 
 
-function mergeRuntimeLoginNetwork(account, config, runtimeNetwork) {
-  const accountNetwork = account && account.network || {};
-  const configNetwork = config && config.network || {};
+function createRuntimeLoginNetwork(runtimeNetwork) {
   const fresh = runtimeNetwork || {};
-  const wlanUserMac = [fresh.wlanUserMac, accountNetwork.wlanUserMac, configNetwork.wlanUserMac]
-    .map((value) => accountUtils.normalizeMac(value))
-    .find((value) => isUsableMac(value)) || "000000000000";
+  /* 生产门户登录只提交本次页面解析到的 IPv4；设备和 AC 字段保持学校原请求的空值。
+     findMacBeforeLogin 继续保留在存储结构中以兼容旧配置，但不再参与认证。 */
   return {
     wlanUserIp: stringValue(fresh.wlanUserIp).trim(),
-    wlanUserIpv6: stringValue(fresh.wlanUserIpv6 || accountNetwork.wlanUserIpv6 || configNetwork.wlanUserIpv6).trim(),
-    wlanUserMac,
-    wlanAcIp: stringValue(fresh.wlanAcIp || accountNetwork.wlanAcIp || configNetwork.wlanAcIp).trim(),
-    wlanAcName: stringValue(fresh.wlanAcName || accountNetwork.wlanAcName || configNetwork.wlanAcName).trim()
+    wlanUserIpv6: "",
+    wlanUserMac: "000000000000",
+    wlanAcIp: "",
+    wlanAcName: ""
   };
 }
 function automaticLoginSkipped(runtime) {
@@ -366,20 +347,15 @@ async function resolveLiveLogoutIdentity(config, network) {
         ...network,
         wlanUserIp: stringValue(network.wlanUserIp).trim() || live.wlanUserIp
       };
-      for (const includeSuffix of [false, true]) {
-        try {
-          const probe = await fetchDrcom(buildFindMacRequest({
-            username: live.username,
-            suffix: live.suffix,
-            network: {}
-          }, config, { networkOverride: probeNetwork, includeSuffix }), "find_mac");
-          const mac = extractMacFromResponse(probe.data, probe.raw);
-          if (isUsableMac(mac)) {
-            live.wlanUserMac = mac;
-            break;
-          }
-        } catch (error) {}
-      }
+      try {
+        const probe = await fetchDrcom(buildFindMacRequest({
+          username: live.username,
+          suffix: live.suffix,
+          network: {}
+        }, config, { networkOverride: probeNetwork, includeSuffix: true }), "find_mac");
+        const mac = extractMacFromResponse(probe.data, probe.raw, probeNetwork.wlanUserIp);
+        if (isUsableMac(mac)) live.wlanUserMac = mac;
+      } catch (error) {}
     }
     return live;
   } catch (error) {
@@ -409,7 +385,8 @@ async function resolveCurrentLogoutNetwork(account, config) {  const stored = ac
 
 async function confirmPortalOffline(config) {
   let status = { state: "unknown" };
-  for (const delay of [300, 800, 1500]) {
+  /* 学校页面在 unbind_mac 成功后固定等待 5 秒才刷新；提前复核会把生效中的解绑误判为失败。 */
+  for (const delay of [5000, 1500]) {
     await waitForLogoutDelay(delay);
     status = await queryPortalSessionStatus(config);
     if (status.state === "offline") return status;
