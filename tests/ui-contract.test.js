@@ -9,7 +9,8 @@ const root = join(__dirname, "..");
 const extensionRoot = join(root, "CRX");
 
 function readExtensionFile(path) {
-  return readFileSync(join(extensionRoot, path), "utf8");
+  // 契约断言常嵌入精确源码片段；Windows 检出默认 CRLF 会破坏含 \n 的多行模板，统一按 LF 读取。
+  return readFileSync(join(extensionRoot, path), "utf8").replace(/\r\n/g, "\n");
 }
 
 function referencedElementIds(source) {
