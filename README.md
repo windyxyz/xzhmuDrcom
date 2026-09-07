@@ -97,7 +97,7 @@ npm run verify
 
 Firefox 使用 MV3 兼容构建：`npm run package:firefox` 产出 `dist/drcom-xuzhou-medical-firefox-1.1.1.zip`。它基于同一份 `CRX/` 源码与白名单，仅替换 manifest：移除 Chrome 的 `key`、`options_page` 改用 `options_ui`、加入 `browser_specific_settings.gecko` 元数据（要求 Firefox 128+，因连接状态使用 `storage.session`）。代码中 Chrome 专有 API（如 `storage.local.setAccessLevel`）均做了能力检测，不支持时自动跳过。
 
-创建本地标签或未来接入标签工作流前运行：
+推送到 GitHub 的 `v*` 标签会触发 `.github/workflows/release.yml`：核验后双平台打包并创建 GitHub Release。发布前可先本地校验版本、标签与变更日志的一致性：
 
 ```powershell
 npm run verify:release -- v1.1.1
