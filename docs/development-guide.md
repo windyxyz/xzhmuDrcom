@@ -11,7 +11,7 @@ DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩
 - 统一完成登录、下线、状态检测、启动自动登录和定时保活；
 - 网络临时失败时有限重试，凭据或设备错误时停止自动重试；
 - 在学校门户上提供可以随时撤回的现代登录界面；
-- 捕获原门户表单或脚本中的真实账号与网络参数；
+- 在可信用户提交窗口内捕获原门户账号候选，并由设置页确认后保存；
 - 在欢迎页、弹窗、设置页和门户之间共享主题与自定义背景；
 - 对请求记录、界面文本和诊断信息进行凭据脱敏；
 - 通过无外部依赖的测试、确定性 ZIP 和 SHA-256 完成可复现发布。
@@ -746,6 +746,14 @@ npm run verify
 node --test tests/portal-session.test.js tests/portal-ui.test.js tests/portal-diagnostics-utils.test.js tests/portal-diagnostics.test.js tests/portal-modernizer.test.js tests/background.test.js tests/options-ui.test.js tests/ui-contract.test.js
 ~~~
 
+OpenWrt/BusyBox 脚本位于 `SSH/drcom-xzhmu.sh`，与扩展共享以下已经由生产抓包确认的约束：登录只带本次门户 IPv4，MAC 固定全零，IPv6 与 AC 字段留空；注销先从 `chkstatus` 的 `uid`、`v46ip` 和 `ss4` 恢复在线身份，无有效 `ss4` 时只用完整在线账号查询一次 `find_mac`，并按当前 IP 匹配 `list[].online_mac`。`unbind_mac` 后先等待 5 秒再复核，仍未离线才使用带 `wlan_vlan_id=1` 的完整注销。
+
+脚本的 `API_RESPONSE_LIMIT` 默认为 64 KiB，`PORTAL_RESPONSE_LIMIT` 默认为 1 MiB。响应先写入权限为 0700 的私有运行目录，超限内容不会进入 shell 变量；会话文件只接受 `SESSION_IP`、`SESSION_MAC` 和 `SESSION_AT` 三个数据字段，不通过 `.` 执行。真实 shell 行为测试使用合成网关响应：
+
+~~~powershell
+node --test tests/ssh-runtime.test.js tests/ssh-security.test.js
+~~~
+
 手工回归至少覆盖安装/更新、四种后缀、保存/临时登录、活动身份下线、结构化协议结果、失败重试、保活、防跳转、门户切换、私有背景、危险操作取消/确认、窄屏/触控/高对比，以及所有输出无真实凭据。
 
 ## 14. 打包与发布
@@ -798,7 +806,7 @@ npm run verify:release -- v1.1.0
 5. 独有结论已经进入 README、开发指南、产品设计、SECURITY 或 CHANGELOG；
 6. 删除后定向测试和 npm run verify 全部通过。
 
-当前保留 portal-preview.*，因为真实浏览器测试直接使用。完成整改后，旧审阅建议已迁入 CHANGELOG 和本指南；无版本、已过时的 UI 截图由自动化真实浏览器测试替代。Git 历史保留删除前基线和逐项整改提交。
+当前保留 portal-preview.*，因为真实浏览器测试直接使用。完成整改后，旧审阅建议与 2026-09 阶段性审计文档的有效结论已迁入 CHANGELOG、SECURITY 和本指南；无版本、已过时的 UI 截图由自动化真实浏览器测试替代。Git 历史保留删除前基线和逐项整改提交。
 
 ## 16. 常见问题
 
@@ -808,7 +816,7 @@ npm run verify:release -- v1.1.0
 
 ### 临时账号无法下线
 
-检查 activeIdentity 是否存在有效网络参数，尤其是 wlan_user_mac。可先在原门户完成一次操作，让捕获逻辑补充参数。
+先检查 `chkstatus` 是否能返回当前在线账号与 IP。扩展会优先使用 `ss4`，无有效值时按当前 IP 从该账号的 `find_mac` 终端列表定位本机 MAC；只有网关状态未知或无法解析在线身份时才会进入完整注销兜底。
 
 ### 自定义背景无法保存
 

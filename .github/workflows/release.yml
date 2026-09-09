@@ -32,10 +32,15 @@ jobs:
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "$GITHUB_REF_NAME"
-          dist/*.zip
-          dist/*.sha256
-          --verify-tag
-          --title "DrCom徐医 $GITHUB_REF_NAME"
-          --notes-file dist/release-notes.md
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/*.zip dist/*.sha256 --clobber
+            gh release edit "$GITHUB_REF_NAME" --title "DrCom徐医 $GITHUB_REF_NAME" --notes-file dist/release-notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              dist/*.zip \
+              dist/*.sha256 \
+              --verify-tag \
+              --title "DrCom徐医 $GITHUB_REF_NAME" \
+              --notes-file dist/release-notes.md
+          fi

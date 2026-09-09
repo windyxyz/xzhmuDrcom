@@ -11,6 +11,8 @@ ENABLE_FIND_MAC="${ENABLE_FIND_MAC:-1}"
 DEBUG_BIND="${DEBUG_BIND:-127.0.0.1}"
 DEBUG_PORT="${DEBUG_PORT:-8765}"
 CONNECT_TIMEOUT="${CONNECT_TIMEOUT:-8}"
+API_RESPONSE_LIMIT="${API_RESPONSE_LIMIT:-65536}"
+PORTAL_RESPONSE_LIMIT="${PORTAL_RESPONSE_LIMIT:-1048576}"
 ACCOUNT_PREFIX="${ACCOUNT_PREFIX:-,0,}"
 LOGIN_METHOD="${LOGIN_METHOD:-1}"
 JS_VERSION="${JS_VERSION:-3.3.2}"
@@ -33,10 +35,14 @@ load_config() {
   DEBUG_BIND="${DEBUG_BIND:-127.0.0.1}"
   DEBUG_PORT="${DEBUG_PORT:-8765}"
   CONNECT_TIMEOUT="${CONNECT_TIMEOUT:-8}"
+  API_RESPONSE_LIMIT="${API_RESPONSE_LIMIT:-65536}"
+  PORTAL_RESPONSE_LIMIT="${PORTAL_RESPONSE_LIMIT:-1048576}"
   ACCOUNT_PREFIX="${ACCOUNT_PREFIX:-,0,}"
   LOGIN_METHOD="${LOGIN_METHOD:-1}"
   JS_VERSION="${JS_VERSION:-3.3.2}"
   CALLBACK_PREFIX="${CALLBACK_PREFIX:-dr}"
+  ensure_runtime_dir || fail "cannot create private runtime directory"
+  [ -n "$WGET_I_SUPPORTED" ] || probe_wget_i || WGET_I_SUPPORTED="0"
 }
 
 portal_origin() {
@@ -74,14 +80,31 @@ url_encode() {
 # 认证 URL 携带密码，不能放在 wget 参数里（会暴露在 /proc/*/cmdline）。
 # 优先写入临时文件用 wget -i 读取后立即删除；旧 BusyBox（<1.31）的 wget
 # 没有 -i，探测失败时退回参数传递。
-REQUEST_URL_FILE="${TMPDIR:-/tmp}/drcom-xzhmu.url.$$"
+RUNTIME_DIR=""
+REQUEST_URL_FILE=""
+RESPONSE_FILE=""
 WGET_I_SUPPORTED=""
 
-cleanup_request_file() {
-  rm -f "$REQUEST_URL_FILE" "$REQUEST_URL_FILE.probe"
+ensure_runtime_dir() {
+  [ -n "$RUNTIME_DIR" ] && return 0
+  RUNTIME_DIR="${TMPDIR:-/tmp}/drcom-xzhmu.$$"
+  if ! mkdir "$RUNTIME_DIR" 2>/dev/null; then
+    RUNTIME_DIR=""
+    return 1
+  fi
+  chmod 700 "$RUNTIME_DIR" 2>/dev/null || true
+  REQUEST_URL_FILE="$RUNTIME_DIR/request.url"
+  RESPONSE_FILE="$RUNTIME_DIR/response.body"
+}
+
+cleanup_runtime() {
+  [ -n "$RUNTIME_DIR" ] || return
+  rm -f "$REQUEST_URL_FILE" "$REQUEST_URL_FILE.probe" "$RESPONSE_FILE" "$RUNTIME_DIR/session.new"
+  rmdir "$RUNTIME_DIR" 2>/dev/null || true
 }
 
 probe_wget_i() {
+  ensure_runtime_dir || return 1
   probe_err=""
   printf '%s\n' "http://127.0.0.1:1/" > "$REQUEST_URL_FILE.probe"
   probe_err="$(wget -i "$REQUEST_URL_FILE.probe" -T 1 -q -O /dev/null 2>&1)"
@@ -89,24 +112,37 @@ probe_wget_i() {
     *"unrecognized option"*|*"invalid option"*) WGET_I_SUPPORTED="0" ;;
     *) WGET_I_SUPPORTED="1" ;;
   esac
-  cleanup_request_file
+  rm -f "$REQUEST_URL_FILE.probe"
 }
 
 http_get() {
+  url="$1"
+  limit="${2:-$API_RESPONSE_LIMIT}"
+  ensure_runtime_dir || return 1
   [ -n "$WGET_I_SUPPORTED" ] || probe_wget_i
   if [ "$WGET_I_SUPPORTED" = "1" ]; then
-    if ! printf '%s' "$1" > "$REQUEST_URL_FILE"; then
+    if ! printf '%s' "$url" > "$REQUEST_URL_FILE"; then
       return 1
     fi
-    wget -q -T "$CONNECT_TIMEOUT" -O - -i "$REQUEST_URL_FILE"
+    wget -q -T "$CONNECT_TIMEOUT" -O "$RESPONSE_FILE" -i "$REQUEST_URL_FILE"
     wget_status="$?"
     rm -f "$REQUEST_URL_FILE"
-    return "$wget_status"
+  else
+    wget -q -T "$CONNECT_TIMEOUT" -O "$RESPONSE_FILE" "$url"
+    wget_status="$?"
   fi
-  wget -q -T "$CONNECT_TIMEOUT" -O - "$1"
+  [ "$wget_status" = "0" ] || { rm -f "$RESPONSE_FILE"; return "$wget_status"; }
+  bytes="$(wc -c < "$RESPONSE_FILE" | tr -d ' ')"
+  case "$bytes" in ''|*[!0-9]*) rm -f "$RESPONSE_FILE"; return 1 ;; esac
+  if [ "$bytes" -gt "$limit" ] 2>/dev/null; then
+    rm -f "$RESPONSE_FILE"
+    return 2
+  fi
+  cat "$RESPONSE_FILE"
+  rm -f "$RESPONSE_FILE"
 }
 
-trap cleanup_request_file EXIT
+trap cleanup_runtime EXIT
 
 protocol_payload() {
   body="$(printf '%s' "$1" | tr '\r\n' '  ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
@@ -164,16 +200,30 @@ query_status_state() {
   body="$(http_get "$url" 2>/dev/null)" || {
     STATUS_BODY=""
     STATUS_MESSAGE="status unknown"
-    printf '%s' "unknown"
+    STATUS_STATE="unknown"
+    STATUS_UID=""
+    STATUS_IP=""
+    STATUS_MAC=""
     return
   }
   STATUS_BODY="$body"
   result="$(extract_value "$body" result)"
   case "$result" in
-    1) STATUS_MESSAGE="online"; printf '%s' "online" ;;
-    0) STATUS_MESSAGE="offline"; printf '%s' "offline" ;;
-    *) STATUS_MESSAGE="unknown"; printf '%s' "unknown" ;;
+    1) STATUS_MESSAGE="online"; STATUS_STATE="online" ;;
+    0) STATUS_MESSAGE="offline"; STATUS_STATE="offline" ;;
+    *) STATUS_MESSAGE="unknown"; STATUS_STATE="unknown" ;;
   esac
+  STATUS_UID="$(extract_value "$body" uid)"
+  STATUS_IP=""
+  for key in v46ip wlan_user_ip user_ip v4ip; do
+    candidate="$(extract_value "$body" "$key")"
+    if valid_ipv4 "$candidate"; then STATUS_IP="$candidate"; break; fi
+  done
+  STATUS_MAC=""
+  for key in ss4 olmac wlan_user_mac online_mac; do
+    candidate="$(extract_value "$body" "$key")"
+    if usable_mac "$candidate"; then STATUS_MAC="$(normalize_mac "$candidate")"; break; fi
+  done
 }
 
 valid_ipv4() {
@@ -272,7 +322,7 @@ resolve_runtime_ip() {
     fi
   done
 
-  html="$(http_get "$PORTAL" 2>/dev/null)" || html=""
+  html="$(http_get "$PORTAL" "$PORTAL_RESPONSE_LIMIT" 2>/dev/null)" || html=""
   for key in v46ip ss5 v4ip; do
     candidate="$(read_static_string "$html" "$key")"
     if valid_ipv4 "$candidate"; then
@@ -306,7 +356,7 @@ normalize_mac() {
 usable_mac() {
   mac="$(normalize_mac "$1")"
   case "$mac" in
-    000000000000|"") return 1 ;;
+    000000000000|111111111111|"") return 1 ;;
     ????????????) case "$mac" in *[!0-9A-F]*) return 1 ;; *) return 0 ;; esac ;;
     *) return 1 ;;
   esac
@@ -338,17 +388,37 @@ build_find_mac_url() {
     "$base" "$(url_encode "$account")" "$(url_encode "$LOGIN_METHOD")" "$(url_encode "$ip")" "$(url_encode "$JS_VERSION")" "$(nonce)"
 }
 
-try_find_mac() {
+extract_mac_for_ip() {
+  payload="$(protocol_payload "$1")" || return
+  expected_ip="$2"
+  printf '%s' "$payload" |
+    sed 's/}[[:space:]]*,[[:space:]]*{/}\
+{/g' |
+    while IFS= read -r record || [ -n "$record" ]; do
+      record_ip="$(extract_value "$record" online_ip)"
+      [ "$record_ip" = "$expected_ip" ] || continue
+      record_mac="$(extract_value "$record" online_mac)"
+      if usable_mac "$record_mac"; then
+        normalize_mac "$record_mac"
+        break
+      fi
+    done
+}
+
+try_find_mac_for_account() {
   [ "$ENABLE_FIND_MAC" = "0" ] && return
-  ip="$1"
-  for account in "$USERNAME" "$(compose_logout_account)"; do
-    body="$(http_get "$(build_find_mac_url "$account" "$ip")" 2>/dev/null)" || body=""
-    mac="$(extract_mac "$body")"
-    if usable_mac "$mac"; then
-      printf '%s' "$mac"
-      return
-    fi
-  done
+  account="$1"
+  ip="$2"
+  body="$(http_get "$(build_find_mac_url "$account" "$ip")" 2>/dev/null)" || return
+  mac="$(extract_mac_for_ip "$body" "$ip")"
+  if usable_mac "$mac"; then
+    printf '%s' "$mac"
+    return
+  fi
+  payload="$(protocol_payload "$body")" || return
+  case "$payload" in *list*) return ;; esac
+  mac="$(extract_mac "$body")"
+  usable_mac "$mac" && printf '%s' "$mac"
 }
 
 build_login_url() {
@@ -357,23 +427,24 @@ build_login_url() {
   base="$(api_base)"
   printf '%s?c=Portal&a=login&callback=%s&login_method=%s&user_account=%s&user_password=%s&wlan_user_ip=%s&wlan_user_ipv6=%s&wlan_user_mac=%s&wlan_ac_ip=%s&wlan_ac_name=%s&jsVersion=%s&v=%s' \
     "$base" "$(callback)" "$(url_encode "$LOGIN_METHOD")" "$(url_encode "$(compose_login_account)")" "$(url_encode "$PASSWORD")" \
-    "$(url_encode "$ip")" "$(url_encode "$WLAN_USER_IPV6")" "$(url_encode "${mac:-000000000000}")" \
-    "$(url_encode "$WLAN_AC_IP")" "$(url_encode "$WLAN_AC_NAME")" "$(url_encode "$JS_VERSION")" "$(nonce)"
+    "$(url_encode "$ip")" "$(url_encode "")" "$(url_encode "${mac:-000000000000}")" \
+    "$(url_encode "")" "$(url_encode "")" "$(url_encode "$JS_VERSION")" "$(nonce)"
 }
 
 build_unbind_url() {
-  ip="$1"
-  mac="$2"
+  account="$1"
+  ip="$2"
+  mac="$3"
   base="$(api_base)"
   printf '%s?c=Portal&a=unbind_mac&callback=%s&user_account=%s&wlan_user_mac=%s&wlan_user_ip=%s&jsVersion=%s&v=%s' \
-    "$base" "$(callback)" "$(url_encode "$(compose_logout_account)")" "$(url_encode "$mac")" "$(url_encode "$ip")" "$(url_encode "$JS_VERSION")" "$(nonce)"
+    "$base" "$(callback)" "$(url_encode "$account")" "$(url_encode "$mac")" "$(url_encode "$ip")" "$(url_encode "$JS_VERSION")" "$(nonce)"
 }
 
 build_logout_url() {
   ip="$1"
   mac="$2"
   base="$(api_base)"
-  printf '%s?c=Portal&a=logout&callback=%s&login_method=%s&user_account=drcom&user_password=123&ac_logout=1&register_mode=1&wlan_user_ip=%s&wlan_user_ipv6=%s&wlan_vlan_id=&wlan_user_mac=%s&wlan_ac_ip=%s&wlan_ac_name=%s&jsVersion=%s&v=%s' \
+  printf '%s?c=Portal&a=logout&callback=%s&login_method=%s&user_account=drcom&user_password=123&ac_logout=1&register_mode=1&wlan_user_ip=%s&wlan_user_ipv6=%s&wlan_vlan_id=1&wlan_user_mac=%s&wlan_ac_ip=%s&wlan_ac_name=%s&jsVersion=%s&v=%s' \
     "$base" "$(callback)" "$(url_encode "$LOGIN_METHOD")" "$(url_encode "$ip")" "$(url_encode "$WLAN_USER_IPV6")" \
     "$(url_encode "${mac:-000000000000}")" "$(url_encode "$WLAN_AC_IP")" "$(url_encode "$WLAN_AC_NAME")" "$(url_encode "$JS_VERSION")" "$(nonce)"
 }
@@ -399,16 +470,37 @@ login_success_response() {
 
 save_session() {
   umask 077
+  ensure_runtime_dir || return 1
   {
     printf 'SESSION_IP=%s\n' "$1"
     printf 'SESSION_MAC=%s\n' "$2"
     printf 'SESSION_AT=%s\n' "$(date +%s 2>/dev/null)"
-  } > "$SESSION_FILE"
+  } > "$RUNTIME_DIR/session.new" || return 1
+  chmod 600 "$RUNTIME_DIR/session.new" 2>/dev/null || true
+  mv -f "$RUNTIME_DIR/session.new" "$SESSION_FILE"
 }
 
 load_session() {
   [ -r "$SESSION_FILE" ] || return 1
-  . "$SESSION_FILE"
+  [ ! -L "$SESSION_FILE" ] && [ ! -h "$SESSION_FILE" ] || return 1
+  session_ip=""
+  session_mac=""
+  session_at=""
+  while IFS='=' read -r key value; do
+    case "$key" in
+      '') continue ;;
+      SESSION_IP) valid_ipv4 "$value" || return 1; session_ip="$value" ;;
+      SESSION_MAC)
+        case "$(normalize_mac "$value")" in ????????????) session_mac="$(normalize_mac "$value")" ;; *) return 1 ;; esac
+        ;;
+      SESSION_AT) case "$value" in ''|*[!0-9]*) return 1 ;; *) session_at="$value" ;; esac ;;
+      *) return 1 ;;
+    esac
+  done < "$SESSION_FILE"
+  [ -n "$session_ip" ] || return 1
+  SESSION_IP="$session_ip"
+  SESSION_MAC="$session_mac"
+  SESSION_AT="$session_at"
 }
 
 clear_session() {
@@ -416,9 +508,10 @@ clear_session() {
 }
 
 confirm_offline() {
-  for delay in 1 1 2; do
+  for delay in 5 2; do
     sleep "$delay"
-    state="$(query_status_state)"
+    query_status_state
+    state="$STATUS_STATE"
     [ "$state" = "offline" ] && return 0
   done
   return 1
@@ -460,20 +553,22 @@ cmd_login() {
   [ -n "$USERNAME" ] || fail "USERNAME is required"
   [ -n "$PASSWORD" ] || fail "PASSWORD is required"
 
-  state="$(query_status_state)"
+  query_status_state
+  state="$STATUS_STATE"
   if [ "$state" = "online" ]; then
     log "already online; password request skipped"
     return 0
   fi
 
   ip="$(resolve_runtime_ip "$PORTAL")" || fail "missing portal runtime IP; password request skipped"
-  mac="$(try_find_mac "$ip")"
-  [ -n "$mac" ] || mac="000000000000"
+  # 学校生产门户的登录请求固定使用全零 MAC；find_mac 仅用于注销时定位本机终端。
+  mac="000000000000"
   body="$(http_get "$(build_login_url "$ip" "$mac")" 2>/dev/null)" || fail "login request failed"
   login_success_response "$body"
   rc="$?"
   if [ "$rc" = "0" ]; then
-    state="$(query_status_state)"
+    query_status_state
+    state="$STATUS_STATE"
     if [ "$state" = "online" ]; then
       save_session "$ip" "$mac"
       log "login success confirmed: account=$(mask_account "$USERNAME") ip=$(mask_ip "$ip") mac=$(mask_mac "$mac") source=$RUNTIME_IP_SOURCE"
@@ -481,7 +576,8 @@ cmd_login() {
     fi
   fi
   if [ "$rc" = "2" ]; then
-    state="$(query_status_state)"
+    query_status_state
+    state="$STATUS_STATE"
     if [ "$state" = "online" ]; then
       save_session "$ip" "$mac"
       log "already online confirmed: account=$(mask_account "$USERNAME") ip=$(mask_ip "$ip")"
@@ -493,13 +589,15 @@ cmd_login() {
 
 cmd_status() {
   load_config
-  state="$(query_status_state)"
+  query_status_state
+  state="$STATUS_STATE"
   log "state=$state message=$STATUS_MESSAGE"
 }
 
 cmd_keepalive() {
   load_config
-  state="$(query_status_state)"
+  query_status_state
+  state="$STATUS_STATE"
   case "$state" in
     online) log "online; keepalive skipped" ;;
     offline) cmd_login ;;
@@ -509,15 +607,33 @@ cmd_keepalive() {
 
 cmd_logout() {
   load_config
+  SESSION_IP=""
+  SESSION_MAC=""
+  SESSION_AT=""
   load_session || true
-  ip="$(resolve_runtime_ip "$PORTAL" 2>/dev/null)"
+  query_status_state
+  live_state="$STATUS_STATE"
+  if [ "$live_state" = "offline" ]; then
+    clear_session
+    log "already offline"
+    return 0
+  fi
+
+  account="$STATUS_UID"
+  [ -n "$account" ] || account="$(compose_logout_account)"
+  ip="$STATUS_IP"
+  [ -n "$ip" ] || ip="$(resolve_runtime_ip "$PORTAL" 2>/dev/null)"
   [ -n "$ip" ] || ip="$SESSION_IP"
   [ -n "$ip" ] || fail "missing logout IP"
-  mac="$SESSION_MAC"
+  mac="$STATUS_MAC"
+  usable_mac "$mac" || mac="$SESSION_MAC"
+  if ! usable_mac "$mac" && [ "$live_state" = "online" ] && [ -n "$STATUS_UID" ]; then
+    mac="$(try_find_mac_for_account "$STATUS_UID" "$ip")"
+  fi
   [ -n "$mac" ] || mac="000000000000"
 
   if usable_mac "$mac"; then
-    http_get "$(build_unbind_url "$ip" "$mac")" >/dev/null 2>&1 || true
+    http_get "$(build_unbind_url "$account" "$ip" "$mac")" >/dev/null 2>&1 || true
     if confirm_offline; then
       clear_session
       log "logout confirmed offline after unbind"
@@ -532,14 +648,16 @@ cmd_logout() {
     return 0
   fi
 
-  state="$(query_status_state)"
+  query_status_state
+  state="$STATUS_STATE"
   [ "$state" = "online" ] && fail "logout not completed; session is still online"
   fail "logout request sent but offline state is not confirmed"
 }
 
 debug_json() {
   load_config
-  state="$(query_status_state)"
+  query_status_state
+  state="$STATUS_STATE"
   ip="$(resolve_runtime_ip "$PORTAL" 2>/dev/null)"
   load_session || true
   [ -n "$ip" ] || ip="$SESSION_IP"
