@@ -552,6 +552,9 @@ body.app-themed-page {
   background-position: right 10px center;
   background-size: 10px;
 }
+
+#ui-language { min-height: 44px; width: min(220px, 100%); white-space: nowrap; }
+.language-setting { align-items: center; }
 .settings-shell input:not([type="checkbox"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]):hover,
 .settings-shell select:hover,
 .settings-shell textarea:hover { background: var(--ctrl-fill-secondary); }

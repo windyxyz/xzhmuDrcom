@@ -7,7 +7,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 function loadOptions(context) {
-  for (const file of ["account-utils.js", "options-appearance-images.js", "options-refresh-controller.js", "options-account-capture-controller.js", "options.js"]) {
+  for (const file of ["i18n-messages.js", "i18n.js", "account-utils.js", "options-appearance-images.js", "options-refresh-controller.js", "options-account-capture-controller.js", "options.js"]) {
     const source = readFileSync(join(__dirname, "..", "CRX", file), "utf8");
     new vm.Script(source, { filename: file }).runInContext(context);
   }
@@ -17,6 +17,11 @@ function createOptionsHarness(options = {}) {
   const messages = [];
   const confirmations = [];
   const runtimeMessageListeners = [];
+  const makeInteractiveElement = (initial = {}) => ({
+    listeners: {},
+    addEventListener(type, listener) { this.listeners[type] = listener; },
+    ...initial
+  });
   const elements = new Map(Object.entries({
     "capture-confirmation": { hidden: true },
     "capture-source": { textContent: "" },
@@ -31,7 +36,16 @@ function createOptionsHarness(options = {}) {
     "portal-diagnostics-dropped": { textContent: "" },
     "export-portal-diagnostics": { disabled: false },
     "clear-portal-diagnostics": { disabled: false },
-    toast: { hidden: true, textContent: "" }
+    toast: { hidden: true, textContent: "" },
+    "ui-language": makeInteractiveElement({ value: options.preference || "zh-CN" }),
+    username: makeInteractiveElement({ value: "" }),
+    "account-username": makeInteractiveElement({ value: "" }),
+    "about-title": { dataset: { i18n: "brand_name" }, textContent: "xzhmu徐医校园网" },
+    "account-list": { innerHTML: "" },
+    "request-log": { innerHTML: "" },
+    "sidebar-account-summary": { textContent: "" },
+    "settings-refresh-status": { dataset: {}, textContent: "" },
+    "refresh-settings": { disabled: false, querySelector() { return null; } }
   }));
   const diagnostics = options.diagnostics || {
     ok: true,
@@ -63,23 +77,37 @@ function createOptionsHarness(options = {}) {
             });
             return;
           }
-          if (message.action === "diagnostics:get") callback(diagnostics);
+          if (message.action === "language:get") callback({ ok: true, preference: options.preference || "zh-CN" });
+          else if (message.action === "language:set") {
+            callback({ ok: true, preference: message.preference });
+            for (const listener of runtimeMessageListeners) {
+              listener({ action: "language:changed", preference: message.preference }, { id: "test-extension-id" });
+            }
+          }
+          else if (message.action === "diagnostics:get") callback(diagnostics);
           else if (message.action === "diagnostics:export") callback({ ok: true, export: options.export || diagnostics });
           else if (message.action === "diagnostics:clear") callback({ ok: true });
           else if (message.action === "diagnostics:set") callback({ ok: true, enabled: message.enabled, limits: diagnostics.limits });
           else callback({ ok: true });
         }
-      }
+      },
+      i18n: { getUILanguage: () => (options.browserLanguages || ["zh-CN"])[0] }
     },
     clearTimeout,
     console,
     document: {
       addEventListener() {},
       getElementById(id) { return elements.get(id) || null; },
+      documentElement: {},
+      querySelectorAll(selector) {
+        if (selector.includes("data-i18n")) return [elements.get("about-title")];
+        return [];
+      },
       createElement() {
         return { click() {} };
       }
     },
+    navigator: { languages: options.browserLanguages || ["zh-CN"] },
     DrcomConfirmDialog: {
       async ask(input) {
         confirmations.push(structuredClone(input));
@@ -89,8 +117,83 @@ function createOptionsHarness(options = {}) {
     setTimeout
   });
   loadOptions(context);
-  return { confirmations, context, elements, messages, runtimeMessageListeners };
+  return {
+    confirmations,
+    context,
+    elements,
+    messages,
+    runtimeMessageListeners,
+    async change(id, value) {
+      const element = elements.get(id);
+      element.value = value;
+      assert.equal(typeof element.listeners.change, "function", `${id} 缺少 change 监听器`);
+      await element.listeners.change({ currentTarget: element, target: element });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  };
 }
+
+test("设置页可恢复跟随浏览器并保持未保存账号编辑", async () => {
+  const fixture = createOptionsHarness({ browserLanguages: ["en-US"], preference: "zh-CN" });
+  fixture.context.bindLanguageControls();
+  fixture.elements.get("username").value = "20260001";
+  fixture.elements.get("account-username").value = "20260002";
+
+  await fixture.change("ui-language", "auto");
+
+  assert.equal(fixture.elements.get("about-title").textContent, "XZHMU Campus Network");
+  assert.equal(fixture.elements.get("username").value, "20260001");
+  assert.equal(fixture.elements.get("account-username").value, "20260002");
+  assert.deepEqual(fixture.messages.at(-1), { action: "language:set", preference: "auto" });
+});
+
+test("设置页切换英文会重新翻译已有动态区域", async () => {
+  const capture = {
+    id: "capture-english",
+    maskedUsername: "20***18",
+    suffix: "@telecom",
+    sourceOrigin: "http://10.10.10.2",
+    replacesExisting: true,
+    expiresAt: Date.now() + 300000
+  };
+  const fixture = createOptionsHarness({ browserLanguages: ["en-US"], preference: "zh-CN", sendMessage(message) {
+    if (message.action === "account:capture:get") return { ok: true, capture };
+    return { ok: true };
+  } });
+  new vm.Script("state = { selectedAccountId: '', accounts: [], recentRequests: [] }").runInContext(fixture.context);
+  await fixture.context.loadPendingAccountCapture();
+  fixture.context.renderSettingsRefreshStatus({ protected: true, enabled: true });
+
+  fixture.context.applyLanguage("en");
+
+  assert.match(fixture.elements.get("account-list").innerHTML, /No saved accounts/);
+  assert.equal(fixture.elements.get("capture-impact").textContent, "Confirming replaces the existing credentials for this account.");
+  assert.match(fixture.elements.get("settings-refresh-status").textContent, /Unsaved edits detected/);
+});
+
+test("设置页英文账号列表会翻译后缀和删除操作", () => {
+  const fixture = createOptionsHarness({ browserLanguages: ["en-US"], preference: "en" });
+  new vm.Script(`state = {
+    selectedAccountId: "account-1",
+    recentRequests: [],
+    accounts: [{ id: "account-1", label: "Main", username: "20260001", suffix: "@cmcc", network: {} }]
+  }`).runInContext(fixture.context);
+
+  fixture.context.applyLanguage("en");
+
+  assert.match(fixture.elements.get("account-list").innerHTML, /China Mobile/);
+  assert.match(fixture.elements.get("account-list").innerHTML, /aria-label="Delete account: Main"/);
+});
+
+test("设置页英文确认框和提示使用当前语言", async () => {
+  const fixture = createOptionsHarness({ browserLanguages: ["en-US"], preference: "en", confirmResult: false });
+  fixture.context.applyLanguage("en");
+
+  await fixture.context.clearPortalDiagnostics();
+
+  assert.equal(fixture.confirmations[0].title, "Clear portal diagnostics?");
+  assert.equal(fixture.confirmations[0].confirmLabel, "Clear records");
+});
 
 test("门户诊断加载会显示精确开关、占用和会话状态", async () => {
   const harness = createOptionsHarness({ diagnostics: {

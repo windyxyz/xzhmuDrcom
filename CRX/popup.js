@@ -4,15 +4,31 @@ const accountUtils = globalThis.DrcomAccountUtils;
 const splitAccount = accountUtils.parse;
 const suffixLabel = accountUtils.suffixLabel;
 const makeAccountLabel = accountUtils.label;
+const i18n = globalThis.DrcomI18n;
+i18n.setLanguage("zh-CN");
+
+const STATUS_KEYS = Object.freeze({
+  checking: "status_checking",
+  authenticating: "status_authenticating",
+  online: "status_online",
+  captive: "status_sign_in_required",
+  waiting: "status_waiting",
+  action_required: "status_action_required",
+  offline: "status_offline"
+});
 
 const $ = (id) => document.getElementById(id);
 let state = null;
+let languagePreference = "auto";
+let currentResult = null;
+let languageControlsBound = false;
 
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
   bindEvents();
   try {
+    await loadLanguage();
     await loadState();
     await refreshStatus(false);
   } catch (error) {
@@ -24,6 +40,7 @@ async function init() {
 }
 
 function bindEvents() {
+  bindLanguageControls();
   $("account-select").addEventListener("change", runAsync(async (event) => {
     await sendMessage({ action: "account:select", accountId: event.target.value });
     await loadState();
@@ -51,26 +68,68 @@ function bindEvents() {
   }));
 }
 
+function bindLanguageControls() {
+  if (languageControlsBound) return;
+  languageControlsBound = true;
+  $("language-toggle")?.addEventListener("click", runAsync(async () => {
+    const preference = i18n.getLanguage() === "zh-CN" ? "en" : "zh-CN";
+    await sendMessage({ action: "language:set", preference });
+  }));
+  chrome.runtime.onMessage?.addListener((message, sender) => {
+    if (sender?.id && sender.id !== chrome.runtime.id) return;
+    if (message?.action !== "language:changed") return;
+    applyLanguage(message.preference);
+  });
+}
+
+async function loadLanguage() {
+  try {
+    const response = await sendMessage({ action: "language:get" });
+    applyLanguage(response.preference);
+  } catch (error) {
+    applyLanguage("auto");
+  }
+}
+
+function applyLanguage(preference) {
+  languagePreference = i18n.normalizePreference(preference);
+  i18n.setLanguage(languagePreference);
+  const language = i18n.getLanguage();
+  i18n.apply(document, language);
+  if (document.documentElement) document.documentElement.lang = language;
+  const toggle = $("language-toggle");
+  if (toggle) toggle.textContent = language === "zh-CN" ? "EN" : "中文";
+  if (currentResult) renderResult(currentResult);
+  if (state) {
+    const selectedAccountId = $("account-select")?.value;
+    renderAccountSelect();
+    if (selectedAccountId && Array.from($("account-select")?.options || []).some((option) => option.value === selectedAccountId)) {
+      $("account-select").value = selectedAccountId;
+    }
+    renderAccountList();
+  }
+}
+
 async function deleteAccount(accountId) {
   const account = state.accounts.find((item) => item.id === accountId);
   if (!account) return;
   const accountLabel = account.label || makeAccountLabel(account.username, account.suffix);
   const confirmed = await globalThis.DrcomConfirmDialog.ask({
-    title: "删除账号？",
-    message: `将永久删除账号“${accountLabel}”（${maskAccount(account)}）。此操作无法撤销。`,
-    confirmLabel: "删除账号"
+    title: i18n.t("delete_account_title"),
+    message: i18n.t("delete_account_message", [accountLabel, maskAccount(account)]),
+    confirmLabel: i18n.t("delete_account_confirm")
   });
   if (!confirmed) return;
 
   await sendMessage({ action: "account:delete", accountId });
   await loadState();
-  toast("账号已删除");
+  toast(i18n.t("account_deleted"));
 }
 
 function openConfiguredPortal() {
   const portalUrl = state?.config?.portalUrl;
   if (!portalUrl) {
-    toast("设置仍在加载，请稍后再试");
+    toast(i18n.t("settings_loading"));
     return false;
   }
   chrome.tabs.create({ url: portalUrl });
@@ -116,7 +175,7 @@ function renderAccountSelect() {
   const select = $("account-select");
   select.innerHTML = "";
   if (!state.accounts.length) {
-    select.append(new Option("还没有保存账号", ""));
+    select.append(new Option(i18n.t("no_saved_accounts"), ""));
     select.disabled = true;
     return;
   }
@@ -133,7 +192,7 @@ function renderAccountList() {
   const list = $("account-list");
   list.innerHTML = "";
   if (!state.accounts.length) {
-    list.innerHTML = '<li class="empty">保存账号后可以一键切换。</li>';
+    list.innerHTML = `<li class="empty">${escapeHtml(i18n.t("empty_accounts_hint"))}</li>`;
     return;
   }
 
@@ -146,7 +205,7 @@ function renderAccountList() {
         <strong>${escapeHtml(accountLabel)}</strong>
         <span>${escapeHtml(maskAccount(account))}</span>
       </button>
-      <button type="button" class="small-danger" title="删除账号：${escapeHtml(accountLabel)}" aria-label="删除账号：${escapeHtml(accountLabel)}" data-delete="${escapeHtml(account.id)}">删</button>
+      <button type="button" class="small-danger" title="${escapeHtml(i18n.t("delete_account_label", [accountLabel]))}" aria-label="${escapeHtml(i18n.t("delete_account_label", [accountLabel]))}" data-delete="${escapeHtml(account.id)}">${escapeHtml(i18n.t("delete_short"))}</button>
     `;
     list.append(item);
   }
@@ -168,15 +227,15 @@ async function saveCurrentAccount() {
   const response = await sendMessage({ action: "account:save", account });
   state = response.state;
   await loadState();
-  toast("账号已保存");
+  toast(i18n.t("account_saved"));
 }
 
 async function login() {
   setBusy(true);
   try {
     const account = readAccountForm();
-    if (!account.username) throw new Error("请输入账号");
-    if (!account.password) throw new Error("请输入密码");
+    if (!account.username) throw new Error(i18n.t("username_required"));
+    if (!account.password) throw new Error(i18n.t("password_required"));
     let result;
     if ($("remember").checked) {
       const saved = await sendMessage({ action: "account:save", account });
@@ -208,34 +267,26 @@ async function refreshStatus(showToast) {
   try {
     const result = await sendMessage({ action: "drcom:status" });
     renderResult(result);
-    if (showToast) toast("状态已刷新");
+    if (showToast) toast(i18n.t("status_refreshed"));
   } catch (error) {
     renderResult({
       ok: false,
       online: false,
       success: false,
       phase: "offline",
-      message: `无法刷新状态：${error.message || error}`
+      message: i18n.t("refresh_failed", [error.message || error])
     });
   }
 }
 
 function renderResult(result) {
+  currentResult = result;
   const online = Object.prototype.hasOwnProperty.call(result, "online") ? Boolean(result.online) : Boolean(result.success);
   const phase = result.phase || (online ? "online" : "offline");
-  const labels = {
-    checking: "检查中",
-    authenticating: "登录中",
-    online: "已在线",
-    captive: "需要登录",
-    waiting: "等待重试",
-    action_required: "需要处理",
-    offline: "未连接"
-  };
   $("status-dot").dataset.state = phase;
-  $("status-label").textContent = labels[phase] || (online ? "已在线" : "未连接");
-  $("status-message").textContent = result.message || "等待操作";
-  $("request-url").textContent = result.url ? `请求：${result.url}` : "";
+  $("status-label").textContent = i18n.t(STATUS_KEYS[phase] || "status_unknown");
+  $("status-message").textContent = result.message || i18n.t("status_waiting_action");
+  $("request-url").textContent = result.url ? i18n.t("request_url", [result.url]) : "";
 }
 
 function readAccountForm() {
@@ -279,7 +330,7 @@ function sendMessage(message) {
         return;
       }
       if (!response) {
-        reject(new Error("后台服务没有返回结果，请刷新后重试。"));
+        reject(new Error(i18n.t("backend_no_response")));
         return;
       }
       if (response.ok === false && response.error) {
@@ -293,7 +344,13 @@ function sendMessage(message) {
 
 function maskAccount(account) {
   const parsed = splitAccount(account.username || "", account.suffix || "");
-  return `${accountUtils.mask(parsed.username)} · ${suffixLabel(parsed.suffix)}`;
+  const suffixKeys = {
+    "": "carrier_campus",
+    "@telecom": "carrier_telecom",
+    "@unicom": "carrier_unicom",
+    "@cmcc": "carrier_mobile"
+  };
+  return `${accountUtils.mask(parsed.username)} · ${suffixKeys[parsed.suffix] ? i18n.t(suffixKeys[parsed.suffix]) : suffixLabel(parsed.suffix)}`;
 }
 
 function toast(message) {

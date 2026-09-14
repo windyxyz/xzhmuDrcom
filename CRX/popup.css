@@ -23,6 +23,12 @@ h1, h2, p { margin: 0; }
 }
 .popup-header h1 { max-width: 100%; overflow-wrap: anywhere; font-size: 16px; font-weight: 600; line-height: 22px; }
 .popup-header p { margin-top: 2px; color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.header-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
+#language-toggle {
+  min-width: 44px; padding: 0 8px; border: 0; border-radius: var(--control-radius);
+  color: var(--accent-fill-default); background: transparent; font-size: 13px; font-weight: 600; white-space: nowrap; min-height: 44px;
+}
+#language-toggle:hover { background: var(--subtle-fill-hover); }
 
 .subtle-button, .text-button { border: 0; color: var(--accent-fill-default); background: transparent; font-weight: 600; }
 .subtle-button { min-height: 32px; flex: 0 0 auto; padding: 0 6px; border-radius: var(--control-radius); font-size: 13px; }

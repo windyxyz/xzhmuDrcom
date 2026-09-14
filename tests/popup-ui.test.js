@@ -8,6 +8,14 @@ const vm = require("node:vm");
 
 function loadPopup(options = {}) {
   const createdElements = [];
+  const runtimeMessageListeners = [];
+  const sent = [];
+  const makeInteractiveElement = (initial = {}) => ({
+    disabled: false,
+    listeners: {},
+    addEventListener(type, listener) { this.listeners[type] = listener; },
+    ...initial
+  });
   const elements = new Map([
     ["status-dot", { dataset: {} }],
     ["status-label", { textContent: "" }],
@@ -16,13 +24,35 @@ function loadPopup(options = {}) {
     ["toast", { hidden: true, textContent: "" }],
     ["account-list", {
       innerHTML: "",
+      listeners: {},
+      addEventListener(type, listener) { this.listeners[type] = listener; },
       append(element) { createdElements.push(element); }
     }],
+    ["language-toggle", makeInteractiveElement({ textContent: "EN" })],
+    ["password", makeInteractiveElement({ value: options.password || "" })],
     ...(options.elements || [])
   ]);
+  const chrome = options.chrome || {};
+  chrome.i18n ||= { getUILanguage: () => (options.browserLanguages || ["zh-CN"])[0] };
+  chrome.runtime ||= {};
+  chrome.runtime.lastError ??= null;
+  chrome.runtime.onMessage ||= {
+    addListener(listener) { runtimeMessageListeners.push(listener); }
+  };
+  chrome.runtime.sendMessage ||= ((message, callback) => {
+    sent.push(structuredClone(message));
+    if (message.action === "language:get") callback({ ok: true, preference: options.languagePreference || "zh-CN" });
+    else if (message.action === "language:set") {
+      callback({ ok: true, preference: message.preference });
+      for (const listener of runtimeMessageListeners) {
+        listener({ action: "language:changed", preference: message.preference }, { id: "test-extension-id" });
+      }
+    } else callback({ ok: true });
+  });
+  chrome.runtime.id ||= "test-extension-id";
   const context = vm.createContext({
     URL,
-    chrome: options.chrome,
+    chrome,
     clearTimeout,
     console,
     document: {
@@ -39,14 +69,40 @@ function loadPopup(options = {}) {
       documentElement: {},
       querySelectorAll() { return []; }
     },
+    navigator: { languages: options.browserLanguages || ["zh-CN"] },
     setTimeout
   });
-  for (const file of ["account-utils.js", "popup.js"]) {
+  for (const file of ["i18n-messages.js", "i18n.js", "account-utils.js", "popup.js"]) {
     const source = readFileSync(join(__dirname, "..", "CRX", file), "utf8");
     new vm.Script(source, { filename: file }).runInContext(context);
   }
-  return { context, createdElements, elements };
+  return {
+    context,
+    createdElements,
+    elements,
+    runtimeMessageListeners,
+    sent,
+    async click(id) {
+      const element = elements.get(id);
+      assert.equal(typeof element?.listeners?.click, "function", `${id} 缺少 click 监听器`);
+      await element.listeners.click({ currentTarget: element, target: element });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  };
 }
+
+test("弹窗切换英文会更新动态状态但不登录或清空密码", async () => {
+  const fixture = loadPopup({ languagePreference: "zh-CN", password: "secret" });
+  fixture.context.bindLanguageControls();
+  fixture.context.renderResult({ phase: "captive", message: "当前需要登录" });
+
+  await fixture.click("language-toggle");
+
+  assert.equal(fixture.elements.get("status-label").textContent, "Sign-in required");
+  assert.equal(fixture.elements.get("status-message").textContent, "当前需要登录");
+  assert.equal(fixture.elements.get("password").value, "secret");
+  assert.equal(fixture.sent.filter((item) => /login$/.test(item.action)).length, 0);
+});
 
 test("弹窗明确区分等待重试、需要处理和需要登录", () => {
   const { context, elements } = loadPopup();
@@ -79,7 +135,7 @@ test("忙碌态结束后不会启用本来就不可用的账号选择框", () =>
     },
     setTimeout
   });
-  for (const file of ["account-utils.js", "popup.js"]) {
+  for (const file of ["i18n-messages.js", "i18n.js", "account-utils.js", "popup.js"]) {
     const source = readFileSync(join(__dirname, "..", "CRX", file), "utf8");
     new vm.Script(source, { filename: file }).runInContext(context);
   }

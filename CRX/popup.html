@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>xzhmu徐医校园网</title>
+  <title data-i18n="brand_name">xzhmu徐医校园网</title>
   <link rel="stylesheet" href="design-tokens.css">
   <link rel="stylesheet" href="popup.css">
 </head>
@@ -11,63 +11,66 @@
   <main class="shell">
     <header class="popup-header">
       <div>
-        <h1><span class="full-label">xzhmu徐医校园网</span><span class="compact-label" aria-hidden="true">xzhmu</span></h1>
+        <h1><span class="full-label" data-i18n="brand_name">xzhmu徐医校园网</span><span class="compact-label" aria-hidden="true">xzhmu</span></h1>
         <p id="portal-host">10.10.10.2</p>
       </div>
-      <button id="refresh-status" class="subtle-button" type="button" aria-label="刷新连接状态" title="刷新连接状态"><span class="win-glyph win-glyph--16" aria-hidden="true">&#xE72C;</span></button>
+      <div class="header-actions">
+        <button id="language-toggle" class="language-toggle" type="button" data-i18n-aria-label="language_switch_bilingual">EN</button>
+        <button id="refresh-status" class="subtle-button" type="button" data-i18n-aria-label="refresh_status" data-i18n-title="refresh_status" aria-label="刷新连接状态" title="刷新连接状态"><span class="win-glyph win-glyph--16" aria-hidden="true">&#xE72C;</span></button>
+      </div>
     </header>
 
     <section id="status-panel" class="status-panel glass-chrome" role="status" aria-live="polite">
       <div class="status-line">
         <span id="status-dot" aria-hidden="true"></span>
-        <strong id="status-label">检查中</strong>
+        <strong id="status-label" data-i18n="status_checking">检查中</strong>
       </div>
-      <p id="status-message">正在读取认证页状态</p>
+      <p id="status-message" data-i18n="status_reading">正在读取认证页状态</p>
       <small id="request-url"></small>
     </section>
 
-    <section class="account-panel" aria-label="登录账号">
+    <section class="account-panel" data-i18n-aria-label="login_account" aria-label="登录账号">
       <label class="field">
-        <span><span class="full-label">选择账号</span><span class="compact-label" aria-hidden="true">账号</span></span>
+        <span><span class="full-label" data-i18n="select_account">选择账号</span><span class="compact-label" data-i18n="account_short" aria-hidden="true">账号</span></span>
         <select id="account-select"></select>
       </label>
 
       <div class="grid-two">
         <label class="field">
-          <span>名称</span>
-          <input id="label" autocomplete="off" placeholder="默认账号">
+          <span data-i18n="account_name">名称</span>
+          <input id="label" autocomplete="off" data-i18n-placeholder="default_account" placeholder="默认账号">
         </label>
         <label class="field">
-          <span>运营商</span>
+          <span data-i18n="carrier">运营商</span>
           <select id="suffix">
-            <option value="">校园网</option>
-            <option value="@telecom">电信 @telecom</option>
-            <option value="@unicom">联通 @unicom</option>
-            <option value="@cmcc">移动 @cmcc</option>
+            <option value="" data-i18n="carrier_campus">校园网</option>
+            <option value="@telecom" data-i18n="carrier_telecom">电信 @telecom</option>
+            <option value="@unicom" data-i18n="carrier_unicom">联通 @unicom</option>
+            <option value="@cmcc" data-i18n="carrier_mobile">移动 @cmcc</option>
           </select>
         </label>
       </div>
 
       <label class="field">
-        <span><span class="full-label">学号或 DrCOM 账号</span><span class="compact-label" aria-hidden="true">账号</span></span>
-        <input id="username" autocomplete="username" placeholder="请输入学号">
+        <span><span class="full-label" data-i18n="username_label">学号或 DrCOM 账号</span><span class="compact-label" data-i18n="account_short" aria-hidden="true">账号</span></span>
+        <input id="username" autocomplete="username" data-i18n-placeholder="username_placeholder" placeholder="请输入学号">
       </label>
 
       <label class="field">
-        <span>密码</span>
-        <input id="password" type="password" autocomplete="off" placeholder="认证密码">
+        <span data-i18n="password">密码</span>
+        <input id="password" type="password" autocomplete="off" data-i18n-placeholder="password_placeholder" placeholder="认证密码">
       </label>
 
       <details class="network-details">
-        <summary>账号网络参数</summary>
+        <summary data-i18n="account_network_parameters">账号网络参数</summary>
         <div class="grid-two network-grid">
           <label class="field">
             <span>wlan_user_ip</span>
-            <input id="wlan-user-ip" inputmode="decimal" placeholder="可留空">
+            <input id="wlan-user-ip" inputmode="decimal" data-i18n-placeholder="optional" placeholder="可留空">
           </label>
           <label class="field">
             <span>wlan_user_mac</span>
-            <input id="wlan-user-mac" placeholder="可留空">
+            <input id="wlan-user-mac" data-i18n-placeholder="optional" placeholder="可留空">
           </label>
         </div>
       </details>
@@ -75,34 +78,36 @@
       <div class="checks">
         <label class="check">
           <input id="remember" type="checkbox" checked>
-          <span><span class="full-label">登录时保存账号</span><span class="compact-label" aria-hidden="true">保存账号</span></span>
+          <span><span class="full-label" data-i18n="remember_account">登录时保存账号</span><span class="compact-label" data-i18n="remember_account_short" aria-hidden="true">保存账号</span></span>
         </label>
         <label class="check">
           <input id="reveal-password" type="checkbox">
-          <span>显示密码</span>
+          <span data-i18n="reveal_password">显示密码</span>
         </label>
       </div>
 
       <div class="actions">
-        <button id="login" class="primary" type="button" aria-label="登录校园网"><span class="win-ring win-ring--inline" aria-hidden="true"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" pathLength="100"/></svg></span><span class="full-label">登录校园网</span><span class="compact-label" aria-hidden="true">登录</span></button>
-        <button id="save-account" class="secondary" type="button">保存</button>
-        <button id="logout" class="secondary" type="button">下线</button>
+        <button id="login" class="primary" type="button" data-i18n-aria-label="login_campus" aria-label="登录校园网"><span class="win-ring win-ring--inline" aria-hidden="true"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" pathLength="100"/></svg></span><span class="full-label" data-i18n="login_campus">登录校园网</span><span class="compact-label" data-i18n="login_short" aria-hidden="true">登录</span></button>
+        <button id="save-account" class="secondary" type="button" data-i18n="save">保存</button>
+        <button id="logout" class="secondary" type="button" data-i18n="logout">下线</button>
       </div>
     </section>
 
     <section class="accounts" aria-labelledby="saved-accounts-title">
       <div class="section-title">
-        <h2 id="saved-accounts-title"><span class="full-label">已保存账号</span><span class="compact-label" aria-hidden="true">账号</span></h2>
-        <button id="open-portal" class="text-button" type="button"><span class="full-label">打开认证页</span><span class="compact-label" aria-hidden="true">认证页</span></button>
+        <h2 id="saved-accounts-title"><span class="full-label" data-i18n="saved_accounts">已保存账号</span><span class="compact-label" data-i18n="account_short" aria-hidden="true">账号</span></h2>
+        <button id="open-portal" class="text-button" type="button"><span class="full-label" data-i18n="open_portal">打开认证页</span><span class="compact-label" data-i18n="portal_short" aria-hidden="true">认证页</span></button>
       </div>
       <ul id="account-list"></ul>
     </section>
 
     <footer>
-      <button id="open-options" class="footer-button" type="button"><span class="full-label">设置与请求记录</span><span class="compact-label" aria-hidden="true">设置</span></button>
+      <button id="open-options" class="footer-button" type="button"><span class="full-label" data-i18n="settings_requests">设置与请求记录</span><span class="compact-label" data-i18n="settings_short" aria-hidden="true">设置</span></button>
     </footer>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script src="i18n-messages.js"></script>
+  <script src="i18n.js"></script>
   <script src="account-utils.js"></script>
   <script src="appearance.js"></script>
   <script src="confirm-dialog.js"></script>

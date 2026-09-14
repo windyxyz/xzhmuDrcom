@@ -5,6 +5,8 @@ const splitAccount = accountUtils.parse;
 const suffixLabel = accountUtils.suffixLabel;
 const makeAccountLabel = accountUtils.label;
 const naturalAccountKey = accountUtils.naturalKey;
+const i18n = globalThis.DrcomI18n;
+i18n.setLanguage("zh-CN");
 
 const optionsAppearanceImages = globalThis.DrcomOptionsAppearanceImages;
 const optionsRefresh = globalThis.DrcomOptionsRefresh;
@@ -24,6 +26,11 @@ let settingsFormDirty = false;
 let accountFormDirty = false;
 let settingsRefreshController = null;
 let pendingAccountCaptureController = null;
+let languagePreference = "auto";
+let languageControlsBound = false;
+let latestConnection;
+let latestDiagnostics;
+let latestRefreshStatus;
 
 document.addEventListener("DOMContentLoaded", init);
 
@@ -32,6 +39,7 @@ async function init() {
   if (!globalThis.chrome?.runtime?.sendMessage) return;
   bindEvents();
   try {
+    await loadLanguage();
     await loadState();
     await loadPendingAccountCapture();
     await loadPortalDiagnostics();
@@ -42,12 +50,14 @@ async function init() {
 }
 
 function bindEvents() {
+  bindLanguageControls();
   pendingAccountCaptureController = createPendingAccountCaptureController({
     $,
     renderAccounts,
     sendMessage,
     setState: (nextState) => { state = nextState; },
-    toast
+    toast,
+    t: (key, substitutions) => i18n.t(key, substitutions)
   });
 
   settingsRefreshController = createSettingsRefreshController({
@@ -130,12 +140,12 @@ function bindEvents() {
   $("appearance-theme").addEventListener("change", runAsync(async () => {
     applyCurrentAppearance();
     await persistAppearance();
-    toast("显示模式已应用");
+    toast(i18n.t("display_mode_applied"));
   }));
   $("appearance-material").addEventListener("change", runAsync(async () => {
     applyCurrentAppearance();
     await persistAppearance();
-    toast("材质已应用");
+    toast(i18n.t("material_applied"));
   }));
   $("scrim-strength").addEventListener("input", () => {
     syncSliderProgress("scrim-strength");
@@ -145,23 +155,23 @@ function bindEvents() {
   });
   $("scrim-strength").addEventListener("change", runAsync(async () => {
     await persistAppearance();
-    toast("遮罩强度已应用");
+    toast(i18n.t("scrim_applied"));
   }));
   $("appearance-nav-transition").addEventListener("change", runAsync(async () => {
     applyCurrentAppearance();
     await persistAppearance();
-    toast("页面过渡已应用");
+    toast(i18n.t("transition_applied"));
   }));
   $("appearance-nav-pane-position").addEventListener("change", runAsync(async () => {
     applyCurrentAppearance();
     await persistAppearance();
-    toast("窗格位置已应用");
+    toast(i18n.t("pane_position_applied"));
   }));
   $("background-fit").addEventListener("change", runAsync(async () => {
     syncAppearanceControls();
     applyCurrentAppearance();
     await persistAppearance();
-    toast("填充方式已应用");
+    toast(i18n.t("fit_applied"));
   }));
   setupColorPicker();
   setupPanelControls();
@@ -172,7 +182,7 @@ function bindEvents() {
       syncPickerFromHex(swatch.dataset.color);
       applyCurrentAppearance();
       await persistAppearance();
-      toast("强调色已应用");
+      toast(i18n.t("accent_applied"));
     }));
   });
   $("appearance-accent").addEventListener("input", () => {
@@ -183,43 +193,43 @@ function bindEvents() {
     syncAccentControls();
     applyCurrentAppearance();
     await persistAppearance();
-    toast("强调色已应用");
+    toast(i18n.t("accent_applied"));
   }));
   $("appearance-accent-hex").addEventListener("change", runAsync(async () => {
     const hex = normalizeAccentHex($("appearance-accent-hex").value);
     if (!hex) {
       syncAccentControls();
-      toast("色值格式应为 #RRGGBB");
+      toast(i18n.t("invalid_hex_color"));
       return;
     }
     $("appearance-accent").value = hex;
     syncAccentControls();
     applyCurrentAppearance();
     await persistAppearance();
-    toast("强调色已应用");
+    toast(i18n.t("accent_applied"));
   }));
   $("online-detail-mode").addEventListener("change", runAsync(async () => {
     await persistAppearance();
-    toast("在线信息显示已应用");
+    toast(i18n.t("online_details_applied"));
   }));
   $("appearance-background").addEventListener("change", runAsync(async (event) => {
     const select = event.target;
     if (select.value === "daily" && !await ensureWallpaperPermission()) {
       select.value = "fresh";
       syncAppearanceControls();
-      toast("未授予必应访问权限，已保持简洁底色");
+      toast(i18n.t("bing_permission_denied"));
       return;
     }
     syncAppearanceControls();
     applyCurrentAppearance();
     /* 无图的自定义背景只是选图前的过渡态：不持久化，避免被规范化为简洁底色后弹回 */
     if (select.value === "custom" && !$("background-image-data").value) {
-      toast("请选择一张背景图片，选中后会自动应用");
+      toast(i18n.t("choose_background_image"));
       return;
     }
     await persistAppearance();
     refreshDailyWallpaper();
-    toast("背景设置已应用");
+    toast(i18n.t("background_applied"));
   }));
   $("background-file").addEventListener("change", runAsync(handleBackgroundFile));
   $("clear-background").addEventListener("click", runAsync(clearBackgroundImage));
@@ -233,7 +243,7 @@ function bindEvents() {
   ["background-blur", "background-dim", "background-scale"].forEach((id) => {
     $(id).addEventListener("change", runAsync(async () => {
       await persistAppearance();
-      toast("背景参数已应用");
+      toast(i18n.t("background_parameters_applied"));
     }));
   });
   document.querySelectorAll(".position-cell").forEach((cell) => {
@@ -242,9 +252,65 @@ function bindEvents() {
       syncAppearanceControls();
       applyCurrentAppearance();
       await persistAppearance();
-      toast("背景焦点已应用");
+      toast(i18n.t("background_focus_applied"));
     }));
   });
+}
+
+function bindLanguageControls() {
+  if (languageControlsBound) return;
+  languageControlsBound = true;
+  $("ui-language")?.addEventListener("change", runAsync(async (event) => {
+    await sendMessage({ action: "language:set", preference: event.currentTarget.value });
+  }));
+  chrome.runtime.onMessage?.addListener((message, sender) => {
+    if (sender?.id && sender.id !== chrome.runtime.id) return;
+    if (message?.action !== "language:changed") return;
+    applyLanguage(message.preference);
+  });
+}
+
+async function loadLanguage() {
+  try {
+    const response = await sendMessage({ action: "language:get" });
+    applyLanguage(response.preference);
+  } catch (error) {
+    applyLanguage("auto");
+  }
+}
+
+function applyLanguage(preference) {
+  languagePreference = i18n.normalizePreference(preference);
+  i18n.setLanguage(languagePreference);
+  const language = i18n.getLanguage();
+  i18n.apply(document, language);
+  if (document.documentElement) document.documentElement.lang = language;
+  const select = $("ui-language");
+  if (select) select.value = languagePreference;
+  refreshSettingsNavigationCopy();
+  if (state) {
+    renderAccounts();
+    renderRequestLog();
+  }
+  if (latestConnection !== undefined) renderConnectionOverview(latestConnection);
+  if (latestDiagnostics !== undefined) {
+    const diagnosticsInput = $("portal-diagnostics-enabled");
+    const checked = diagnosticsInput?.checked;
+    renderPortalDiagnostics(latestDiagnostics);
+    if (diagnosticsInput && checked !== undefined) diagnosticsInput.checked = checked;
+  }
+  if (latestRefreshStatus !== undefined) renderSettingsRefreshStatus(latestRefreshStatus);
+  pendingAccountCaptureController?.render?.();
+}
+
+function refreshSettingsNavigationCopy() {
+  if (typeof document.querySelector !== "function") return;
+  const active = document.querySelector('[data-settings-target][aria-current="page"]');
+  if (!active) return;
+  const title = $("settings-title");
+  const description = $("settings-description");
+  if (title) title.textContent = i18n.t(active.dataset.settingsTitleKey || "nav_network");
+  if (description) description.textContent = i18n.t(active.dataset.settingsDescriptionKey || "nav_network_description");
 }
 
 function ensurePendingAccountCaptureController() {
@@ -254,7 +320,8 @@ function ensurePendingAccountCaptureController() {
       renderAccounts,
       sendMessage,
       setState: (nextState) => { state = nextState; },
-      toast
+      toast,
+      t: (key, substitutions) => i18n.t(key, substitutions)
     });
   }
   return pendingAccountCaptureController;
@@ -342,6 +409,7 @@ function formatPortalDiagnosticsSize(bytes) {
 }
 
 function renderPortalDiagnostics(diagnostics) {
+  latestDiagnostics = diagnostics;
   const input = $("portal-diagnostics-enabled");
   const status = $("portal-diagnostics-status");
   const storage = $("portal-diagnostics-storage");
@@ -354,11 +422,11 @@ function renderPortalDiagnostics(diagnostics) {
   const droppedRecords = Math.max(0, Math.floor(Number(diagnostics.droppedRecords) || 0));
   if (input) input.checked = enabled;
   if (status) status.textContent = diagnostics.paused === true
-    ? "诊断记录已暂停"
-    : enabled ? "诊断模式已开启" : "诊断模式已关闭";
+    ? i18n.t("diagnostics_paused")
+    : enabled ? i18n.t("diagnostics_enabled") : i18n.t("diagnostics_disabled");
   if (storage) storage.textContent = formatPortalDiagnosticsSize(bytes) + " / " + formatPortalDiagnosticsSize(portalDiagnosticsLimitBytes(diagnostics));
   if (sessions) sessions.textContent = sessionCount + " / " + portalDiagnosticsLimitSessions(diagnostics);
-  if (dropped) dropped.textContent = droppedRecords + " 条";
+  if (dropped) dropped.textContent = i18n.t("record_count", [droppedRecords]);
 }
 
 async function loadPortalDiagnostics() {
@@ -414,11 +482,11 @@ async function exportPortalDiagnostics() {
 
 async function clearPortalDiagnostics() {
   const confirmer = globalThis.DrcomConfirmDialog;
-  if (!confirmer || typeof confirmer.ask !== "function") throw new Error("确认对话框不可用");
+  if (!confirmer || typeof confirmer.ask !== "function") throw new Error(i18n.t("confirm_unavailable"));
   const confirmed = await confirmer.ask({
-    title: "清空门户诊断记录？",
-    message: "将删除本机保存的全部门户诊断会话，诊断开关保持不变。此操作无法撤销。",
-    confirmLabel: "清空记录",
+    title: i18n.t("clear_diagnostics_title"),
+    message: i18n.t("clear_diagnostics_message"),
+    confirmLabel: i18n.t("clear_records"),
     danger: true
   });
   if (!confirmed) return false;
@@ -472,10 +540,10 @@ const BACKGROUND_POSITIONS = new Set([
   "left bottom", "center bottom", "right bottom"
 ]);
 const WALLPAPER_ORIGINS = ["https://cn.bing.com/*"];
-const POSITION_LABELS = new Map([
-  ["left top", "左上"], ["center top", "上"], ["right top", "右上"],
-  ["left center", "左"], ["center", "居中"], ["right center", "右"],
-  ["left bottom", "左下"], ["center bottom", "下"], ["right bottom", "右下"]
+const POSITION_LABEL_KEYS = new Map([
+  ["left top", "position_left_top"], ["center top", "position_top"], ["right top", "position_right_top"],
+  ["left center", "position_left"], ["center", "position_center"], ["right center", "position_right"],
+  ["left bottom", "position_left_bottom"], ["center bottom", "position_bottom"], ["right bottom", "position_right_bottom"]
 ]);
 let resolvedWallpaper = { day: "", dataUrl: "" };
 
@@ -626,7 +694,7 @@ function syncPicker(persist = false) {
   syncAccentControls();
   applyCurrentAppearance();
   if (persist) {
-    persistAppearance().then(() => toast("强调色已应用")).catch((error) => toast(error.message || String(error)));
+    persistAppearance().then(() => toast(i18n.t("accent_applied"))).catch((error) => toast(error.message || String(error)));
   }
 }
 
@@ -659,7 +727,7 @@ function setupColorPicker() {
     if (spectrum.hasPointerCapture?.(event.pointerId)) {
       spectrum.releasePointerCapture(event.pointerId);
       updateFromEvent(event);
-      persistAppearance().then(() => toast("强调色已应用")).catch(() => {});
+      persistAppearance().then(() => toast(i18n.t("accent_applied"))).catch(() => {});
     }
   });
   const valueSlider = $("cp-value");
@@ -669,7 +737,7 @@ function setupColorPicker() {
   });
   valueSlider?.addEventListener("change", runAsync(async () => {
     await persistAppearance();
-    toast("强调色已应用");
+    toast(i18n.t("accent_applied"));
   }));
 }
 
@@ -694,8 +762,8 @@ function syncGuardSeconds() {
   if (!input) return;
   syncSliderProgress("guard-seconds");
   const output = $("guard-seconds-value");
-  if (output) output.textContent = `${Math.round(Number(input.value) || 0)} 秒`;
-  input.title = `${Math.round(Number(input.value) || 0)} 秒`;
+  if (output) output.textContent = i18n.t("seconds_value", [Math.round(Number(input.value) || 0)]);
+  input.title = i18n.t("seconds_value", [Math.round(Number(input.value) || 0)]);
 }
 
 function hydrateAppearance(input) {
@@ -738,19 +806,19 @@ function hydrateAppearance(input) {
 
 function connectionSummary(connection) {
   if (!connection || typeof connection !== "object") {
-    return { label: "无法检查", detail: "后台暂时不可用", tone: "action" };
+    return { label: i18n.t("connection_unavailable"), detail: i18n.t("backend_unavailable"), tone: "action" };
   }
   const online = connection.online === true || connection.phase === "online";
   const phase = online ? "online" : String(connection.phase || "idle");
   const presentations = {
-    online: { label: "已连接", detail: "当前认证状态正常", tone: "online" },
-    captive: { label: "需要登录", detail: "当前网络尚未完成认证", tone: "action" },
-    action_required: { label: "需要处理", detail: "请检查账号或认证信息", tone: "action" },
-    waiting: { label: "等待重试", detail: "助手会在稍后继续检查", tone: "waiting" },
-    checking: { label: "检查中", detail: "正在读取校园网状态", tone: "waiting" },
-    authenticating: { label: "登录中", detail: "正在向认证网关发送请求", tone: "waiting" },
-    offline: { label: "未连接", detail: "可以打开认证页完成登录", tone: "action" },
-    idle: { label: "尚未检查", detail: "点击测试连接获取当前状态", tone: "neutral" }
+    online: { label: i18n.t("connection_connected"), detail: i18n.t("connection_ok"), tone: "online" },
+    captive: { label: i18n.t("status_sign_in_required"), detail: i18n.t("connection_not_authenticated"), tone: "action" },
+    action_required: { label: i18n.t("status_action_required"), detail: i18n.t("connection_check_credentials"), tone: "action" },
+    waiting: { label: i18n.t("status_waiting"), detail: i18n.t("connection_retry_later"), tone: "waiting" },
+    checking: { label: i18n.t("status_checking"), detail: i18n.t("connection_reading"), tone: "waiting" },
+    authenticating: { label: i18n.t("status_authenticating"), detail: i18n.t("connection_contacting_gateway"), tone: "waiting" },
+    offline: { label: i18n.t("status_offline"), detail: i18n.t("connection_open_portal"), tone: "action" },
+    idle: { label: i18n.t("connection_not_checked"), detail: i18n.t("connection_test_hint"), tone: "neutral" }
   };
   const presentation = presentations[phase] || presentations.offline;
   return {
@@ -760,6 +828,7 @@ function connectionSummary(connection) {
 }
 
 function renderConnectionOverview(connection) {
+  latestConnection = connection;
   const element = $("settings-connection-status");
   const presentation = connectionSummary(connection);
   if (element) {
@@ -773,7 +842,7 @@ function renderConnectionOverview(connection) {
 }
 
 function formatSettingsRefreshTime(timestamp) {
-  return new Date(timestamp).toLocaleTimeString("zh-CN", {
+  return new Date(timestamp).toLocaleTimeString(i18n.getLanguage() === "zh-CN" ? "zh-CN" : "en-US", {
     hour12: false,
     hour: "2-digit",
     minute: "2-digit",
@@ -782,6 +851,7 @@ function formatSettingsRefreshTime(timestamp) {
 }
 
 function renderSettingsRefreshStatus(status = {}) {
+  latestRefreshStatus = status;
   const element = $("settings-refresh-status");
   const button = $("refresh-settings");
   if (!element) return;
@@ -792,23 +862,23 @@ function renderSettingsRefreshStatus(status = {}) {
   element.dataset.tone = status.error ? "error" : status.protected ? "warning" : "neutral";
   if (status.busy) {
     element.textContent = status.protected
-      ? "正在同步安全区域；未保存编辑已受保护"
-      : "正在同步设置…";
+      ? i18n.t("refresh_syncing_protected")
+      : i18n.t("refresh_syncing");
     return;
   }
   if (status.error) {
-    element.textContent = "同步失败：" + (status.error.message || String(status.error));
+    element.textContent = i18n.t("refresh_failed_status", [status.error.message || String(status.error)]);
     return;
   }
   if (status.protected) {
-    element.textContent = "检测到未保存编辑；已更新连接状态和诊断摘要";
+    element.textContent = i18n.t("refresh_protected");
     return;
   }
   if (status.syncedAt) {
-    element.textContent = "最近同步 " + formatSettingsRefreshTime(status.syncedAt);
+    element.textContent = i18n.t("refresh_recent", [formatSettingsRefreshTime(status.syncedAt)]);
     return;
   }
-  element.textContent = status.enabled === false ? "自动同步已关闭" : "自动同步已开启";
+  element.textContent = status.enabled === false ? i18n.t("refresh_disabled") : i18n.t("refresh_enabled");
 }
 
 async function persistAutoRefreshPreference(enabled) {
@@ -822,9 +892,9 @@ async function persistAutoRefreshPreference(enabled) {
 
 function confirmSettingsReload() {
   return globalThis.DrcomConfirmDialog.ask({
-    title: "重新加载设置页？",
-    message: "当前有尚未保存的账号或设置。重新加载会丢弃这些编辑。",
-    confirmLabel: "放弃编辑并重新加载"
+    title: i18n.t("reload_title"),
+    message: i18n.t("reload_message"),
+    confirmLabel: i18n.t("reload_confirm")
   });
 }
 
@@ -848,10 +918,10 @@ async function testConnection() {
   const status = $("settings-connection-status");
   if (button) {
     button.disabled = true;
-    setButtonBusy(button, true, "检查中…", "测试连接");
+    setButtonBusy(button, true, i18n.t("checking_ellipsis"), i18n.t("test_connection"));
   }
   if (status) {
-    status.textContent = "检查中 · 正在联系认证网关";
+    status.textContent = i18n.t("checking_gateway");
     status.dataset.tone = "waiting";
   }
   try {
@@ -862,7 +932,7 @@ async function testConnection() {
   } finally {
     if (button) {
       button.disabled = false;
-      setButtonBusy(button, false, "", "测试连接");
+      setButtonBusy(button, false, "", i18n.t("test_connection"));
     }
   }
 }
@@ -870,7 +940,7 @@ async function testConnection() {
 function openConfiguredPortal() {
   const portalUrl = state?.config?.portalUrl;
   if (!portalUrl) {
-    toast("设置仍在加载，请稍后再试");
+    toast(i18n.t("settings_loading"));
     return false;
   }
   chrome.tabs.create({ url: portalUrl });
@@ -896,23 +966,23 @@ function setupPanelControls() {
     }
     applyCurrentAppearance();
     await persistAppearance();
-    toast("品牌面板已应用");
+    toast(i18n.t("brand_panel_applied"));
   }));
   $("panel-color-hex")?.addEventListener("change", runAsync(async () => {
     const hex = normalizeAccentHex($("panel-color-hex").value);
     if (!hex) {
       $("panel-color-hex").value = normalizeAccentHex($("appearance-accent").value) || "#007aff";
-      toast("色值格式应为 #RRGGBB");
+      toast(i18n.t("invalid_hex_color"));
       return;
     }
     applyCurrentAppearance();
     await persistAppearance();
-    toast("品牌面板已应用");
+    toast(i18n.t("brand_panel_applied"));
   }));
   $("panel-pattern").addEventListener("change", runAsync(async () => {
     applyCurrentAppearance();
     await persistAppearance();
-    toast("面板图案已应用");
+    toast(i18n.t("panel_pattern_applied"));
   }));
 }
 
@@ -923,7 +993,7 @@ function setupPaneToggle() {
   const apply = (compact) => {
     layout.classList.toggle("nav-compact", compact);
     button.setAttribute("aria-expanded", compact ? "false" : "true");
-    button.title = compact ? "展开导航" : "折叠导航";
+    button.title = compact ? i18n.t("navigation_expand") : i18n.t("navigation_collapse");
     try { localStorage.setItem("drcom-nav-compact", compact ? "1" : "0"); } catch (error) {}
   };
   let compact = false;
@@ -965,8 +1035,12 @@ function setupSettingsNavigation() {
       if (item === button) item.setAttribute("aria-current", "page");
       else item.removeAttribute("aria-current");
     }
-    $("settings-title").textContent = button.dataset.settingsTitle || button.textContent.trim();
-    $("settings-description").textContent = button.dataset.settingsDescription || "";
+    $("settings-title").textContent = button.dataset.settingsTitleKey
+      ? i18n.t(button.dataset.settingsTitleKey)
+      : button.dataset.settingsTitle || button.textContent.trim();
+    $("settings-description").textContent = button.dataset.settingsDescriptionKey
+      ? i18n.t(button.dataset.settingsDescriptionKey)
+      : button.dataset.settingsDescription || "";
     const titleIcon = $("settings-title-icon");
     if (titleIcon) {
       titleIcon.textContent = button.dataset.glyph || titleIcon.textContent;
@@ -1015,15 +1089,15 @@ function syncIntervalControls() {
   const summary = $("interval-summary");
   if (summary) {
     const parts = [];
-    if (normalized.minutes) parts.push(`${normalized.minutes} 分钟`);
-    if (normalized.seconds) parts.push(`${normalized.seconds} 秒`);
-    summary.textContent = `每 ${parts.join(" ")}检查一次`;
+    if (normalized.minutes) parts.push(i18n.t("minutes_value", [normalized.minutes]));
+    if (normalized.seconds) parts.push(i18n.t("seconds_value", [normalized.seconds]));
+    summary.textContent = i18n.t("check_every", [parts.join(" ")]);
   }
 }
 
 function gatewayHost(value) {
-  try { return new URL(value).host || "认证页"; }
-  catch (error) { return "认证页"; }
+  try { return new URL(value).host || i18n.t("portal_short"); }
+  catch (error) { return i18n.t("portal_short"); }
 }
 
 function gatewayOriginPattern(value) {
@@ -1048,7 +1122,7 @@ async function requestGatewayAccess(config) {
   const request = { origins };
   if (config?.ui?.modernizePortal !== false) request.permissions = ["scripting"];
   const granted = await chrome.permissions.request(request);
-  if (!granted) throw new Error("需要允许访问自定义校园网网关，才能保存并应用该配置");
+  if (!granted) throw new Error(i18n.t("gateway_permission_required"));
   return true;
 }
 
@@ -1056,9 +1130,9 @@ function renderAccounts() {
   const list = $("account-list");
   const sidebarSummary = $("sidebar-account-summary");
   const selected = state.accounts.find((account) => account.id === state.selectedAccountId) || state.accounts[0] || null;
-  if (sidebarSummary) sidebarSummary.textContent = selected ? (selected.label || maskAccount(selected)) : "未保存账号";
+  if (sidebarSummary) sidebarSummary.textContent = selected ? (selected.label || maskAccount(selected)) : i18n.t("no_account_saved");
   if (!state.accounts.length) {
-    list.innerHTML = '<p class="empty-note">还没有保存账号。先在校园网认证页登录一次，或手动保存账号。</p>';
+    list.innerHTML = `<p class="empty-note">${escapeHtml(i18n.t("no_saved_accounts_long"))}</p>`;
     return;
   }
   list.innerHTML = state.accounts.map((account) => {
@@ -1068,7 +1142,7 @@ function renderAccounts() {
       '<button type="button" class="account-row" data-edit="' + escapeHtml(account.id) + '">' +
       '<strong>' + escapeHtml(accountLabel) + '</strong>' +
       '<span>' + escapeHtml(maskAccount(account)) + '</span></button>' +
-      '<button type="button" class="small-danger" title="删除账号：' + escapeHtml(accountLabel) + '" aria-label="删除账号：' + escapeHtml(accountLabel) + '" data-delete="' + escapeHtml(account.id) + '">删</button></div>';
+      '<button type="button" class="small-danger" title="' + escapeHtml(i18n.t("delete_account_label", [accountLabel])) + '" aria-label="' + escapeHtml(i18n.t("delete_account_label", [accountLabel])) + '" data-delete="' + escapeHtml(account.id) + '">' + escapeHtml(i18n.t("delete_short")) + '</button></div>';
   }).join("");
 }
 
@@ -1076,21 +1150,21 @@ function renderRequestLog() {
   const list = $("request-log");
   const records = Array.isArray(state.recentRequests) ? state.recentRequests : [];
   if (!records.length) {
-    list.innerHTML = '<p class="empty-note">暂无记录。点击登录、下线或刷新状态后，这里会显示最近 10 次请求。</p>';
+    list.innerHTML = `<p class="empty-note">${escapeHtml(i18n.t("no_request_records"))}</p>`;
     return;
   }
   list.innerHTML = records.map((record) => {
     const ok = isRequestRecordOk(record);
-    const kind = record.kind === "login" ? "登录" : record.kind === "logout" ? "下线" : record.kind === "status" ? "状态检测" : record.kind || "请求";
-    const badge = record.kind === "logout" ? (ok ? "成功/离线" : "失败") : record.kind === "status" ? (ok ? "在线" : "未在线") : (ok ? "成功/在线" : "失败/离线");
+    const kind = record.kind === "login" ? i18n.t("request_login") : record.kind === "logout" ? i18n.t("request_logout") : record.kind === "status" ? i18n.t("request_status") : record.kind || i18n.t("request_generic");
+    const badge = record.kind === "logout" ? (ok ? i18n.t("request_success_offline") : i18n.t("request_failed")) : record.kind === "status" ? (ok ? i18n.t("request_online") : i18n.t("request_not_online")) : (ok ? i18n.t("request_success_online") : i18n.t("request_failed_offline"));
     return '<article class="request-log-item">' +
       '<div class="request-log-head"><strong>' + escapeHtml(kind) + '</strong>' +
       '<span class="request-badge ' + (ok ? 'ok' : 'fail') + '">' + badge + '</span>' +
       '<time>' + escapeHtml(formatTime(record.createdAt)) + '</time></div>' +
-      '<p>' + escapeHtml(record.message || '无明确消息') + '</p>' +
-      '<details><summary>查看脱敏 URL 与返回文本</summary>' +
-      '<code>' + escapeHtml(record.url || '无 URL') + '</code>' +
-      '<pre>' + escapeHtml(record.raw || '无返回文本') + '</pre>' +
+      '<p>' + escapeHtml(record.message || i18n.t("no_explicit_message")) + '</p>' +
+      '<details><summary>' + escapeHtml(i18n.t("view_redacted_request")) + '</summary>' +
+      '<code>' + escapeHtml(record.url || i18n.t("no_url")) + '</code>' +
+      '<pre>' + escapeHtml(record.raw || i18n.t("no_response_text")) + '</pre>' +
       '</details></article>';
   }).join("");
 }
@@ -1159,7 +1233,7 @@ async function saveEditedAccount(event) {
   fillAccountEditor(response.account);
   renderAccounts();
   renderRequestLog();
-  toast("账号已保存");
+  toast(i18n.t("account_saved"));
 }
 
 async function loginEditedAccount() {
@@ -1169,13 +1243,13 @@ async function loginEditedAccount() {
   renderAccounts();
   const result = await sendMessage({ action: "drcom:login", accountId: saved.account.id });
   await loadState();
-  toast(result.message || "已发送登录请求");
+  toast(result.message || i18n.t("login_request_sent"));
 }
 
 async function logoutAccount() {
   const result = await sendMessage({ action: "drcom:logout" });
   await loadState();
-  toast(result.message || "已发送下线请求");
+  toast(result.message || i18n.t("logout_request_sent"));
 }
 
 async function deleteEditedAccount() {
@@ -1188,9 +1262,9 @@ async function deleteAccount(accountId) {
   if (!account) return;
   const accountLabel = account.label || makeAccountLabel(account.username, account.suffix);
   const confirmed = await globalThis.DrcomConfirmDialog.ask({
-    title: "删除账号？",
-    message: `将永久删除账号“${accountLabel}”（${maskAccount(account)}）。此操作无法撤销。`,
-    confirmLabel: "删除账号"
+    title: i18n.t("delete_account_title"),
+    message: i18n.t("delete_account_message", [accountLabel, maskAccount(account)]),
+    confirmLabel: i18n.t("delete_account_confirm")
   });
   if (!confirmed) return;
 
@@ -1199,7 +1273,7 @@ async function deleteAccount(accountId) {
   renderAccounts();
   renderRequestLog();
   fillAccountEditor(state.accounts.find((account) => account.id === state.selectedAccountId) || state.accounts[0] || null);
-  toast("账号已删除");
+  toast(i18n.t("account_deleted"));
 }
 
 async function selectAccount(accountId) {
@@ -1210,7 +1284,7 @@ async function selectAccount(accountId) {
 
 function parseCapturedUrl() {
   const raw = $("raw-url").value.trim();
-  if (!raw) return toast("请先粘贴抓包 URL");
+  if (!raw) return toast(i18n.t("paste_capture_url_first"));
   try {
     const url = new URL(raw);
     const params = url.searchParams;
@@ -1225,9 +1299,10 @@ function parseCapturedUrl() {
     $("login-method").value = params.get("login_method") || $("login-method").value || "1";
     $("js-version").value = params.get("jsVersion") || $("js-version").value || "3.3.2";
     settingsFormDirty = true;
-    toast("解析成功：" + suffixLabel(parsed.suffix));
+    const parsedSuffix = { "": "carrier_campus", "@telecom": "carrier_telecom", "@unicom": "carrier_unicom", "@cmcc": "carrier_mobile" }[parsed.suffix];
+    toast(i18n.t("parse_success", [parsedSuffix ? i18n.t(parsedSuffix) : suffixLabel(parsed.suffix)]));
   } catch (error) {
-    toast("URL 格式不正确");
+    toast(i18n.t("invalid_url"));
   }
 }
 
@@ -1247,9 +1322,9 @@ async function saveParsedAccount() {
   if (existing) {
     const existingLabel = existing.label || makeAccountLabel(existing.username, existing.suffix);
     const confirmed = await globalThis.DrcomConfirmDialog.ask({
-      title: "覆盖导入账号？",
-      message: `导入数据将覆盖账号“${existingLabel}”的名称、密码和网络参数。此操作无法撤销。`,
-      confirmLabel: "覆盖导入"
+      title: i18n.t("overwrite_import_title"),
+      message: i18n.t("overwrite_import_message", [existingLabel]),
+      confirmLabel: i18n.t("overwrite_import_confirm")
     });
     if (!confirmed) return;
     account.id = existing.id;
@@ -1259,7 +1334,8 @@ async function saveParsedAccount() {
   fillAccountEditor(response.account);
   renderAccounts();
   renderRequestLog();
-  toast("账号已保存：" + suffixLabel(response.account.suffix));
+  const savedSuffix = { "": "carrier_campus", "@telecom": "carrier_telecom", "@unicom": "carrier_unicom", "@cmcc": "carrier_mobile" }[response.account.suffix];
+  toast(i18n.t("account_saved_with_provider", [savedSuffix ? i18n.t(savedSuffix) : suffixLabel(response.account.suffix)]));
 }
 
 async function saveSettings(event) {
@@ -1280,12 +1356,12 @@ function markSettingsAutoSaved() {
   const element = $("settings-autosave-status");
   if (!element) return;
   element.hidden = false;
-  element.textContent = "设置已自动生效 · " + new Date().toLocaleTimeString("zh-CN", {
+  element.textContent = i18n.t("settings_auto_applied", [new Date().toLocaleTimeString(i18n.getLanguage() === "zh-CN" ? "zh-CN" : "en-US", {
     hour12: false,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit"
-  });
+  })]);
   clearTimeout(markSettingsAutoSaved.timer);
   markSettingsAutoSaved.timer = setTimeout(() => { element.hidden = true; }, 2600);
 }
@@ -1296,16 +1372,16 @@ async function autoSaveSettings({ announce = false } = {}) {
   const gatewayWarning = gatewaySecurityWarning(state.config, config);
   if (gatewayWarning) {
     const confirmed = await globalThis.DrcomConfirmDialog.ask({
-      title: "使用自定义 HTTP 网关？",
+      title: i18n.t("custom_http_gateway_title"),
       message: gatewayWarning,
-      confirmLabel: "仍然保存",
+      confirmLabel: i18n.t("save_anyway"),
       danger: true
     });
     if (!confirmed) return false;
   }
   await requestGatewayAccess(config);
   if (config.ui.background === "daily" && !await ensureWallpaperPermission()) {
-    throw new Error("需要允许访问必应，才能使用每日壁纸背景");
+    throw new Error(i18n.t("bing_permission_required"));
   }
   const response = await sendMessage({ action: "config:save", config });
   state = response.state;
@@ -1336,9 +1412,7 @@ function gatewaySecurityWarning(previous, next) {
       return false;
     }
   });
-  return insecureCustom
-    ? "该自定义 HTTP 网关会以明文传输账号、密码等凭据。仅在你确认信任此网关时继续。"
-    : "";
+  return insecureCustom ? i18n.t("custom_http_gateway_warning") : "";
 }
 
 function renderGatewaySecurityWarning() {
@@ -1351,9 +1425,9 @@ function renderGatewaySecurityWarning() {
 async function resetConfig() {
   const accountCount = state.accounts.length;
   const confirmed = await globalThis.DrcomConfirmDialog.ask({
-    title: "恢复默认设置？",
-    message: `将把网关、认证协议、自动化、门户和外观设置恢复为默认值。现有的 ${accountCount} 个已保存账号不会删除。`,
-    confirmLabel: "恢复默认"
+    title: i18n.t("restore_defaults_title"),
+    message: i18n.t("restore_defaults_message", [accountCount]),
+    confirmLabel: i18n.t("restore_default")
   });
   if (!confirmed) return;
 
@@ -1362,23 +1436,23 @@ async function resetConfig() {
   hydrateForm();
   renderAccounts();
   renderRequestLog();
-  toast("已恢复默认配置");
+  toast(i18n.t("defaults_restored"));
 }
 
 async function clearRequestLog() {
   const recordCount = state.recentRequests.length;
-  if (!recordCount) return toast("没有请求记录可清空");
+  if (!recordCount) return toast(i18n.t("no_records_to_clear"));
   const confirmed = await globalThis.DrcomConfirmDialog.ask({
-    title: "清空请求记录？",
-    message: `将永久清空当前保存的 ${recordCount} 条脱敏请求记录。此操作无法撤销。`,
-    confirmLabel: "清空记录"
+    title: i18n.t("clear_requests_title"),
+    message: i18n.t("clear_requests_message", [recordCount]),
+    confirmLabel: i18n.t("clear_records")
   });
   if (!confirmed) return;
 
   const response = await sendMessage({ action: "requestLog:clear" });
   state = response.state;
   renderRequestLog();
-  toast("请求记录已清空");
+  toast(i18n.t("request_records_cleared"));
 }
 
 function readConfig() {
@@ -1402,7 +1476,7 @@ function readConfig() {
     ui: {
       modernizePortal: $("modernize-portal").checked,
       autoRefreshSettings: $("auto-refresh-settings").checked,
-      title: "徐医校园网",
+      title: i18n.t("campus_network_short"),
       ...readAppearanceConfig()
     },
     redirect: {
@@ -1490,7 +1564,7 @@ function syncAppearanceControls() {
   $("background-scale-value").value = `${Math.round(Number($("background-scale").value) * 100)}%`;
   const positionValue = $("background-position")?.value || "center";
   const positionOutput = $("background-position-value");
-  if (positionOutput) positionOutput.textContent = POSITION_LABELS.get(positionValue) || "居中";
+  if (positionOutput) positionOutput.textContent = i18n.t(POSITION_LABEL_KEYS.get(positionValue) || "position_center");
   if (typeof document.querySelectorAll === "function") {
     document.querySelectorAll(".position-cell").forEach((cell) => {
       if (cell.dataset.position === positionValue) cell.setAttribute("aria-pressed", "true");
@@ -1501,12 +1575,12 @@ function syncAppearanceControls() {
   const storageNote = $("background-storage-note");
   if (storageNote) {
     storageNote.textContent = daily
-      ? "每日壁纸由后台从必应获取并缓存；首次保存时需要允许访问必应"
+      ? i18n.t("daily_wallpaper_note")
       : custom
         ? hasImage
-          ? `当前约 ${formatStorageSize(imageData.length)}，保存上限 1.9 MB`
-          : "选择后立即保存并应用；超过 1.9 MB 时自动高质量压缩"
-        : "使用当前主题底色，不加载任何图片";
+          ? i18n.t("background_storage_usage", [formatStorageSize(imageData.length)])
+          : i18n.t("background_compression_note")
+        : i18n.t("theme_background_note");
   }
 }
 
@@ -1514,7 +1588,7 @@ async function handleBackgroundFile(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
   event.target.disabled = true;
-  toast("正在优化背景图片…");
+  toast(i18n.t("optimizing_background"));
   try {
     const dataUrl = await optimizeBackgroundImage(file);
     $("background-image-data").value = dataUrl;
@@ -1522,7 +1596,7 @@ async function handleBackgroundFile(event) {
     syncAppearanceControls();
     applyCurrentAppearance();
     await persistAppearance();
-    toast(`背景已应用，当前约 ${formatStorageSize(dataUrl.length)}`);
+    toast(i18n.t("background_applied_size", [formatStorageSize(dataUrl.length)]));
   } finally {
     event.target.value = "";
     event.target.disabled = false;
@@ -1532,9 +1606,9 @@ async function handleBackgroundFile(event) {
 async function clearBackgroundImage() {
   if (!$("background-image-data").value) return;
   const confirmed = await globalThis.DrcomConfirmDialog.ask({
-    title: "清除背景图片？",
-    message: "将删除当前保存的自定义背景图片并恢复简洁背景。重新使用时需要再次选择原图片。",
-    confirmLabel: "清除图片"
+    title: i18n.t("clear_background_title"),
+    message: i18n.t("clear_background_message"),
+    confirmLabel: i18n.t("clear_image")
   });
   if (!confirmed) return;
 
@@ -1543,19 +1617,25 @@ async function clearBackgroundImage() {
   syncAppearanceControls();
   applyCurrentAppearance();
   await persistAppearance();
-  toast("已恢复简洁背景");
+  toast(i18n.t("simple_background_restored"));
 }
 
 function maskAccount(account) {
   const parsed = splitAccount(account.username || "", account.suffix || "");
-  return accountUtils.mask(parsed.username) + " · " + suffixLabel(parsed.suffix);
+  const suffixKeys = {
+    "": "carrier_campus",
+    "@telecom": "carrier_telecom",
+    "@unicom": "carrier_unicom",
+    "@cmcc": "carrier_mobile"
+  };
+  return accountUtils.mask(parsed.username) + " · " + (suffixKeys[parsed.suffix] ? i18n.t(suffixKeys[parsed.suffix]) : suffixLabel(parsed.suffix));
 }
 
 function formatTime(value) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("zh-CN", { hour12: false });
+  return date.toLocaleString(i18n.getLanguage() === "zh-CN" ? "zh-CN" : "en-US", { hour12: false });
 }
 
 function sendMessage(message) {
@@ -1567,7 +1647,7 @@ function sendMessage(message) {
         return;
       }
       if (!response) {
-        reject(new Error("后台服务没有返回结果，请刷新后重试。"));
+        reject(new Error(i18n.t("backend_no_response")));
         return;
       }
       if (response.ok === false && response.error) {
