@@ -9,6 +9,10 @@ const FIXED_DOS_DATE = 0x0021;
 const RELEASE_FILES = [
   ["CRX/manifest.json", "manifest.json"],
   ["LICENSE", "LICENSE"],
+  ["CRX/i18n-messages.js", "i18n-messages.js"],
+  ["CRX/i18n.js", "i18n.js"],
+  ["CRX/_locales/zh_CN/messages.json", "_locales/zh_CN/messages.json"],
+  ["CRX/_locales/en/messages.json", "_locales/en/messages.json"],
   ["CRX/account-utils.js", "account-utils.js"],
   ["CRX/portal-session.js", "portal-session.js"],
   ["CRX/appearance.js", "appearance.js"],

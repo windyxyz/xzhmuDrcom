@@ -48,6 +48,22 @@ function readStoredZipEntry(zipBuffer, wantedName) {
   throw new Error("ZIP 中缺少文件：" + wantedName);
 }
 
+function buildAndRead(target) {
+  const projectRoot = join(__dirname, "..");
+  const outputDirectory = mkdtempSync(join(tmpdir(), "drcom-browser-locales-"));
+  const result = buildPackage({ projectRoot, outputDirectory, target });
+  const zipBuffer = readFileSync(result.zipPath);
+
+  return {
+    text(path) {
+      return readStoredZipEntry(zipBuffer, path).toString("utf8");
+    },
+    cleanup() {
+      rmSync(outputDirectory, { recursive: true, force: true });
+    }
+  };
+}
+
 test("诊断运行时模块以依赖顺序进入分发白名单", () => {
   const archivePaths = RELEASE_FILES.map((entry) => entry.archivePath);
   const expected = [
@@ -152,5 +168,20 @@ test("Chrome 与 Firefox 分发包使用各自的安全清单", () => {
     assert.equal(firefoxManifest.browser_specific_settings.gecko.id, "xzhmu-campus-net@xzhmu.local");
   } finally {
     rmSync(outputDirectory, { recursive: true, force: true });
+  }
+});
+
+test("双浏览器包声明并收录中英文语言资源", () => {
+  for (const target of ["chrome", "firefox"]) {
+    const archive = buildAndRead(target);
+    try {
+      const manifest = JSON.parse(archive.text("manifest.json"));
+      assert.equal(manifest.default_locale, "zh_CN");
+      assert.equal(manifest.name, "__MSG_extensionName__");
+      assert.equal(JSON.parse(archive.text("_locales/zh_CN/messages.json")).extensionName.message, "徐医校园网xzhmu");
+      assert.equal(JSON.parse(archive.text("_locales/en/messages.json")).extensionName.message, "XZHMU Campus Network");
+    } finally {
+      archive.cleanup();
+    }
   }
 });
