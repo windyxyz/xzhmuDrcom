@@ -6,6 +6,8 @@
 (function loadBackgroundModules() {
   if (typeof importScripts !== "function") return;
   importScripts(
+    "i18n-messages.js",
+    "i18n.js",
     "account-utils.js",
     "portal-session.js",
     "portal-diagnostics-utils.js",
@@ -18,6 +20,7 @@
     "background/connection-service.js",
     "background/wallpaper-service.js",
     "background/portal-service.js",
+    "background/language-service.js",
     "background/message-router.js"
   );
 })();

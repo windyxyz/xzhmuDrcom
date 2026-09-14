@@ -47,6 +47,12 @@ async function handleMessage(message, sender) {
   }
 
   switch (action) {
+    case "language:get":
+      return { ok: true, preference: await languageService.getPreference() };
+
+    case "language:set":
+      return { ok: true, preference: await languageService.setPreference(message.preference) };
+
     case "diagnostics:status":
       return getPortalDiagnosticsStatus();
     case "diagnostics:start":

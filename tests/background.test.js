@@ -240,6 +240,8 @@ function portalSender(overrides = {}) {
 test("后台入口只负责依赖加载和事件注册", () => {
   const source = readFileSync(join(__dirname, "..", "CRX", "background.js"), "utf8");
   const modulePaths = [
+    "i18n-messages.js",
+    "i18n.js",
     'portal-session.js',
     "portal-diagnostics-utils.js",
     "background/state-store.js",
@@ -251,6 +253,7 @@ test("后台入口只负责依赖加载和事件注册", () => {
     "background/connection-service.js",
     "background/wallpaper-service.js",
     "background/portal-service.js",
+    "background/language-service.js",
     "background/message-router.js"
   ];
 
@@ -887,6 +890,31 @@ test("网页内容脚本不能执行设置页专属的破坏性操作", async ()
       /无权执行此操作/
     );
   }
+});
+
+test("门户脚本可切换界面语言但不能注入任意存储值", async () => {
+  const background = loadBackground();
+  const sender = portalSender();
+
+  await background.getState();
+  background.__localWrites.length = 0;
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(await background.handleMessage({ action: "language:set", preference: "en" }, sender))),
+    { ok: true, preference: "en" }
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(await background.handleMessage({ action: "language:get" }, sender))),
+    { ok: true, preference: "en" }
+  );
+  await assert.rejects(
+    background.handleMessage({ action: "language:set", preference: "../../account" }, sender),
+    /语言/
+  );
+  assert.deepEqual(
+    background.__localWrites.filter((patch) => Object.hasOwn(patch, "drcomAssistantState")),
+    []
+  );
 });
 
 test("网页内容脚本不能直接保存或覆盖持久账号", async () => {

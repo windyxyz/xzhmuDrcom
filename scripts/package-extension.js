@@ -28,6 +28,7 @@ const RELEASE_FILES = [
   ["CRX/background/connection-service.js", "background/connection-service.js"],
   ["CRX/background/wallpaper-service.js", "background/wallpaper-service.js"],
   ["CRX/background/portal-service.js", "background/portal-service.js"],
+  ["CRX/background/language-service.js", "background/language-service.js"],
   ["CRX/background/message-router.js", "background/message-router.js"],
   ["CRX/fonts/segoe-fluent-icons.ttf", "fonts/segoe-fluent-icons.ttf"],
   ["CRX/design-tokens.css", "design-tokens.css"],

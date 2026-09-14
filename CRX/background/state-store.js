@@ -77,6 +77,8 @@ const loginFlights = new Map();
 let logoutFlight = null;
 const STATE_UNCHANGED = Symbol("state-unchanged");
 const WEB_PAGE_ACTIONS = new Set([
+  "language:get",
+  "language:set",
   "portal:config:get",
   "portal:appearance:get",
   "portal:status:get",

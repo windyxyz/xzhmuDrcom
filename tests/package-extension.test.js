@@ -171,6 +171,23 @@ test("Chrome 与 Firefox 分发包使用各自的安全清单", () => {
   }
 });
 
+test("语言服务及其本地化依赖会在两个浏览器包中按路由前的顺序加载", () => {
+  const archivePaths = RELEASE_FILES.map((entry) => entry.archivePath);
+  for (const path of ["i18n-messages.js", "i18n.js", "background/language-service.js", "background/message-router.js"]) {
+    assert.notEqual(archivePaths.indexOf(path), -1, `${path} must be distributed`);
+  }
+
+  const firefoxArchive = buildAndRead("firefox");
+  try {
+    const scripts = JSON.parse(firefoxArchive.text("manifest.json")).background.scripts;
+    assert.ok(scripts.indexOf("i18n-messages.js") < scripts.indexOf("i18n.js"));
+    assert.ok(scripts.indexOf("i18n.js") < scripts.indexOf("background/language-service.js"));
+    assert.ok(scripts.indexOf("background/language-service.js") < scripts.indexOf("background/message-router.js"));
+  } finally {
+    firefoxArchive.cleanup();
+  }
+});
+
 test("双浏览器包声明并收录中英文语言资源", () => {
   for (const target of ["chrome", "firefox"]) {
     const archive = buildAndRead(target);
