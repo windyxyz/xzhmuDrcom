@@ -276,7 +276,7 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
 .drcom-remember span { color: var(--text-secondary) !important; font-size: 12px !important; }
 
 .drcom-password-wrapper { position: relative; display: block; }
-.drcom-password-wrapper input { width: 100%; padding-right: 42px; }
+.drcom-password-wrapper input { width: 100%; padding-right: 52px; }
 .drcom-password-wrapper input::-ms-reveal,
 .drcom-password-wrapper input::-ms-clear { display: none; }
 .drcom-password-toggle {
@@ -287,8 +287,8 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 26px;
+  min-width: 44px;
+  min-height: 44px;
   border: 0;
   border-radius: var(--control-radius);
   background: transparent;
