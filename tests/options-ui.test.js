@@ -171,6 +171,93 @@ test("设置页切换英文会重新翻译已有动态区域", async () => {
   assert.match(fixture.elements.get("settings-refresh-status").textContent, /Unsaved edits detected/);
 });
 
+test("切换语言会重译设置派生文案且不改动表单值", () => {
+  const fixture = createOptionsHarness({ preference: "zh-CN" });
+  const add = (id, value = "") => fixture.elements.set(id, { value, textContent: "", style: { setProperty() {} } });
+  add("guard-seconds", "47");
+  add("guard-seconds-value");
+  add("interval-minutes", "2");
+  add("interval-seconds", "30");
+  add("interval-summary");
+  add("appearance-background", "daily");
+  add("background-image-data", "");
+  add("background-controls");
+  add("clear-background");
+  add("background-blur", "2");
+  add("background-dim", "0.4");
+  add("background-scale", "1");
+  add("background-blur-value");
+  add("background-dim-value");
+  add("background-scale-value");
+  add("background-position", "center");
+  add("background-position-value");
+  add("background-storage-note");
+  fixture.context.syncGuardSeconds();
+  fixture.context.syncIntervalControls();
+  fixture.context.syncAppearanceControls();
+  assert.match(fixture.elements.get("guard-seconds-value").textContent, /秒/);
+  assert.match(fixture.elements.get("interval-summary").textContent, /检查一次/);
+  assert.equal(fixture.elements.get("background-position-value").textContent, "居中");
+  fixture.elements.get("interval-seconds").value = "90";
+
+  fixture.context.applyLanguage("en");
+
+  assert.equal(fixture.elements.get("guard-seconds-value").textContent, "47 seconds");
+  assert.equal(fixture.elements.get("interval-summary").textContent, "Check every 3 minutes 30 seconds");
+  assert.equal(fixture.elements.get("background-position-value").textContent, "Center");
+  assert.match(fixture.elements.get("background-storage-note").textContent, /daily Bing wallpaper/);
+  assert.equal(fixture.elements.get("guard-seconds").value, "47");
+  assert.equal(fixture.elements.get("interval-minutes").value, "2");
+  assert.equal(fixture.elements.get("interval-seconds").value, "90");
+  assert.equal(fixture.elements.get("appearance-background").value, "daily");
+});
+
+test("切换语言会重译自定义 HTTP 网关警告且保留地址", () => {
+  const fixture = createOptionsHarness({ preference: "zh-CN" });
+  const portalUrl = "http://gateway.example/login";
+  const apiUrl = "http://gateway.example:801/eportal/";
+  fixture.elements.set("portal-url", { value: portalUrl });
+  fixture.elements.set("api-url", { value: apiUrl });
+  fixture.elements.set("gateway-security-warning", { hidden: true, textContent: "" });
+  new vm.Script(`state = { config: { portalUrl: "http://10.10.10.2/", apiUrl: "http://10.10.10.2:801/eportal/" }, accounts: [], recentRequests: [] }`).runInContext(fixture.context);
+  fixture.context.renderGatewaySecurityWarning();
+  fixture.context.applyLanguage("en");
+
+  assert.equal(fixture.elements.get("gateway-security-warning").hidden, false);
+  assert.match(fixture.elements.get("gateway-security-warning").textContent, /without encryption/);
+  assert.equal(fixture.elements.get("portal-url").value, portalUrl);
+  assert.equal(fixture.elements.get("api-url").value, apiUrl);
+});
+
+test("保活间隔输入事件仍会规范化数值", () => {
+  const fixture = createOptionsHarness();
+  fixture.elements.set("interval-minutes", { value: "2" });
+  fixture.elements.set("interval-seconds", { value: "90" });
+  fixture.elements.set("interval-summary", { textContent: "" });
+
+  fixture.context.syncIntervalControls({ type: "input" });
+
+  assert.equal(fixture.elements.get("interval-minutes").value, "3");
+  assert.equal(fixture.elements.get("interval-seconds").value, "30");
+});
+
+test("独立账号捕获控制器从中央目录取得当前语言", async () => {
+  const fixture = createOptionsHarness({ preference: "zh-CN" });
+  fixture.context.DrcomI18n.setLanguage("en");
+  const controller = fixture.context.createPendingAccountCaptureController({
+    $: (id) => fixture.elements.get(id),
+    sendMessage: async () => ({ capture: {
+      id: "capture-1", maskedUsername: "20***18", suffix: "@telecom",
+      replacesExisting: true, expiresAt: Date.now() + 300000
+    } }),
+    toast() {}, setState() {}, renderAccounts() {}
+  });
+  await controller.load();
+
+  assert.equal(fixture.elements.get("capture-source").textContent, "Unknown source");
+  assert.equal(fixture.elements.get("capture-impact").textContent, "Confirming replaces the existing credentials for this account.");
+});
+
 test("设置页英文账号列表会翻译后缀和删除操作", () => {
   const fixture = createOptionsHarness({ browserLanguages: ["en-US"], preference: "en" });
   new vm.Script(`state = {

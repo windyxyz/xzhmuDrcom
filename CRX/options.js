@@ -300,6 +300,13 @@ function applyLanguage(preference) {
     if (diagnosticsInput && checked !== undefined) diagnosticsInput.checked = checked;
   }
   if (latestRefreshStatus !== undefined) renderSettingsRefreshStatus(latestRefreshStatus);
+  if ($("guard-seconds")) syncGuardSeconds();
+  if ($("interval-minutes") && $("interval-seconds")) syncIntervalControls(true);
+  if ($("appearance-background") && $("background-image-data") && $("background-controls")
+      && $("clear-background") && $("background-blur") && $("background-dim")
+      && $("background-scale") && $("background-blur-value") && $("background-dim-value")
+      && $("background-scale-value")) syncAppearanceControls();
+  if ($("gateway-security-warning") && $("portal-url") && $("api-url")) renderGatewaySecurityWarning();
   pendingAccountCaptureController?.render?.();
 }
 
@@ -1079,13 +1086,15 @@ function readKeepAliveInterval() {
   return Math.min(30, Math.max(0.5, minutes + seconds / 60));
 }
 
-function syncIntervalControls() {
+function syncIntervalControls(preserveInput = false) {
   const minutes = $("interval-minutes");
   const seconds = $("interval-seconds");
   if (!minutes || !seconds) return;
   const normalized = splitKeepAliveInterval(readKeepAliveInterval());
-  minutes.value = String(normalized.minutes);
-  seconds.value = String(normalized.seconds);
+  if (preserveInput !== true) {
+    minutes.value = String(normalized.minutes);
+    seconds.value = String(normalized.seconds);
+  }
   const summary = $("interval-summary");
   if (summary) {
     const parts = [];
@@ -1420,6 +1429,7 @@ function renderGatewaySecurityWarning() {
   if (!element) return;
   const next = { portalUrl: $("portal-url").value, apiUrl: $("api-url").value };
   element.hidden = !gatewaySecurityWarning(state && state.config, next);
+  element.textContent = i18n.t("http_gateway_warning");
 }
 
 async function resetConfig() {

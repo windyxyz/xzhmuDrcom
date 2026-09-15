@@ -5,13 +5,8 @@
     let pendingAccountCaptureId = "";
     let pendingCapture = null;
     const $ = deps.$;
-    const t = deps.t || ((key) => ({
-      capture_unknown_source: "未知来源",
-      capture_replace_impact: "确认后会覆盖同账号已有凭据。",
-      capture_add_impact: "确认后会新增一个本地账号。",
-      capture_saved: "门户账号已保存",
-      capture_discarded: "已丢弃门户账号候选"
-    })[key] || key);
+    const t = deps.t || globalThis.DrcomI18n?.t;
+    if (typeof t !== "function") throw new Error("Pending account capture requires DrcomI18n or an injected translator");
 
     function render() {
       if (!pendingCapture) return;
