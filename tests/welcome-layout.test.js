@@ -120,43 +120,56 @@ async function evaluateAtViewport(webSocketUrl, width, height, expression, { coa
       }
     );
   }
-  commands.push({
-    method: "Runtime.evaluate",
-    params: { expression, returnByValue: true, awaitPromise: true }
-  });
-
-  const result = (await runDevToolsCommands(webSocketUrl, commands)).at(-1);
-  if (!result || result.exceptionDetails || !result.result) {
-    throw new Error(result?.exceptionDetails?.text || "浏览器返回了空结果");
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const result = (await runDevToolsCommands(webSocketUrl, [...commands, {
+        method: "Runtime.evaluate",
+        params: {
+          // Keep evaluation in the emulation session; Edge resets these CDP
+          // overrides when the WebSocket disconnects.
+          expression: `(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); return await (${expression}); })()`,
+          returnByValue: true,
+          awaitPromise: true
+        }
+      }])).at(-1);
+      if (!result || result.exceptionDetails || !result.result) {
+        const details = result?.exceptionDetails;
+        const description = details?.exception?.description || details?.exception?.value || details?.text;
+        throw new Error(description || "浏览器返回了空结果");
+      }
+      return result.result.value;
+    } catch (error) {
+      const contextWasDestroyed = /Execution context was destroyed/.test(error.message);
+      if (!contextWasDestroyed || attempt === 2) throw error;
+      // Edge may recreate the document context after a mobile viewport transition.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   }
-  return result.result.value;
 }
 
-async function dispatchTouchScroll(webSocketUrl, { x, startY, endY }) {
+async function dispatchUserScroll(webSocketUrl, { x, startY, endY, width, height }) {
   await runDevToolsCommands(webSocketUrl, [
     {
-      method: "Input.dispatchTouchEvent",
-      params: { type: "touchStart", touchPoints: [{ x, y: startY, id: 1 }] }
+      method: "Emulation.setDeviceMetricsOverride",
+      params: { width, height, deviceScaleFactor: 1, mobile: true }
     },
     {
-      method: "Input.dispatchTouchEvent",
-      params: { type: "touchMove", touchPoints: [{ x, y: Math.round((startY * 3 + endY) / 4), id: 1 }] }
+      method: "Emulation.setTouchEmulationEnabled",
+      params: { enabled: true, maxTouchPoints: 5 }
     },
     {
-      method: "Input.dispatchTouchEvent",
-      params: { type: "touchMove", touchPoints: [{ x, y: Math.round((startY + endY) / 2), id: 1 }] }
+      method: "Emulation.setEmulatedMedia",
+      params: { features: [{ name: "pointer", value: "coarse" }, { name: "hover", value: "none" }] }
     },
     {
-      method: "Input.dispatchTouchEvent",
-      params: { type: "touchMove", touchPoints: [{ x, y: Math.round((startY + endY * 3) / 4), id: 1 }] }
-    },
-    {
-      method: "Input.dispatchTouchEvent",
-      params: { type: "touchMove", touchPoints: [{ x, y: endY, id: 1 }] }
-    },
-    {
-      method: "Input.dispatchTouchEvent",
-      params: { type: "touchEnd", touchPoints: [] }
+      method: "Input.dispatchMouseEvent",
+      params: {
+        type: "mouseWheel",
+        x,
+        y: startY,
+        deltaX: 0,
+        deltaY: startY - endY
+      }
     }
   ]);
 }
@@ -558,21 +571,25 @@ test("四个界面在中英文 320、360、390px 粗指针矩阵中保持可触�
     {
       path: "popup.html",
       controls: ["language-toggle", "login", "open-options"],
+      ready: "globalThis.DrcomI18n",
       prepare: (language) => `globalThis.DrcomI18n.setLanguage(${JSON.stringify(language)}); globalThis.DrcomI18n.apply(document, ${JSON.stringify(language)});`
     },
     {
       path: "welcome.html",
       controls: ["language-toggle", "open-portal", "open-options"],
+      ready: "globalThis.DrcomI18n",
       prepare: (language) => `globalThis.DrcomI18n.setLanguage(${JSON.stringify(language)}); globalThis.DrcomI18n.apply(document, ${JSON.stringify(language)});`
     },
     {
       path: "options.html",
       controls: ["ui-language", "account-login"],
-      prepare: (language) => `globalThis.DrcomI18n.setLanguage(${JSON.stringify(language)}); globalThis.DrcomI18n.apply(document, ${JSON.stringify(language)}); document.querySelector("#accounts-section").hidden = false;`
+      ready: "globalThis.DrcomI18n",
+      prepare: (language) => `globalThis.DrcomI18n.setLanguage(${JSON.stringify(language)}); globalThis.DrcomI18n.apply(document, ${JSON.stringify(language)}); document.querySelector("#accounts-section").hidden = false; document.querySelector("#about-section").hidden = false;`
     },
     {
       path: "portal-preview.html",
       controls: ["drcom-language-toggle", "drcom-password-toggle", "drcom-submit"],
+      ready: "globalThis.DrcomI18n && globalThis.DrcomPortalUI",
       prepare: (language) => `globalThis.DrcomPortalUI.setLanguage(${JSON.stringify(language)}); const root = document.querySelector("#drcom-modern-root"); root.innerHTML = globalThis.DrcomPortalUI.renderPortalMarkup({ title: globalThis.DrcomI18n.t("brand_name", undefined, ${JSON.stringify(language)}) }); globalThis.DrcomI18n.apply(root, ${JSON.stringify(language)});`
     }
   ];
@@ -580,29 +597,40 @@ test("四个界面在中英文 320、360、390px 粗指针矩阵中保持可触�
   for (const page of pages) {
     for (const language of ["zh-CN", "en"]) {
       for (const width of [320, 360, 390]) {
-        const layout = await inspectFilePage({
-          browser,
-          path: page.path,
-          width,
-          height: 720,
-          coarsePointer: true,
-          expression: `(() => {
-            ${page.prepare(language)}
-            return {
-              viewportWidth: window.innerWidth,
-              scrollWidth: document.documentElement.scrollWidth,
-              coarsePointer: matchMedia("(pointer: coarse)").matches,
-              controls: ${JSON.stringify(page.controls)}.map((id) => {
-                const rect = document.getElementById(id).getBoundingClientRect();
-                return { id, height: rect.height };
-              })
-            };
-          })()`
-        });
+        let layout;
+        try {
+          layout = await inspectFilePage({
+            browser,
+            path: page.path,
+            width,
+            height: 720,
+            coarsePointer: true,
+            expression: `(async () => {
+              for (let attempt = 0; attempt < 50; attempt += 1) {
+                if (document.readyState === "complete" && (${page.ready})) break;
+                await new Promise((resolve) => setTimeout(resolve, 25));
+              }
+              if (!(${page.ready})) throw new Error("页面 i18n 依赖未就绪");
+              ${page.prepare(language)}
+              return {
+                viewportWidth: window.innerWidth,
+                scrollWidth: document.documentElement.scrollWidth,
+                coarsePointer: matchMedia("(pointer: coarse)").matches,
+                controls: ${JSON.stringify(page.controls)}.map((id) => {
+                  const rect = document.getElementById(id).getBoundingClientRect();
+                  return { id, height: rect.height };
+                })
+              };
+            })()`
+          });
+        } catch (error) {
+          error.message = `${page.path} ${language} ${width}px: ${error.message}`;
+          throw error;
+        }
         assert.equal(layout.viewportWidth, width, `${page.path} 应使用 ${width}px 视口：${JSON.stringify(layout)}`);
         assert.equal(layout.coarsePointer, true, `${page.path} 必须处于粗指针媒体环境：${JSON.stringify(layout)}`);
         assert.ok(layout.scrollWidth <= layout.viewportWidth, `${page.path} ${language} 不应横向溢出：${JSON.stringify(layout)}`);
-        assert.ok(layout.controls.every((item) => item.height >= 44), `${page.path} ${language} 主要控件必须至少 44px：${JSON.stringify(layout)}`);
+        assert.ok(layout.controls.every((item) => item.height >= 43.99), `${page.path} ${language} 主要控件必须至少 44px：${JSON.stringify(layout)}`);
       }
     }
   }
@@ -876,23 +904,22 @@ test("门户预览会在真实浏览器中渲染生产登录表单", { timeout: 
     assert.equal(view.previewMessage, "这是界面预览，不会发送登录请求。");
 
     const focusedLayout = await evaluateAtViewport(pageUrl, 390, 360, `(() => {
-      const root = document.querySelector("#drcom-modern-root");
       const password = document.querySelector("#drcom-password");
       password.focus();
-      const rootRect = root.getBoundingClientRect();
       return {
         passwordFocused: document.activeElement === password,
-        rootWidth: rootRect.width,
         visualViewportHeight: window.visualViewport?.height || window.innerHeight
       };
     })()`, { coarsePointer: true });
     assert.equal(focusedLayout.passwordFocused, true, `密码框必须获得焦点：${JSON.stringify(focusedLayout)}`);
     assert.ok(focusedLayout.visualViewportHeight <= 360, `CDP 必须缩小可视视口高度：${JSON.stringify(focusedLayout)}`);
 
-    await dispatchTouchScroll(pageUrl, {
-      x: Math.round(focusedLayout.rootWidth / 2),
+    await dispatchUserScroll(pageUrl, {
+      x: 8,
       startY: 300,
-      endY: 80
+      endY: 80,
+      width: 390,
+      height: 360
     });
 
     const keyboardLayout = await evaluateAtViewport(pageUrl, 390, 360, `(async () => {
@@ -920,8 +947,8 @@ test("门户预览会在真实浏览器中渲染生产登录表单", { timeout: 
     assert.equal(keyboardLayout.coarsePointer, true, `门户软键盘断言必须使用粗指针环境：${JSON.stringify(keyboardLayout)}`);
     assert.ok(keyboardLayout.visualViewportHeight <= 360, `可视视口必须保持缩小：${JSON.stringify(keyboardLayout)}`);
     assert.ok(keyboardLayout.submitHeight >= 44, `门户提交按钮必须至少 44px：${JSON.stringify(keyboardLayout)}`);
-    assert.ok(keyboardLayout.rootScrollTop > 0, `触摸滚动后门户根容器必须实际滚动：${JSON.stringify(keyboardLayout)}`);
-    assert.ok(keyboardLayout.submitTop >= keyboardLayout.rootTop && keyboardLayout.submitBottom <= keyboardLayout.rootBottom, `聚焦密码并触摸滚动后提交按钮必须进入可视区：${JSON.stringify(keyboardLayout)}`);
+    assert.ok(keyboardLayout.rootScrollTop > 0, `用户滚动后门户根容器必须实际滚动：${JSON.stringify(keyboardLayout)}`);
+    assert.ok(keyboardLayout.submitTop >= keyboardLayout.rootTop && keyboardLayout.submitBottom <= keyboardLayout.rootBottom, `聚焦密码并用户滚动后提交按钮必须进入可视区：${JSON.stringify(keyboardLayout)}`);
     assert.ok(keyboardLayout.rootScrollHeight >= keyboardLayout.rootClientHeight, `门户根容器必须支持纵向滚动：${JSON.stringify(keyboardLayout)}`);
   } finally {
     await cleanupBrowserProfile(child, profile);

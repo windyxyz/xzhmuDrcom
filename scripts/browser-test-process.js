@@ -56,7 +56,9 @@ async function cleanupBrowserProfile(child, profile, options = {}) {
     await stopBrowser(child, options);
   } finally {
     if (profile) {
-      rmSync(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      // Edge can keep its per-profile Crashpad files locked briefly after the
+      // browser process exits on Windows.
+      rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     }
   }
 }
