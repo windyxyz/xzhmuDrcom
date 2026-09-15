@@ -52,3 +52,12 @@ test("应用翻译只写 textContent 和受支持属性", () => {
   assert.equal(node.innerHTMLWrites, 0);
   assert.equal(node.attributes.get("aria-label"), "Language / 语言");
 });
+
+test("中文运行时品牌和门户更新提示使用正式产品名顺序", () => {
+  const brand = makeElement({ i18n: "brand_name" });
+  const title = makeElement({ i18n: "brand_settings_title" });
+  i18n.apply(makeRoot([brand, title]), "zh-CN");
+  assert.equal(brand.textContent, "徐医校园网xzhmu");
+  assert.equal(title.textContent, "徐医校园网xzhmu 设置");
+  assert.equal(i18n.t("portal_context_lost", undefined, "zh-CN"), "徐医校园网xzhmu 已更新，请刷新页面以恢复登录界面。");
+});

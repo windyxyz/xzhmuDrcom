@@ -145,8 +145,24 @@ function createHarness(options = {}) {
   const documentElement = {
     classList: new FakeClassList(),
     innerText: "",
-    style: { setProperty() {} }
+    style: { setProperty() {} },
+    attributes: new Map(),
+    getAttribute(name) { return this.attributes.get(name) ?? null; },
+    setAttribute(name, value) { this.attributes.set(name, String(value)); },
+    removeAttribute(name) { this.attributes.delete(name); }
   };
+  if (options.hostLanguage !== null) documentElement.setAttribute("lang", options.hostLanguage || "zh-CN");
+  if (options.hostDirection !== null) documentElement.setAttribute("dir", options.hostDirection || "ltr");
+  Object.defineProperties(documentElement, {
+    lang: {
+      get() { return this.getAttribute("lang") || ""; },
+      set(value) { this.setAttribute("lang", value); }
+    },
+    dir: {
+      get() { return this.getAttribute("dir") || ""; },
+      set(value) { this.setAttribute("dir", value); }
+    }
+  });
   const document = {
     readyState: "complete",
     failPortalEventBinding: options.failPortalEventBinding === true,
@@ -332,6 +348,9 @@ function createHarness(options = {}) {
     async emitDocument(type, event = {}) {
       for (const listener of documentListeners.get(type) || []) await listener(event);
     },
+    emitRuntime(message) {
+      for (const listener of runtimeMessageListeners) listener(message, { id: "test-extension-id" });
+    },
     resolveDeferred(action, response = responses[action] || { ok: true }) {
       deferredActions.delete(action);
       const callbacks = pendingCallbacks.get(action) || [];
@@ -505,7 +524,7 @@ test("扩展重载孤儿化后摘除现代界面并显示刷新引导", async ()
   assert.equal(harness.confirmations.length, 1);
   assert.equal(harness.document.getElementById("drcom-modern-root"), null);
   assert.ok(harness.document.getElementById("drcom-context-lost-hint"));
-  assert.match(harness.document.getElementById("drcom-context-lost-hint").innerHTML, /xzhmu徐医校园网 已更新/);
+  assert.match(harness.document.getElementById("drcom-context-lost-hint").innerHTML, /徐医校园网xzhmu 已更新/);
   assert.equal(harness.document.documentElement.classList.contains("drcom-modern-active"), false);
 });
 
@@ -936,4 +955,60 @@ test("Chrome 与 Firefox 在门户代码前加载共享语言资源", () => {
     assert.ok(scripts.indexOf("i18n.js") > scripts.indexOf("i18n-messages.js"), `${file} 语言 API 加载顺序错误`);
     assert.ok(scripts.indexOf("i18n.js") < scripts.indexOf("account-utils.js"), `${file} 语言 API 必须先于门户代码`);
   }
+});
+
+test("禁用门户时语言读取和广播不改学校页面元数据", async () => {
+  const harness = createHarness({ hostLanguage: "zh-Hant", hostDirection: "rtl", languagePreference: "en", responses: {
+    "portal:config:get": { ok: true, portal: { enabled: false, title: "徐医校园网", appearance: {}, onlineDetailMode: "classic" } }
+  } });
+  await loadModernizer(harness);
+  harness.emitRuntime({ action: "language:changed", preference: "zh-CN" });
+  assert.equal(harness.document.getElementById("drcom-modern-root"), null);
+  assert.equal(harness.document.documentElement.getAttribute("lang"), "zh-Hant");
+  assert.equal(harness.document.documentElement.getAttribute("dir"), "rtl");
+});
+
+test("恢复学校原页时还原原有 lang 与 dir 且后续语言广播不再污染", async () => {
+  const harness = createHarness({ hostLanguage: "zh-Hant", hostDirection: "rtl", languagePreference: "en" });
+  await loadModernizer(harness);
+  assert.equal(harness.document.documentElement.getAttribute("lang"), "en");
+  assert.equal(harness.document.documentElement.getAttribute("dir"), "ltr");
+  await harness.document.getElementById("drcom-restore-original").emit("click", { isTrusted: true });
+  harness.emitRuntime({ action: "language:changed", preference: "en" });
+  assert.equal(harness.document.documentElement.getAttribute("lang"), "zh-Hant");
+  assert.equal(harness.document.documentElement.getAttribute("dir"), "rtl");
+});
+
+test("验证码和接管失败均不遗留扩展语言属性", async () => {
+  for (const settings of [{ pageState: "captcha" }, { failPortalEventBinding: true }]) {
+    const harness = createHarness({ ...settings, hostLanguage: "zh-Hant", hostDirection: "rtl", languagePreference: "en" });
+    await loadModernizer(harness);
+    await harness.flush();
+    assert.equal(harness.document.getElementById("drcom-modern-root"), null);
+    assert.equal(harness.document.documentElement.getAttribute("lang"), "zh-Hant");
+    assert.equal(harness.document.documentElement.getAttribute("dir"), "rtl");
+  }
+});
+
+test("学校页面没有语言属性时恢复后也不留下新增属性", async () => {
+  const harness = createHarness({ hostLanguage: null, hostDirection: null, languagePreference: "en" });
+  await loadModernizer(harness);
+  assert.equal(harness.document.documentElement.getAttribute("lang"), "en");
+  await harness.document.getElementById("drcom-restore-original").emit("click", { isTrusted: true });
+  assert.equal(harness.document.documentElement.getAttribute("lang"), null);
+  assert.equal(harness.document.documentElement.getAttribute("dir"), null);
+});
+
+test("缺省门户标题在原位切换后显示当前语言品牌", async () => {
+  const harness = createHarness({ responses: {
+    "portal:config:get": { ok: true, portal: { enabled: true, appearance: {}, onlineDetailMode: "classic" } }
+  } });
+  await loadModernizer(harness);
+  const root = harness.document.getElementById("drcom-modern-root");
+  assert.equal(harness.document.getElementById("drcom-login-title").textContent, "徐医校园网xzhmu");
+  const messagesBefore = harness.messages.length;
+  await harness.document.getElementById("drcom-language-toggle").emit("click", { isTrusted: true });
+  assert.equal(harness.document.getElementById("drcom-modern-root"), root);
+  assert.equal(harness.document.getElementById("drcom-login-title").textContent, "XZHMU Campus Network");
+  assert.deepEqual(harness.messages.slice(messagesBefore).map((message) => message.action), ["language:set"]);
 });

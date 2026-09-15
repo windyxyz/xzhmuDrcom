@@ -50,3 +50,12 @@ test("弹窗和设置页声明的翻译键在两种语言中都存在", () => {
     }
   }
 });
+
+test("弹窗和设置页未运行脚本时仍显示正式中文品牌名", () => {
+  const popup = readFileSync(join(CRX, "popup.html"), "utf8");
+  const options = readFileSync(join(CRX, "options.html"), "utf8");
+  assert.match(popup, /<title data-i18n="brand_name">徐医校园网xzhmu<\/title>/);
+  assert.match(popup, /<span class="full-label" data-i18n="brand_name">徐医校园网xzhmu<\/span>/);
+  assert.match(options, /<title data-i18n="brand_settings_title">徐医校园网xzhmu 设置<\/title>/);
+  assert.match(options, /<h2 id="about-title" data-i18n="brand_name">徐医校园网xzhmu<\/h2>/);
+});

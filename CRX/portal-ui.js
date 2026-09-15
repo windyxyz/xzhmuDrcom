@@ -33,6 +33,7 @@
 
   function localizeTitle(value) {
     const title = String(value || "");
+    if (!title) return t("brand_name");
     const knownChinese = i18n.t("campus_network_short", undefined, "zh-CN");
     const knownEnglish = i18n.t("campus_network_short", undefined, "en");
     return title === knownChinese || title === knownEnglish ? t("campus_network_short") : title;

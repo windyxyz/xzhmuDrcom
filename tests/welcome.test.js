@@ -6,6 +6,12 @@ const { join } = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
+test("欢迎页未运行脚本时也显示正式中文产品名", () => {
+  const html = readFileSync(join(__dirname, "..", "CRX", "welcome.html"), "utf8");
+  assert.match(html, /<title[^>]*>开始使用徐医校园网xzhmu<\/title>/);
+  assert.match(html, /<strong data-i18n="brand_name">徐医校园网xzhmu<\/strong>/);
+});
+
 test("欢迎页主操作进入网关，次操作打开设置", () => {
   const documentListeners = {};
   const elementListeners = {};

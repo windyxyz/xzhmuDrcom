@@ -40,7 +40,7 @@ function createOptionsHarness(options = {}) {
     "ui-language": makeInteractiveElement({ value: options.preference || "zh-CN" }),
     username: makeInteractiveElement({ value: "" }),
     "account-username": makeInteractiveElement({ value: "" }),
-    "about-title": { dataset: { i18n: "brand_name" }, textContent: "xzhmu徐医校园网" },
+    "about-title": { dataset: { i18n: "brand_name" }, textContent: "徐医校园网xzhmu" },
     "account-list": { innerHTML: "" },
     "request-log": { innerHTML: "" },
     "sidebar-account-summary": { textContent: "" },

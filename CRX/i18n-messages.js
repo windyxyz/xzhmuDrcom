@@ -8,11 +8,11 @@
 
   return Object.freeze({
     "zh-CN": Object.freeze({
-      brand_name: "xzhmu徐医校园网",
-      brand_settings_title: "xzhmu徐医校园网 设置",
+      brand_name: "徐医校园网xzhmu",
+      brand_settings_title: "徐医校园网xzhmu 设置",
       gateway_open: "打开 $1 并登录",
       authentication_gateway: "认证网关",
-      welcome_page_title: "开始使用xzhmu徐医校园网",
+      welcome_page_title: "开始使用徐医校园网xzhmu",
       welcome_tagline: "连接校园网，从这里开始",
       welcome_heading: "先登录校园网",
       welcome_intro: "第一次使用只需要完成一次网页登录。助手会识别登录请求并保存必要参数，以后可以快速连接。",
@@ -70,7 +70,7 @@
       portal_captcha_heading: "请使用学校原始页面",
       portal_captcha_description: "检测到验证码或扫码登录，本次不会接管或隐藏原始控件。",
       portal_dismiss: "关闭",
-      portal_context_lost: "xzhmu徐医校园网 已更新，请刷新页面以恢复登录界面。",
+      portal_context_lost: "徐医校园网xzhmu 已更新，请刷新页面以恢复登录界面。",
       portal_refresh_page: "立即刷新",
       portal_backend_no_response: "后台服务没有返回结果",
       portal_backend_request_failed: "后台请求失败",

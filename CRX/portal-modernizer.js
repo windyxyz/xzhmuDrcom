@@ -9,6 +9,7 @@
   let activePortalConfig = null;
   let languagePreference = "auto";
   let currentPortalInput = null;
+  let hostDocumentMetadata = null;
   let portalReadinessObserver = null;
   let recognitionQueued = false;
   let userRestoredOriginal = false;
@@ -59,10 +60,10 @@
     i18n.setLanguage(languagePreference);
     const language = i18n.getLanguage();
     ui.setLanguage(language);
-    document.documentElement.lang = language;
-    document.documentElement.dir = "ltr";
     const root = document.getElementById("drcom-modern-root");
     if (root) {
+      document.documentElement.lang = language;
+      document.documentElement.dir = "ltr";
       i18n.apply(root, language);
       const brandContext = root.querySelector("#drcom-brand-context");
       if (brandContext && currentPortalInput) brandContext.textContent = t("portal_brand_context", [currentPortalInput.host]);
@@ -161,7 +162,7 @@
         || statusResult?.message === i18n.t("portal_session_online", undefined, "en")
         ? "portal_session_online" : "";
       currentPortalInput = {
-        title: config.title || t("brand_name"),
+        title: config.title || "",
         online,
         host: portalHost(config.portalUrl),
         onlineDetailMode: config.onlineDetailMode || "classic",
@@ -181,8 +182,14 @@
         root.dataset.appearanceBackground = normalized.background;
         installPrivateAppearance(normalized);
       }
+      hostDocumentMetadata = {
+        lang: document.documentElement.getAttribute("lang"),
+        dir: document.documentElement.getAttribute("dir")
+      };
       document.body.append(root);
       document.documentElement.classList.add("drcom-modern-active");
+      document.documentElement.lang = i18n.getLanguage();
+      document.documentElement.dir = "ltr";
       bindPortalEvents(root, online);
       bindCharacters(root, online);
       if (!online) prefillFromOriginalPage(root);
@@ -231,6 +238,14 @@
     }
     document.documentElement.classList.remove("drcom-modern-active");
     document.getElementById("drcom-modern-root")?.remove();
+    if (hostDocumentMetadata) {
+      for (const attribute of ["lang", "dir"]) {
+        const originalValue = hostDocumentMetadata[attribute];
+        if (originalValue === null) document.documentElement.removeAttribute(attribute);
+        else document.documentElement.setAttribute(attribute, originalValue);
+      }
+      hostDocumentMetadata = null;
+    }
     currentPortalInput = null;
     document.getElementById("drcom-private-appearance")?.remove();
     document.getElementById("drcom-captcha-hint")?.remove();
