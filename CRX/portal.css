@@ -64,6 +64,18 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   align-items: center;
   gap: 8px;
 }
+.drcom-language-toggle {
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--control-radius);
+  background: var(--ctrl-fill-default);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.drcom-language-toggle:hover { background: var(--ctrl-fill-secondary); }
 
 #drcom-open-options {
   display: inline-flex;
@@ -83,7 +95,7 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
 #drcom-open-options:active { background: var(--subtle-fill-pressed); }
 
 #drcom-restore-original {
-  min-height: 32px;
+  min-height: 44px;
   padding: 5px 12px 6px;
   font: inherit;
   font-size: 13px;
@@ -535,6 +547,9 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
 }
 
 @media (max-width: 560px) {
+  .drcom-header { flex-wrap: wrap; }
+  .drcom-header strong { min-width: 0; overflow-wrap: anywhere; }
+  .drcom-header-actions { width: 100%; margin-left: 0; justify-content: flex-end; flex-wrap: wrap; }
   .drcom-surface { border: 0; background: transparent; box-shadow: none; padding: 4px 0 0; }
   .drcom-login-actions { grid-template-columns: 1fr; }
   .drcom-session-summary { grid-template-columns: 1fr; }

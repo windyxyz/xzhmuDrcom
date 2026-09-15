@@ -7,6 +7,54 @@ const test = require("node:test");
 
 const portalUiPath = join(__dirname, "..", "CRX", "portal-ui.js");
 
+test("现代门户英文渲染保留未知网关原文且转义", () => {
+  const ui = require(portalUiPath);
+  ui.setLanguage("en");
+  try {
+    const html = ui.renderPortalMarkup({
+      title: "徐医校园网",
+      online: false,
+      host: "10.10.10.2"
+    });
+    const onlineHtml = ui.renderPortalMarkup({
+      online: true,
+      statusMessage: "未知错误 <734>"
+    });
+    assert.match(html, />Sign in</);
+    assert.match(html, /Language \/ 语言/);
+    assert.match(onlineHtml, /未知错误 &lt;734&gt;/);
+    assert.doesNotMatch(onlineHtml, /未知错误 <734>/);
+  } finally {
+    ui.setLanguage("zh-CN");
+  }
+});
+
+test("英文在线详情使用英文明示时长单位且保留会话值", () => {
+  const ui = require(portalUiPath);
+  ui.setLanguage("en");
+  try {
+    const html = ui.renderPortalMarkup({ online: true, session: { account: "20***18", usedMinutes: 125 } });
+    assert.match(html, /id="drcom-used-time"[^>]*>125 minutes</);
+    assert.match(html, /id="drcom-used-minutes-detail"[^>]*>125 minutes</);
+    assert.match(html, /20\*\*\*18/);
+  } finally {
+    ui.setLanguage("zh-CN");
+  }
+});
+
+test("英文门户只翻译已知默认标题并保留自定义标题", () => {
+  const ui = require(portalUiPath);
+  ui.setLanguage("en");
+  try {
+    const defaultHtml = ui.renderPortalMarkup({ title: "徐医校园网" });
+    const customHtml = ui.renderPortalMarkup({ title: "专用网关 <A>" });
+    assert.match(defaultHtml, /id="drcom-login-title"[^>]*>XZHMU Campus Network</);
+    assert.match(customHtml, /id="drcom-login-title"[^>]*>专用网关 &lt;A&gt;</);
+  } finally {
+    ui.setLanguage("zh-CN");
+  }
+});
+
 test("门户账号解析优先采用账号字符串中的运营商后缀", () => {
   const { parseAccount } = require(portalUiPath);
   const cases = [
@@ -125,10 +173,10 @@ test("完整、简化和隐藏模式按约定控制在线详情", () => {
 test("登录页按学校顺序提供运营商、重置和四个官方辅助入口", () => {
   const { renderPortalMarkup } = require(portalUiPath);
   const markup = renderPortalMarkup({ online: false });
-  const campus = markup.indexOf('<option value="">校园网</option>');
-  const unicom = markup.indexOf('<option value="@unicom">');
-  const telecom = markup.indexOf('<option value="@telecom">');
-  const mobile = markup.indexOf('<option value="@cmcc">');
+  const campus = markup.indexOf('<option value="" data-i18n="carrier_campus">校园网</option>');
+  const unicom = markup.indexOf('<option value="@unicom"');
+  const telecom = markup.indexOf('<option value="@telecom"');
+  const mobile = markup.indexOf('<option value="@cmcc"');
 
   assert.ok(campus < unicom && unicom < telecom && telecom < mobile);
   assert.match(markup, /id="drcom-reset"/);

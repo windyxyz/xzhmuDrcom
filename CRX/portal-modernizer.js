@@ -4,7 +4,11 @@
   const ui = globalThis.DrcomPortalUI;
   const capture = globalThis.DrcomPortalCapture;
   const characters = globalThis.DrcomCharacters;
+  const i18n = globalThis.DrcomI18n;
+  const t = (key, substitutions) => i18n.t(key, substitutions);
   let activePortalConfig = null;
+  let languagePreference = "auto";
+  let currentPortalInput = null;
   let portalReadinessObserver = null;
   let recognitionQueued = false;
   let userRestoredOriginal = false;
@@ -22,13 +26,75 @@
       if (!ui) throw new Error("门户界面模块未加载");
       if (!capture) throw new Error("门户捕获模块未加载");
       capture.install({ ui, sendMessage: safeSend });
+      bindLanguageMessages();
       activePortalConfig = await loadPortalConfig();
+      await loadLanguage();
       if (activePortalConfig.enabled !== true) return;
       startPortalReadinessObserver();
       schedulePortalRecognition();
     } catch (error) {
       removeModernPortal();
     }
+  }
+
+  function bindLanguageMessages() {
+    chrome.runtime.onMessage?.addListener((message, sender) => {
+      if (sender?.id && sender.id !== chrome.runtime.id) return;
+      if (message?.action !== "language:changed") return;
+      applyLanguage(message.preference);
+    });
+  }
+
+  async function loadLanguage() {
+    try {
+      const response = await sendMessage({ action: "language:get" });
+      applyLanguage(response.preference);
+    } catch (error) {
+      applyLanguage("auto");
+    }
+  }
+
+  function applyLanguage(preference) {
+    languagePreference = i18n.normalizePreference(preference);
+    i18n.setLanguage(languagePreference);
+    const language = i18n.getLanguage();
+    ui.setLanguage(language);
+    document.documentElement.lang = language;
+    document.documentElement.dir = "ltr";
+    const root = document.getElementById("drcom-modern-root");
+    if (root) {
+      i18n.apply(root, language);
+      const brandContext = root.querySelector("#drcom-brand-context");
+      if (brandContext && currentPortalInput) brandContext.textContent = t("portal_brand_context", [currentPortalInput.host]);
+      if (currentPortalInput) {
+        const localizedTitle = ui.localizeTitle(currentPortalInput.title);
+        const brandTitle = root.querySelector("#drcom-brand-title");
+        const loginTitle = root.querySelector("#drcom-login-title");
+        if (brandTitle) brandTitle.textContent = localizedTitle;
+        if (loginTitle) loginTitle.textContent = localizedTitle;
+      }
+      const description = root.querySelector("#drcom-online-description");
+      if (description && currentPortalInput) description.textContent = t("portal_online_description", [ui.localizeTitle(currentPortalInput.title)]);
+      const checkedAt = root.querySelector("#drcom-checked-at");
+      if (checkedAt && currentPortalInput?.checkedAt) {
+        checkedAt.textContent = t("portal_checked_at", [globalThis.DrcomPortalSession.formatTimestamp(currentPortalInput.checkedAt)]);
+      }
+      if (currentPortalInput?.session) {
+        const usedTime = ui.formatUsedMinutes(currentPortalInput.session.usedMinutes);
+        const summaryTime = root.querySelector("#drcom-used-time");
+        const detailTime = root.querySelector("#drcom-used-minutes-detail");
+        if (summaryTime) summaryTime.textContent = usedTime;
+        if (detailTime) detailTime.textContent = usedTime;
+      }
+      const status = root.querySelector("#drcom-form-status");
+      if (status?.dataset.i18nKey) status.textContent = t(status.dataset.i18nKey);
+      const passwordToggle = root.querySelector("#drcom-password-toggle");
+      if (passwordToggle?.getAttribute("aria-pressed") === "true") {
+        passwordToggle.setAttribute("aria-label", t("portal_hide_password"));
+      }
+    }
+    const captchaHint = document.getElementById("drcom-captcha-hint");
+    if (captchaHint) i18n.apply(captchaHint, language);
   }
 
   async function loadPortalConfig() {
@@ -91,15 +157,20 @@
       removeModernPortal();
       const root = document.createElement("div");
       root.id = "drcom-modern-root";
-      root.innerHTML = ui.renderPortalMarkup({
-        title: config.title || "徐医校园网",
+      const statusKey = statusResult?.message === i18n.t("portal_session_online", undefined, "zh-CN")
+        || statusResult?.message === i18n.t("portal_session_online", undefined, "en")
+        ? "portal_session_online" : "";
+      currentPortalInput = {
+        title: config.title || t("brand_name"),
         online,
         host: portalHost(config.portalUrl),
         onlineDetailMode: config.onlineDetailMode || "classic",
         session: statusResult && statusResult.session,
-        statusMessage: statusResult && statusResult.message,
+        statusMessage: statusKey ? t(statusKey) : statusResult && statusResult.message,
         checkedAt: statusResult && statusResult.checkedAt
-      });
+      };
+      root.innerHTML = ui.renderPortalMarkup(currentPortalInput);
+      if (statusKey) root.querySelector("#drcom-form-status").dataset.i18nKey = statusKey;
       if (globalThis.DrcomAppearance) {
         const normalized = globalThis.DrcomAppearance.normalizeAppearance(config.appearance || {});
         globalThis.DrcomAppearance.applyToRoot(root, {
@@ -149,8 +220,8 @@
   }
 
   function portalHost(value) {
-    try { return new URL(value || location.href).host || location.host || "认证网关"; }
-    catch (error) { return location.host || "认证网关"; }
+    try { return new URL(value || location.href).host || location.host || t("authentication_gateway"); }
+    catch (error) { return location.host || t("authentication_gateway"); }
   }
 
   function removeModernPortal() {
@@ -160,6 +231,7 @@
     }
     document.documentElement.classList.remove("drcom-modern-active");
     document.getElementById("drcom-modern-root")?.remove();
+    currentPortalInput = null;
     document.getElementById("drcom-private-appearance")?.remove();
     document.getElementById("drcom-captcha-hint")?.remove();
     if (characterController) {
@@ -174,9 +246,9 @@
     hint.id = "drcom-captcha-hint";
     hint.setAttribute("role", "status");
     hint.innerHTML = `
-      <strong>请使用学校原始页面</strong>
-      <span>检测到验证码或扫码登录，本次不会接管或隐藏原始控件。</span>
-      <button id="drcom-captcha-dismiss" type="button" aria-label="关闭提示">关闭</button>
+      <strong data-i18n="portal_captcha_heading">${t("portal_captcha_heading")}</strong>
+      <span data-i18n="portal_captcha_description">${t("portal_captcha_description")}</span>
+      <button id="drcom-captcha-dismiss" type="button" data-i18n="portal_dismiss" data-i18n-aria-label="portal_dismiss" aria-label="${t("portal_dismiss")}">${t("portal_dismiss")}</button>
     `;
     hint.querySelector("#drcom-captcha-dismiss")?.addEventListener("click", (event) => {
       if (!event.isTrusted) return;
@@ -241,7 +313,7 @@
       const show = password.type === "password";
       password.type = show ? "text" : "password";
       toggle.setAttribute("aria-pressed", show ? "true" : "false");
-      toggle.setAttribute("aria-label", show ? "隐藏密码" : "显示密码");
+      toggle.setAttribute("aria-label", show ? t("portal_hide_password") : t("reveal_password"));
       const glyph = toggle.querySelector(".win-glyph");
       if (glyph) glyph.textContent = show ? "\uE7B3" : "\uE890";
       syncFromForm();
@@ -250,7 +322,7 @@
       if (!event.isTrusted) return;
       if (toggle) {
         toggle.setAttribute("aria-pressed", "false");
-        toggle.setAttribute("aria-label", "显示密码");
+        toggle.setAttribute("aria-label", t("reveal_password"));
         const glyph = toggle.querySelector(".win-glyph");
         if (glyph) glyph.textContent = "\uE890";
       }
@@ -260,6 +332,16 @@
   }
 
   function bindPortalEvents(root, online) {
+    root.querySelector("#drcom-language-toggle")?.addEventListener("click", async (event) => {
+      if (!event.isTrusted) return;
+      const preference = i18n.getLanguage() === "zh-CN" ? "en" : "zh-CN";
+      try {
+        const response = await sendMessage({ action: "language:set", preference });
+        applyLanguage(response.preference || preference);
+      } catch (error) {
+        applyLanguage(preference);
+      }
+    });
     root.querySelector("#drcom-restore-original")?.addEventListener("click", (event) => {
       if (!event.isTrusted) return;
       restoreOriginalPortal();
@@ -300,7 +382,7 @@
   }
 
   async function refreshPortalStatus(root) {
-    setPortalBusy(root, true, "正在刷新在线状态…");
+    setPortalBusy(root, true, "portal_refreshing");
     try {
       const result = await sendMessage({ action: "portal:status:get" });
       if (userRestoredOriginal) return;
@@ -347,15 +429,15 @@
     const remember = Boolean(root.querySelector("#drcom-remember")?.checked);
 
     if (!account.username) {
-      setPortalStatus(root, "请输入学号或 DrCOM 账号", "error");
+      setLocalPortalStatus(root, "portal_username_required", "error");
       return;
     }
     if (!account.password) {
-      setPortalStatus(root, "请输入认证密码", "error");
+      setLocalPortalStatus(root, "portal_password_required", "error");
       return;
     }
 
-    setPortalBusy(root, true, "正在连接校园网…");
+    setPortalBusy(root, true, "portal_connecting");
     try {
       let result;
       if (remember) {
@@ -375,7 +457,8 @@
         sadRevertTimer = 0;
         setCharacterMode(root, characterStateFromForm(root));
       }, 3000);
-      setPortalStatus(root, result.message || "认证未通过，请检查账号和密码", "error");
+      if (result.message) setPortalStatus(root, result.message, "error");
+      else setLocalPortalStatus(root, "portal_auth_failed", "error");
     } catch (error) {
       setPortalStatus(root, error.message || String(error), "error");
     } finally {
@@ -386,19 +469,19 @@
   async function logoutFromPortal(root) {
     const confirmDialog = globalThis.DrcomConfirmDialog;
     if (!confirmDialog || typeof confirmDialog.ask !== "function") {
-      setPortalStatus(root, "无法打开注销确认，请使用学校原始页面。", "error");
+      setLocalPortalStatus(root, "portal_confirm_unavailable", "error");
       return;
     }
     const confirmed = await confirmDialog.ask({
-      title: "注销当前校园网连接？",
-      message: "确认后将注销并解绑 MAC；取消不会发送任何下线请求。",
-      confirmLabel: "注销并解绑 MAC"
+      title: t("portal_logout_title"),
+      message: t("portal_logout_message"),
+      confirmLabel: t("portal_logout")
     });
     if (!confirmed) return;
-    setPortalBusy(root, true, "正在下线…");
+    setPortalBusy(root, true, "portal_logging_out");
     try {
       const result = await sendMessage({ action: "drcom:logout" });
-      if (!result.success) throw new Error(result.error || result.message || "下线失败");
+      if (!result.success) throw new Error(result.error || result.message || t("portal_logout_failed"));
       mountPortal(activePortalConfig || {}, false);
     } catch (error) {
       setPortalStatus(root, error.message || String(error), "error");
@@ -407,12 +490,12 @@
     }
   }
 
-  function setPortalBusy(root, busy, message = "") {
+  function setPortalBusy(root, busy, messageKey = "") {
     root.dataset.busy = busy ? "true" : "false";
     root.querySelectorAll("button, input, select").forEach((element) => {
       if (element.id !== "drcom-restore-original") element.disabled = busy;
     });
-    if (message) setPortalStatus(root, message, "progress");
+    if (messageKey) setLocalPortalStatus(root, messageKey, "progress");
   }
 
   function setPortalStatus(root, message, state = "") {
@@ -420,6 +503,13 @@
     if (!status) return;
     status.textContent = message;
     status.dataset.state = state;
+    delete status.dataset.i18nKey;
+  }
+
+  function setLocalPortalStatus(root, key, state = "") {
+    setPortalStatus(root, t(key), state);
+    const status = root.querySelector("#drcom-form-status");
+    if (status) status.dataset.i18nKey = key;
   }
 
   function collectNetworkValues() {
@@ -469,8 +559,8 @@
       const hint = document.createElement("div");
       hint.id = "drcom-context-lost-hint";
       hint.setAttribute("role", "alert");
-      hint.innerHTML = '<span>xzhmu徐医校园网 已更新，请刷新页面以恢复登录界面。</span>'
-        + '<button id="drcom-context-lost-refresh" type="button">立即刷新</button>';
+      hint.innerHTML = `<span>${t("portal_context_lost")}</span>`
+        + `<button id="drcom-context-lost-refresh" type="button">${t("portal_refresh_page")}</button>`;
       hint.style.cssText = "position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:12px;padding:10px 16px;background:#1a1a1a;color:#fff;font:13px/1.5 system-ui,sans-serif;border:1px solid rgba(255,255,255,.2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);";
       hint.querySelector("#drcom-context-lost-refresh")?.addEventListener("click", (event) => {
         if (!event.isTrusted) return;
@@ -493,11 +583,11 @@
             return;
           }
           if (!response) {
-            reject(new Error("后台服务没有返回结果"));
+            reject(new Error(t("portal_backend_no_response")));
             return;
           }
           if (response.ok === false) {
-            reject(new Error(response.error || response.message || "后台请求失败"));
+            reject(new Error(response.error || response.message || t("portal_backend_request_failed")));
             return;
           }
           resolve(response);
@@ -505,7 +595,7 @@
       } catch (error) {
         if (/context invalidated|Extension context/i.test(String(error && error.message))) {
           handleExtensionContextLost();
-          reject(new Error("扩展已更新，请刷新页面后重试。"));
+          reject(new Error(t("portal_extension_updated")));
           return;
         }
         reject(error);

@@ -264,6 +264,8 @@ test("门户共享令牌和纯逻辑模块在内容脚本之前加载", () => {
   const portalScript = manifest.content_scripts[0];
   assert.deepEqual(portalScript.css, ["design-tokens.css", "portal.css"]);
   assert.deepEqual(portalScript.js, [
+    "i18n-messages.js",
+    "i18n.js",
     "account-utils.js",
     "portal-session.js",
     "appearance.js",
@@ -293,7 +295,6 @@ test("异步壁纸回调、门户孤儿提示和清理逻辑保持防御性", ()
   const welcome = readExtensionFile("welcome.js");
   const modernizer = readExtensionFile("portal-modernizer.js");
   assert.ok(welcome.includes("chrome.runtime.lastError"));
-  assert.ok(modernizer.includes("xzhmu徐医校园网 已更新"));
   assert.equal(modernizer.includes("context invalidated|Extension context|Cannot read"), false);
   const removeModernPortal = modernizer.slice(
     modernizer.indexOf("function removeModernPortal()"),

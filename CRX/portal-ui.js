@@ -7,20 +7,36 @@
   const portalSession = typeof module === "object" && module.exports
     ? require("./portal-session.js")
     : root.DrcomPortalSession;
-  const api = factory(accountUtils, portalSession);
+  const i18n = typeof module === "object" && module.exports
+    ? require("./i18n.js")
+    : root.DrcomI18n;
+  const api = factory(accountUtils, portalSession, i18n);
   if (typeof module === "object" && module.exports) {
     module.exports = api;
   }
   if (root) {
     root.DrcomPortalUI = api;
   }
-})(typeof globalThis === "object" ? globalThis : this, (accountUtils, portalSession) => {
+})(typeof globalThis === "object" ? globalThis : this, (accountUtils, portalSession, i18n) => {
+  let language = "zh-CN";
+  const t = (key, substitutions) => i18n.t(key, substitutions, language);
   const OFFICIAL_LINKS = [
-    ["自助服务", "http://self.xzhmu.edu.cn"],
-    ["账号激活", "https://authserver.xzhmu.edu.cn/retrieve-password/accountActivation/index.html#/?service=http%3A%2F%2F10.10.10.2"],
-    ["使用说明", "http://self.xzhmu.edu.cn/guide.htm"],
-    ["找回密码", "https://authserver.xzhmu.edu.cn/retrieve-password/retrievePassword/index.html"]
+    ["portal_self_service", "http://self.xzhmu.edu.cn"],
+    ["portal_account_activation", "https://authserver.xzhmu.edu.cn/retrieve-password/accountActivation/index.html#/?service=http%3A%2F%2F10.10.10.2"],
+    ["portal_guide", "http://self.xzhmu.edu.cn/guide.htm"],
+    ["portal_recover_password", "https://authserver.xzhmu.edu.cn/retrieve-password/retrievePassword/index.html"]
   ];
+
+  function setLanguage(preference) {
+    language = i18n.resolveLanguage(preference, i18n.getBrowserLanguages?.() || []);
+  }
+
+  function localizeTitle(value) {
+    const title = String(value || "");
+    const knownChinese = i18n.t("campus_network_short", undefined, "zh-CN");
+    const knownEnglish = i18n.t("campus_network_short", undefined, "en");
+    return title === knownChinese || title === knownEnglish ? t("campus_network_short") : title;
+  }
 
   function buildAccount(form = {}, network = {}) {
     const parsed = accountUtils.parse(form.username, form.suffix);
@@ -55,12 +71,12 @@
   }
 
   function renderOfficialLinks(className = "drcom-support-links") {
-    return `<nav class="${className}" aria-label="校园网辅助服务">${OFFICIAL_LINKS
-      .map(([label, href]) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`)
+    return `<nav class="${className}" aria-label="${escapeHtml(t("portal_support_services"))}" data-i18n-aria-label="portal_support_services">${OFFICIAL_LINKS
+      .map(([key, href]) => `<a href="${href}" target="_blank" rel="noopener noreferrer" data-i18n="${key}">${escapeHtml(t(key))}</a>`)
       .join("")}</nav>`;
   }
 
-  function renderBrandPanel(safeTitle, safeHost) {
+  function renderBrandPanel(safeTitle, host) {
     return `
       <section class="drcom-brand-panel" aria-hidden="true">
         <span class="drcom-blob drcom-blob-a"></span>
@@ -68,44 +84,49 @@
         <div class="drcom-brand-stage">
           <div class="dchar-frame" data-characters></div>
           <div class="drcom-brand-copy">
-            <strong>${safeTitle}</strong>
-            <span>校园网认证 · ${safeHost}</span>
+            <strong id="drcom-brand-title">${safeTitle}</strong>
+            <span id="drcom-brand-context">${escapeHtml(t("portal_brand_context", [host]))}</span>
           </div>
         </div>
       </section>
     `;
   }
 
+  function formatUsedMinutes(value) {
+    const formatted = portalSession.formatMinutes(value);
+    const match = /^(\d+) 分钟$/.exec(formatted);
+    return match ? t("portal_minutes", [match[1]]) : formatted;
+  }
+
   function renderSessionRows(session = {}) {
     const network = session.network && typeof session.network === "object" ? session.network : {};
     const rows = [
-      ["账号", session.account],
-      ["已用时间", portalSession.formatMinutes(session.usedMinutes)],
-      ["总流量", portalSession.formatKilobytes(session.totalKilobytes)],
-      ["上行流量", portalSession.formatKilobytes(session.uploadKilobytes)],
-      ["下行流量", portalSession.formatKilobytes(session.downloadKilobytes)],
-      ["余额", Number.isFinite(Number(session.balanceYuan)) ? `¥${Number(session.balanceYuan).toFixed(2)}` : ""],
-      ["登录时间", portalSession.formatTimestamp(session.loginAt)],
-      ["外网映射地址", session.externalIp],
+      ["account_short", session.account],
+      ["portal_used_time", formatUsedMinutes(session.usedMinutes)],
+      ["portal_total_traffic", portalSession.formatKilobytes(session.totalKilobytes)],
+      ["portal_upload_traffic", portalSession.formatKilobytes(session.uploadKilobytes)],
+      ["portal_download_traffic", portalSession.formatKilobytes(session.downloadKilobytes)],
+      ["portal_balance", Number.isFinite(Number(session.balanceYuan)) ? `¥${Number(session.balanceYuan).toFixed(2)}` : ""],
+      ["portal_login_time", portalSession.formatTimestamp(session.loginAt)],
+      ["portal_external_ip", session.externalIp],
       ["IPv4", network.ipv4],
       ["IPv6", network.ipv6],
       ["MAC", network.mac],
       ["VLAN", network.vlan],
       ["AC IP", network.acIp],
-      ["AC 名称", network.acName]
+      ["portal_ac_name", network.acName]
     ].filter(([, value]) => String(value || "").trim());
     if (!rows.length) return "";
     return `<dl class="drcom-session-list">${rows
-      .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
+      .map(([key, value]) => `<div><dt data-i18n="${key}">${escapeHtml(t(key))}</dt><dd${key === "portal_used_time" ? ' id="drcom-used-minutes-detail"' : ""}>${escapeHtml(value)}</dd></div>`)
       .join("")}</dl>`;
   }
 
   function renderOnlineContent({ title, session = null, onlineDetailMode = "classic", statusMessage = "", checkedAt = 0 }) {
-    const finalTitle = escapeHtml(title);
     const mode = ["classic", "full", "minimal", "hidden"].includes(onlineDetailMode)
       ? onlineDetailMode
       : "classic";
-    const usedTime = session ? portalSession.formatMinutes(session.usedMinutes) : "";
+    const usedTime = session ? formatUsedMinutes(session.usedMinutes) : "";
     const totalFlow = session ? portalSession.formatKilobytes(session.totalKilobytes) : "";
     const rows = session ? renderSessionRows(session) : "";
     const showSummary = mode === "classic" || mode === "full";
@@ -113,13 +134,13 @@
     const checkedText = checkedAt ? portalSession.formatTimestamp(checkedAt) : "";
     const summary = showSummary && (usedTime || totalFlow)
       ? `<div class="drcom-session-summary">
-          ${usedTime ? `<div><span>已用时间</span><strong id="drcom-used-time">${escapeHtml(usedTime)}</strong></div>` : ""}
-          ${totalFlow ? `<div><span>总流量</span><strong id="drcom-total-flow">${escapeHtml(totalFlow)}</strong></div>` : ""}
+          ${usedTime ? `<div><span data-i18n="portal_used_time">${escapeHtml(t("portal_used_time"))}</span><strong id="drcom-used-time">${escapeHtml(usedTime)}</strong></div>` : ""}
+          ${totalFlow ? `<div><span data-i18n="portal_total_traffic">${escapeHtml(t("portal_total_traffic"))}</span><strong id="drcom-total-flow">${escapeHtml(totalFlow)}</strong></div>` : ""}
         </div>`
       : "";
     const details = showSummary && rows
       ? `<details id="drcom-session-details"${mode === "full" ? " open" : ""}>
-          <summary>查看完整在线详情</summary>
+          <summary data-i18n="portal_online_details">${escapeHtml(t("portal_online_details"))}</summary>
           ${rows}
         </details>`
       : "";
@@ -127,23 +148,23 @@
     return `
       <section class="drcom-state-view" aria-labelledby="drcom-state-title">
         <span class="drcom-status-mark" aria-hidden="true"></span>
-        <h1 id="drcom-state-title">已经连接校园网</h1>
-        <p>当前设备已通过 ${finalTitle} 认证，可以正常访问网络。</p>
+        <h1 id="drcom-state-title" data-i18n="portal_online_heading">${escapeHtml(t("portal_online_heading"))}</h1>
+        <p id="drcom-online-description">${escapeHtml(t("portal_online_description", [title]))}</p>
         ${summary}
         ${details}
         ${showTools ? `<div class="drcom-online-tools">
-          <button id="drcom-refresh-status" type="button">刷新在线状态</button>
-          <a id="drcom-self-service" href="${OFFICIAL_LINKS[0][1]}" target="_blank" rel="noopener noreferrer">自助服务</a>
+          <button id="drcom-refresh-status" type="button" data-i18n="portal_refresh_status">${escapeHtml(t("portal_refresh_status"))}</button>
+          <a id="drcom-self-service" href="${OFFICIAL_LINKS[0][1]}" target="_blank" rel="noopener noreferrer" data-i18n="portal_self_service">${escapeHtml(t("portal_self_service"))}</a>
         </div>` : ""}
-        ${checkedText && showTools ? `<p class="drcom-checked-at">最近检查：${escapeHtml(checkedText)}</p>` : ""}
-        <button id="drcom-logout" class="drcom-secondary-button" type="button">注销并解绑 MAC</button>
+        ${checkedText && showTools ? `<p id="drcom-checked-at" class="drcom-checked-at">${escapeHtml(t("portal_checked_at", [checkedText]))}</p>` : ""}
+        <button id="drcom-logout" class="drcom-secondary-button" type="button" data-i18n="portal_logout">${escapeHtml(t("portal_logout"))}</button>
         <p id="drcom-form-status" class="drcom-form-status" aria-live="polite">${escapeHtml(statusMessage)}</p>
       </section>
     `;
   }
 
   function renderPortalMarkup({
-    title = "徐医校园网",
+    title = t("brand_name"),
     online = false,
     host = "10.10.10.2",
     session = null,
@@ -151,11 +172,12 @@
     statusMessage = "",
     checkedAt = 0
   } = {}) {
-    const safeTitle = escapeHtml(title);
-    const safeHost = escapeHtml(host || "认证网关");
+    const visibleTitle = localizeTitle(title);
+    const safeTitle = escapeHtml(visibleTitle);
+    const safeHost = escapeHtml(host || t("authentication_gateway"));
     const content = online
       ? renderOnlineContent({
-        title,
+        title: visibleTitle,
         session,
         onlineDetailMode,
         statusMessage,
@@ -166,42 +188,42 @@
           <div class="drcom-intro">
             <h1 id="drcom-login-title">${safeTitle}</h1>
             <p class="drcom-host">${safeHost}</p>
-            <p>输入校园网账号并登录，认证请求会直接发送到学校接口。</p>
+            <p data-i18n="portal_login_intro">${escapeHtml(t("portal_login_intro"))}</p>
           </div>
           <form id="drcom-login-form" class="drcom-login-form">
             <label>
-              <span>学号或 DrCOM 账号</span>
+              <span data-i18n="username_label">${escapeHtml(t("username_label"))}</span>
               <input id="drcom-username" name="username" autocomplete="username" required>
             </label>
             <label>
-              <span>运营商</span>
+              <span data-i18n="carrier">${escapeHtml(t("carrier"))}</span>
               <select id="drcom-suffix" name="suffix">
-                <option value="">校园网</option>
-                <option value="@unicom">联通 @unicom</option>
-                <option value="@telecom">电信 @telecom</option>
-                <option value="@cmcc">移动 @cmcc</option>
+                <option value="" data-i18n="carrier_campus">${escapeHtml(t("carrier_campus"))}</option>
+                <option value="@unicom" data-i18n="carrier_unicom">${escapeHtml(t("carrier_unicom"))}</option>
+                <option value="@telecom" data-i18n="carrier_telecom">${escapeHtml(t("carrier_telecom"))}</option>
+                <option value="@cmcc" data-i18n="carrier_mobile">${escapeHtml(t("carrier_mobile"))}</option>
               </select>
             </label>
             <label>
-              <span>密码</span>
+              <span data-i18n="password">${escapeHtml(t("password"))}</span>
               <span class="drcom-password-wrapper">
                 <input id="drcom-password" name="password" type="password" autocomplete="current-password" required>
-                <button id="drcom-password-toggle" class="drcom-password-toggle" type="button" aria-label="显示密码" aria-pressed="false" title="显示或隐藏密码">
+                <button id="drcom-password-toggle" class="drcom-password-toggle" type="button" aria-label="${escapeHtml(t("reveal_password"))}" data-i18n-aria-label="reveal_password" aria-pressed="false" title="${escapeHtml(t("portal_password_toggle_title"))}" data-i18n-title="portal_password_toggle_title">
                   <span class="win-glyph" aria-hidden="true">&#xE890;</span>
                 </button>
               </span>
             </label>
             <label class="drcom-remember">
               <input id="drcom-remember" type="checkbox" checked>
-              <span>保存密码到本机，方便下次快速登录</span>
+              <span data-i18n="portal_remember">${escapeHtml(t("portal_remember"))}</span>
             </label>
-            <p id="drcom-form-status" class="drcom-form-status" aria-live="polite"></p>
+            <p id="drcom-form-status" class="drcom-form-status" aria-live="polite">${escapeHtml(statusMessage)}</p>
             <div class="drcom-login-actions">
-              <button id="drcom-submit" class="drcom-primary-button" type="submit"><span class="win-ring win-ring--inline" aria-hidden="true"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" pathLength="100"/></svg></span><span>登录校园网</span></button>
-              <button id="drcom-reset" class="drcom-secondary-button" type="reset">重置</button>
+              <button id="drcom-submit" class="drcom-primary-button" type="submit"><span class="win-ring win-ring--inline" aria-hidden="true"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" pathLength="100"/></svg></span><span data-i18n="portal_sign_in">${escapeHtml(t("portal_sign_in"))}</span></button>
+              <button id="drcom-reset" class="drcom-secondary-button" type="reset" data-i18n="portal_reset">${escapeHtml(t("portal_reset"))}</button>
             </div>
             ${renderOfficialLinks()}
-            <p class="drcom-original-capabilities">扫码或验证码登录请使用学校原始页面。</p>
+            <p class="drcom-original-capabilities" data-i18n="portal_original_capabilities">${escapeHtml(t("portal_original_capabilities"))}</p>
           </form>
         </section>
       `;
@@ -210,28 +232,32 @@
       <div class="drcom-page">
         <header class="drcom-header glass-chrome">
           <span class="drcom-brand-mark" aria-hidden="true"></span>
-          <strong>xzhmu徐医校园网</strong>
+          <strong data-i18n="brand_name">${escapeHtml(t("brand_name"))}</strong>
           <div class="drcom-header-actions">
-            <button id="drcom-open-options" type="button" aria-label="个性化" title="个性化">
+            <button id="drcom-language-toggle" class="drcom-language-toggle" type="button" data-i18n="language_switch" data-i18n-aria-label="language_switch_bilingual" aria-label="${escapeHtml(t("language_switch_bilingual"))}">${escapeHtml(t("language_switch"))}</button>
+            <button id="drcom-open-options" type="button" aria-label="${escapeHtml(t("portal_personalize"))}" data-i18n-aria-label="portal_personalize" title="${escapeHtml(t("portal_personalize"))}" data-i18n-title="portal_personalize">
               <span class="win-glyph" aria-hidden="true">&#xE713;</span>
             </button>
-            <button id="drcom-restore-original" type="button">使用原始登录页</button>
+            <button id="drcom-restore-original" type="button" data-i18n="portal_restore_original">${escapeHtml(t("portal_restore_original"))}</button>
           </div>
         </header>
         <main class="drcom-stage">
-          ${renderBrandPanel(safeTitle, safeHost)}
+          ${renderBrandPanel(safeTitle, host || t("authentication_gateway"))}
           <div class="drcom-surface">${content}</div>
         </main>
-        <footer>账号数据只保存在这台设备的浏览器中。</footer>
+        <footer data-i18n="welcome_privacy">${escapeHtml(t("welcome_privacy"))}</footer>
       </div>
     `;
   }
 
   return {
     buildAccount,
+    formatUsedMinutes,
+    localizeTitle,
     normalizeSuffix: accountUtils.normalizeSuffix,
     parseAccount: accountUtils.parse,
     renderPortalMarkup,
+    setLanguage,
     shouldTakeOver,
     suffixLabel: accountUtils.suffixLabel
   };

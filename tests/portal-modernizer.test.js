@@ -8,6 +8,8 @@ const vm = require("node:vm");
 
 const portalUi = require(join(__dirname, "..", "CRX", "portal-ui.js"));
 const appearance = require(join(__dirname, "..", "CRX", "appearance.js"));
+const i18n = require(join(__dirname, "..", "CRX", "i18n.js"));
+const portalSession = require(join(__dirname, "..", "CRX", "portal-session.js"));
 
 class FakeClassList {
   constructor() {
@@ -44,6 +46,8 @@ class FakeElement {
     this.shadowRoot = null;
     this.listeners = new Map();
     this.childrenById = new Map();
+    this.localizableNodes = [];
+    this.textContent = "";
     this._innerHTML = "";
   }
 
@@ -64,6 +68,7 @@ class FakeElement {
   }
 
   querySelectorAll(selector) {
+    if (selector.includes("data-i18n")) return this.localizableNodes;
     if (selector !== "button, input, select") return [];
     return Array.from(this.childrenById.values()).filter((element) =>
       ["BUTTON", "INPUT", "SELECT"].includes(element.tagName)
@@ -78,6 +83,10 @@ class FakeElement {
     return this.attributes.get(name) ?? null;
   }
 
+  focus() {
+    this.document.activeElement = this;
+  }
+
   attachShadow(options = {}) {
     const shadow = { mode: options.mode, innerHTML: "" };
     this.document.closedShadowRoots.set(this, shadow);
@@ -88,16 +97,23 @@ class FakeElement {
   set innerHTML(value) {
     this._innerHTML = String(value);
     this.childrenById.clear();
+    this.localizableNodes = [];
     const tags = this._innerHTML.matchAll(/<([a-z][a-z0-9-]*)\b([^>]*)>/gi);
     for (const match of tags) {
       const id = match[2].match(/\bid="([^"]+)"/i)?.[1];
-      if (!id) continue;
+      if (!id && !/data-i18n/.test(match[2])) continue;
       const element = new FakeElement(this.document, match[1], id);
       element.checked = /\bchecked\b/i.test(match[2]);
       for (const attribute of match[2].matchAll(/\b([a-z][a-z0-9-]*)="([^"]*)"/gi)) {
         element.setAttribute(attribute[1], attribute[2]);
+        if (attribute[1] === "data-i18n") element.dataset.i18n = attribute[2];
+        if (attribute[1] === "data-i18n-aria-label") element.dataset.i18nAriaLabel = attribute[2];
+        if (attribute[1] === "data-i18n-title") element.dataset.i18nTitle = attribute[2];
       }
-      this.childrenById.set(id, element);
+      const closing = this._innerHTML.indexOf(`</${match[1]}>`, match.index + match[0].length);
+      if (closing >= 0) element.textContent = this._innerHTML.slice(match.index + match[0].length, closing).replace(/<[^>]*>/g, "");
+      if (id) this.childrenById.set(id, element);
+      if (/data-i18n/.test(match[2])) this.localizableNodes.push(element);
     }
   }
 
@@ -119,6 +135,7 @@ function createHarness(options = {}) {
   const pendingCallbacks = new Map();
   const microtaskErrors = [];
   const documentListeners = new Map();
+  const runtimeMessageListeners = [];
   const scheduleMicrotask = queueMicrotask;
   let pageState = options.pageState || (options.online ? "online" : "login");
   let shouldTakeOverCalls = 0;
@@ -134,6 +151,7 @@ function createHarness(options = {}) {
     readyState: "complete",
     failPortalEventBinding: options.failPortalEventBinding === true,
     closedShadowRoots: new Map(),
+    activeElement: null,
     documentElement,
     body: {
       innerText: "",
@@ -180,6 +198,8 @@ function createHarness(options = {}) {
   }
   updatePageText();
   const responses = {
+    "language:get": { ok: true, preference: options.languagePreference || "zh-CN" },
+    "language:set": { ok: true, preference: "en" },
     "portal:config:get": {
       ok: true,
       portal: {
@@ -238,6 +258,8 @@ function createHarness(options = {}) {
     URL,
     chrome: {
       runtime: {
+        id: "test-extension-id",
+        onMessage: { addListener(listener) { runtimeMessageListeners.push(listener); } },
         lastError: null,
         sendMessage(message, callback) {
           if ((options.throwingActions || []).includes(message.action)) {
@@ -252,6 +274,9 @@ function createHarness(options = {}) {
             return;
           }
           callback(responses[message.action] || { ok: true });
+          if (message.action === "language:set") {
+            for (const listener of runtimeMessageListeners) listener({ action: "language:changed", preference: message.preference }, { id: "test-extension-id" });
+          }
         }
       }
     },
@@ -274,6 +299,8 @@ function createHarness(options = {}) {
     setTimeout
   });
   context.globalThis = context;
+  context.DrcomI18n = i18n;
+  context.DrcomPortalSession = portalSession;
   context.DrcomPortalUI = {
     ...portalUi,
     shouldTakeOver(input) {
@@ -363,7 +390,7 @@ test("现代登录表单只在可信提交时交互保存账号并发起认证",
 
   assert.deepEqual(
     harness.messages.map((message) => message.action),
-    ["portal:config:get", "portal:appearance:get", "account:save:interactive", "drcom:login", "portal:status:get"]
+    ["portal:config:get", "portal:appearance:get", "language:get", "account:save:interactive", "drcom:login", "portal:status:get"]
   );
   assert.match(harness.document.getElementById("drcom-modern-root").innerHTML, /已经连接校园网/);
 });
@@ -478,6 +505,7 @@ test("扩展重载孤儿化后摘除现代界面并显示刷新引导", async ()
   assert.equal(harness.confirmations.length, 1);
   assert.equal(harness.document.getElementById("drcom-modern-root"), null);
   assert.ok(harness.document.getElementById("drcom-context-lost-hint"));
+  assert.match(harness.document.getElementById("drcom-context-lost-hint").innerHTML, /xzhmu徐医校园网 已更新/);
   assert.equal(harness.document.documentElement.classList.contains("drcom-modern-active"), false);
 });
 
@@ -789,4 +817,123 @@ test("用户恢复原始页后页面状态变化不会重新挂载或重连就�
   assert.equal(harness.document.getElementById("drcom-modern-root"), null);
   assert.equal(harness.modernRootMountCount(), 1);
   assert.equal(harness.connectedObserverCount(), 1);
+});
+
+test("门户语言切换原位更新文案并保留表单节点、值、焦点和监听器", async () => {
+  const harness = createHarness();
+  await loadModernizer(harness);
+  const root = harness.document.getElementById("drcom-modern-root");
+  const username = harness.document.getElementById("drcom-username");
+  const suffix = harness.document.getElementById("drcom-suffix");
+  const password = harness.document.getElementById("drcom-password");
+  const remember = harness.document.getElementById("drcom-remember");
+  username.value = "student-18";
+  suffix.value = "@telecom";
+  password.value = "secret";
+  remember.checked = false;
+  password.focus();
+  const messagesBefore = harness.messages.length;
+  const mountsBefore = harness.modernRootMountCount();
+  await harness.document.getElementById("drcom-language-toggle").emit("click", { isTrusted: true });
+  await harness.flush();
+
+  assert.equal(harness.document.getElementById("drcom-modern-root"), root);
+  assert.equal(harness.modernRootMountCount(), mountsBefore);
+  assert.equal(harness.document.getElementById("drcom-username"), username);
+  assert.equal(harness.document.getElementById("drcom-password"), password);
+  assert.equal(username.value, "student-18");
+  assert.equal(suffix.value, "@telecom");
+  assert.equal(password.value, "secret");
+  assert.equal(remember.checked, false);
+  assert.equal(harness.document.activeElement, password);
+  assert.equal(harness.document.documentElement.lang, "en");
+  assert.equal(harness.document.getElementById("drcom-restore-original").textContent, "Use original sign-in page");
+  assert.deepEqual(harness.messages.slice(messagesBefore).map((message) => message.action), ["language:set"]);
+  assert.equal(harness.document.getElementById("drcom-login-form").listeners.has("submit"), true);
+});
+
+test("在线门户语言切换复用状态并保留未知网关消息", async () => {
+  const harness = createHarness({ online: true, responses: {
+    "portal:status:get": { state: "online", message: "未知错误 <734>", checkedAt: 1788339720000, session: { account: "20***18" } }
+  } });
+  await loadModernizer(harness);
+  await harness.flush();
+  const root = harness.document.getElementById("drcom-modern-root");
+  const status = harness.document.getElementById("drcom-form-status");
+  const refreshes = harness.messages.filter((message) => message.action === "portal:status:get").length;
+  const mounts = harness.modernRootMountCount();
+  await harness.document.getElementById("drcom-language-toggle").emit("click", { isTrusted: true });
+  await harness.flush();
+
+  assert.equal(harness.document.getElementById("drcom-modern-root"), root);
+  assert.equal(harness.modernRootMountCount(), mounts);
+  assert.equal(harness.messages.filter((message) => message.action === "portal:status:get").length, refreshes);
+  assert.equal(harness.document.getElementById("drcom-state-title").textContent, "Connected to the campus network");
+  assert.equal(harness.document.getElementById("drcom-form-status"), status);
+  assert.equal(status.textContent, "未知错误 &lt;734&gt;");
+  assert.equal(harness.messages.some((message) => ["account:save:interactive", "drcom:login", "drcom:logout", "account:capture:stage"].includes(message.action)), false);
+});
+
+test("已知在线状态提示随语言更新而未知消息保持原文", async () => {
+  const harness = createHarness({ online: true });
+  await loadModernizer(harness);
+  await harness.flush();
+  const status = harness.document.getElementById("drcom-form-status");
+  assert.equal(status.textContent, "当前校园网会话在线。");
+  await harness.document.getElementById("drcom-language-toggle").emit("click", { isTrusted: true });
+  assert.equal(status.textContent, "Current campus network session is online.");
+});
+
+test("在线门户语言切换只更新时长展示节点不替换会话区", async () => {
+  const harness = createHarness({ online: true });
+  await loadModernizer(harness);
+  await harness.flush();
+  const root = harness.document.getElementById("drcom-modern-root");
+  const details = harness.document.getElementById("drcom-session-details");
+  await harness.document.getElementById("drcom-language-toggle").emit("click", { isTrusted: true });
+  assert.equal(harness.document.getElementById("drcom-modern-root"), root);
+  assert.equal(harness.document.getElementById("drcom-session-details"), details);
+  assert.equal(harness.document.getElementById("drcom-used-time").textContent, "125 minutes");
+  assert.equal(harness.document.getElementById("drcom-used-minutes-detail").textContent, "125 minutes");
+});
+
+test("门户切换只更新已知默认标题而不替换登录表单", async () => {
+  const harness = createHarness();
+  await loadModernizer(harness);
+  const form = harness.document.getElementById("drcom-login-form");
+  await harness.document.getElementById("drcom-language-toggle").emit("click", { isTrusted: true });
+  assert.equal(harness.document.getElementById("drcom-login-form"), form);
+  assert.equal(harness.document.getElementById("drcom-login-title").textContent, "XZHMU Campus Network");
+  assert.equal(harness.document.getElementById("drcom-brand-title").textContent, "XZHMU Campus Network");
+});
+
+test("门户自身校验提示随语言切换而更新但不提交账号", async () => {
+  const harness = createHarness();
+  await loadModernizer(harness);
+  await harness.document.getElementById("drcom-login-form").emit("submit", { isTrusted: true, preventDefault() {} });
+  const status = harness.document.getElementById("drcom-form-status");
+  assert.equal(status.textContent, "请输入学号或 DrCOM 账号");
+  await harness.document.getElementById("drcom-language-toggle").emit("click", { isTrusted: true });
+  assert.equal(status.textContent, "Enter your student ID or DrCOM account");
+  assert.equal(harness.messages.some((message) => ["account:save:interactive", "drcom:login"].includes(message.action)), false);
+});
+
+test("英文门户注销确认使用英文且取消不发送下线", async () => {
+  const harness = createHarness({ online: true, languagePreference: "en", confirmResult: false });
+  await loadModernizer(harness);
+  await harness.flush();
+  await harness.document.getElementById("drcom-logout").emit("click", { isTrusted: true });
+  assert.equal(harness.confirmations[0].title, "Sign out of the current campus connection?");
+  assert.equal(harness.confirmations[0].confirmLabel, "Sign out and unbind MAC");
+  assert.equal(harness.messages.some((message) => message.action === "drcom:logout"), false);
+});
+
+test("Chrome 与 Firefox 在门户代码前加载共享语言资源", () => {
+  for (const file of ["manifest.json", "manifest.firefox.json"]) {
+    const manifest = JSON.parse(readFileSync(join(__dirname, "..", "CRX", file), "utf8"));
+    const scripts = manifest.content_scripts[0].js;
+    assert.ok(scripts.indexOf("i18n-messages.js") >= 0, `${file} 缺少共享词典`);
+    assert.ok(scripts.indexOf("i18n.js") > scripts.indexOf("i18n-messages.js"), `${file} 语言 API 加载顺序错误`);
+    assert.ok(scripts.indexOf("i18n.js") < scripts.indexOf("account-utils.js"), `${file} 语言 API 必须先于门户代码`);
+  }
 });

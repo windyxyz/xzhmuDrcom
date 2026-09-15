@@ -52,6 +52,8 @@
         "portal.css"
       ],
       "js": [
+        "i18n-messages.js",
+        "i18n.js",
         "account-utils.js",
         "portal-session.js",
         "appearance.js",

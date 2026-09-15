@@ -90,6 +90,19 @@ body {
   color: var(--text-primary);
 }
 .intro p { margin: 10px 0 0; color: var(--text-secondary); font-size: 14px; line-height: 1.6; max-width: 46ch; }
+.welcome-language-toggle {
+  float: right;
+  min-height: 44px;
+  min-width: 64px;
+  margin: 0 0 8px 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--stroke-default);
+  border-radius: var(--control-radius);
+  background: var(--ctrl-fill-default);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
 
 .setup-steps {
   list-style: none;
@@ -125,7 +138,7 @@ body {
   font-size: 13px;
   font-weight: 600;
 }
-.setup-steps strong { font-size: 14px; font-weight: 600; line-height: 20px; white-space: nowrap; }
+.setup-steps strong { font-size: 14px; font-weight: 600; line-height: 20px; }
 .setup-steps li > span:not(.step-number) { color: var(--text-secondary); font-size: 12px; line-height: 16px; }
 
 /* 认证地址卡片 */
@@ -155,7 +168,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 36px;
+  min-height: 44px;
   padding: 6px 16px 7px;
   font: inherit;
   font-size: 14px;
@@ -206,8 +219,8 @@ body :focus-visible {
   .welcome-brand { border-radius: 0; border-left: 0; border-right: 0; border-top: 0; }
   .welcome-content { padding: 16px; }
   .setup-steps li { padding: 10px 12px; }
-  .welcome-actions { flex-wrap: nowrap; }
-  .welcome-actions button { flex: 1; font-size: 13px; white-space: nowrap; padding: 6px 8px 7px; }
+  .welcome-actions { flex-wrap: wrap; }
+  .welcome-actions button { flex: 1 1 100%; font-size: 13px; padding: 6px 8px 7px; }
 }
 
 @media (max-height: 600px) and (orientation: landscape) {
