@@ -13,6 +13,7 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   max-width: 100%;
   min-height: 100dvh;
   overflow: auto;
+  touch-action: pan-y;
   scroll-padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
   color: var(--text-primary);
   background: var(--solid-bg-base);

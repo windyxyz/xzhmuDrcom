@@ -112,7 +112,7 @@ async function evaluateAtViewport(webSocketUrl, width, height, expression, { coa
     commands.push(
       {
         method: "Emulation.setTouchEmulationEnabled",
-        params: { enabled: true, maxTouchPoints: 5 }
+        params: { enabled: true, maxTouchPoints: 5, configuration: "mobile" }
       },
       {
         method: "Emulation.setEmulatedMedia",
@@ -147,31 +147,107 @@ async function evaluateAtViewport(webSocketUrl, width, height, expression, { coa
   }
 }
 
-async function dispatchUserScroll(webSocketUrl, { x, startY, endY, width, height }) {
-  await runDevToolsCommands(webSocketUrl, [
+async function focusAndTouchScroll(webSocketUrl, { x, startY, endY, width, height }) {
+  const touchPoint = (y) => [{ x, y, id: 1, radiusX: 2, radiusY: 2, force: 1 }];
+  const commands = [
     {
       method: "Emulation.setDeviceMetricsOverride",
       params: { width, height, deviceScaleFactor: 1, mobile: true }
     },
     {
       method: "Emulation.setTouchEmulationEnabled",
-      params: { enabled: true, maxTouchPoints: 5 }
+      params: { enabled: true, maxTouchPoints: 5, configuration: "mobile" }
     },
     {
       method: "Emulation.setEmulatedMedia",
       params: { features: [{ name: "pointer", value: "coarse" }, { name: "hover", value: "none" }] }
     },
     {
-      method: "Input.dispatchMouseEvent",
+      method: "Runtime.evaluate",
       params: {
-        type: "mouseWheel",
-        x,
-        y: startY,
-        deltaX: 0,
-        deltaY: startY - endY
+        expression: `(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          const root = document.querySelector("#drcom-modern-root");
+          const password = document.querySelector("#drcom-password");
+          globalThis.__drcomTouchEvents = [];
+          ["touchstart", "touchmove", "touchend"].forEach((type) => {
+            root.addEventListener(type, () => globalThis.__drcomTouchEvents.push(type), { passive: true });
+          });
+          password.focus();
+          globalThis.__drcomFocusedLayout = {
+            passwordFocused: document.activeElement === password,
+            visualViewportHeight: window.visualViewport?.height || window.innerHeight,
+            rootScrollTop: root.scrollTop
+          };
+        })()`,
+        returnByValue: true,
+        awaitPromise: true
       }
+    },
+    {
+      method: "Input.dispatchTouchEvent",
+      params: { type: "touchStart", touchPoints: touchPoint(startY) }
+    },
+    {
+      method: "Input.dispatchTouchEvent",
+      params: { type: "touchMove", touchPoints: touchPoint(Math.round((startY * 3 + endY) / 4)) }
+    },
+    {
+      method: "Input.dispatchTouchEvent",
+      params: { type: "touchMove", touchPoints: touchPoint(Math.round((startY + endY) / 2)) }
+    },
+    {
+      method: "Input.dispatchTouchEvent",
+      params: { type: "touchMove", touchPoints: touchPoint(Math.round((startY + endY * 3) / 4)) }
+    },
+    {
+      method: "Input.dispatchTouchEvent",
+      params: { type: "touchMove", touchPoints: touchPoint(endY) }
+    },
+    {
+      method: "Input.dispatchTouchEvent",
+      params: { type: "touchEnd", touchPoints: [] }
     }
-  ]);
+  ];
+  commands.push({
+    method: "Runtime.evaluate",
+    params: {
+      expression: `(async () => {
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const root = document.querySelector("#drcom-modern-root");
+        const submit = document.querySelector("#drcom-submit");
+        const rootRect = root.getBoundingClientRect();
+        const submitRect = submit.getBoundingClientRect();
+        return {
+          focusedLayout: globalThis.__drcomFocusedLayout,
+          keyboardLayout: {
+            viewportWidth: window.innerWidth,
+            visualViewportHeight: window.visualViewport?.height || window.innerHeight,
+            scrollWidth: document.documentElement.scrollWidth,
+            coarsePointer: matchMedia("(pointer: coarse)").matches,
+            submitHeight: submitRect.height,
+            submitTop: submitRect.top,
+            submitBottom: submitRect.bottom,
+            rootTop: rootRect.top,
+            rootBottom: rootRect.bottom,
+            rootScrollTop: root.scrollTop,
+            rootScrollHeight: root.scrollHeight,
+            rootClientHeight: root.clientHeight,
+            touchEvents: globalThis.__drcomTouchEvents
+          }
+        };
+      })()`,
+      returnByValue: true,
+      awaitPromise: true
+    }
+  });
+  const result = (await runDevToolsCommands(webSocketUrl, commands)).at(-1);
+  if (!result || result.exceptionDetails || !result.result) {
+    const details = result?.exceptionDetails;
+    const description = details?.exception?.description || details?.exception?.value || details?.text;
+    throw new Error(description || "浏览器返回了空结果");
+  }
+  return result.result.value;
 }
 
 async function inspectFilePage({ browser, path, width, height, expression, coarsePointer = false }) {
@@ -858,6 +934,7 @@ test("门户预览会在真实浏览器中渲染生产登录表单", { timeout: 
     "--headless=new",
     "--allow-file-access-from-files",
     "--disable-gpu",
+    "--touch-events=enabled",
     "--no-first-run",
     "--remote-debugging-port=0",
     `--user-data-dir=${profile}`,
@@ -903,51 +980,23 @@ test("门户预览会在真实浏览器中渲染生产登录表单", { timeout: 
     assert.ok(view.scrollWidth <= view.viewportWidth, `预览不应横向溢出：${JSON.stringify(view)}`);
     assert.equal(view.previewMessage, "这是界面预览，不会发送登录请求。");
 
-    const focusedLayout = await evaluateAtViewport(pageUrl, 390, 360, `(() => {
-      const password = document.querySelector("#drcom-password");
-      password.focus();
-      return {
-        passwordFocused: document.activeElement === password,
-        visualViewportHeight: window.visualViewport?.height || window.innerHeight
-      };
-    })()`, { coarsePointer: true });
-    assert.equal(focusedLayout.passwordFocused, true, `密码框必须获得焦点：${JSON.stringify(focusedLayout)}`);
-    assert.ok(focusedLayout.visualViewportHeight <= 360, `CDP 必须缩小可视视口高度：${JSON.stringify(focusedLayout)}`);
-
-    await dispatchUserScroll(pageUrl, {
-      x: 8,
+    const { focusedLayout, keyboardLayout } = await focusAndTouchScroll(pageUrl, {
+      x: 195,
       startY: 300,
       endY: 80,
       width: 390,
       height: 360
     });
-
-    const keyboardLayout = await evaluateAtViewport(pageUrl, 390, 360, `(async () => {
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      const root = document.querySelector("#drcom-modern-root");
-      const submit = document.querySelector("#drcom-submit");
-      const rootRect = root.getBoundingClientRect();
-      const submitRect = submit.getBoundingClientRect();
-      return {
-        viewportWidth: window.innerWidth,
-        visualViewportHeight: window.visualViewport?.height || window.innerHeight,
-        scrollWidth: document.documentElement.scrollWidth,
-        coarsePointer: matchMedia("(pointer: coarse)").matches,
-        submitHeight: submitRect.height,
-        submitTop: submitRect.top,
-        submitBottom: submitRect.bottom,
-        rootTop: rootRect.top,
-        rootBottom: rootRect.bottom,
-        rootScrollTop: root.scrollTop,
-        rootScrollHeight: root.scrollHeight,
-        rootClientHeight: root.clientHeight
-      };
-    })()`, { coarsePointer: true });
+    assert.equal(focusedLayout.passwordFocused, true, `密码框必须获得焦点：${JSON.stringify(focusedLayout)}`);
+    assert.ok(focusedLayout.visualViewportHeight <= 360, `CDP 必须缩小可视视口高度：${JSON.stringify(focusedLayout)}`);
     assert.ok(keyboardLayout.scrollWidth <= keyboardLayout.viewportWidth, `软键盘高度下门户不应横向溢出：${JSON.stringify(keyboardLayout)}`);
     assert.equal(keyboardLayout.coarsePointer, true, `门户软键盘断言必须使用粗指针环境：${JSON.stringify(keyboardLayout)}`);
     assert.ok(keyboardLayout.visualViewportHeight <= 360, `可视视口必须保持缩小：${JSON.stringify(keyboardLayout)}`);
     assert.ok(keyboardLayout.submitHeight >= 44, `门户提交按钮必须至少 44px：${JSON.stringify(keyboardLayout)}`);
-    assert.ok(keyboardLayout.rootScrollTop > 0, `用户滚动后门户根容器必须实际滚动：${JSON.stringify(keyboardLayout)}`);
+    assert.equal(keyboardLayout.touchEvents[0], "touchstart", `移动拖拽必须以触摸开始：${JSON.stringify(keyboardLayout)}`);
+    assert.equal(keyboardLayout.touchEvents.at(-1), "touchend", `移动拖拽必须以触摸结束：${JSON.stringify(keyboardLayout)}`);
+    assert.ok(keyboardLayout.touchEvents.filter((type) => type === "touchmove").length >= 2, `移动拖拽必须包含触摸移动：${JSON.stringify(keyboardLayout)}`);
+    assert.ok(keyboardLayout.rootScrollTop > focusedLayout.rootScrollTop, `触摸拖拽后门户根容器必须实际滚动：${JSON.stringify({ focusedLayout, keyboardLayout })}`);
     assert.ok(keyboardLayout.submitTop >= keyboardLayout.rootTop && keyboardLayout.submitBottom <= keyboardLayout.rootBottom, `聚焦密码并用户滚动后提交按钮必须进入可视区：${JSON.stringify(keyboardLayout)}`);
     assert.ok(keyboardLayout.rootScrollHeight >= keyboardLayout.rootClientHeight, `门户根容器必须支持纵向滚动：${JSON.stringify(keyboardLayout)}`);
   } finally {

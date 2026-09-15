@@ -66,10 +66,20 @@ test("门户滚动容器为软键盘后的提交操作预留底部空间", () =>
   const css = read("portal.css");
 
   assert.match(css, /#drcom-modern-root\s*\{[^}]*scroll-padding-bottom:\s*max\(24px,\s*env\(safe-area-inset-bottom,\s*0px\)\);/s);
+  assert.match(css, /#drcom-modern-root\s*\{[^}]*touch-action:\s*pan-y;/s);
 });
 
 test("门户密码显示按钮满足 44 像素触控目标", () => {
   const css = read("portal.css");
 
   assert.match(css, /\.drcom-password-toggle\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px;/s);
+});
+
+test("门户软键盘可达性通过 CDP 触摸拖拽而非鼠标滚轮验证", () => {
+  const browserTest = readFileSync(join(__dirname, "welcome-layout.test.js"), "utf8");
+
+  assert.match(browserTest, /async function focusAndTouchScroll\(/);
+  assert.match(browserTest, /method: "Input\.dispatchTouchEvent"[\s\S]*type: "touchStart"/);
+  assert.match(browserTest, /method: "Input\.dispatchTouchEvent"[\s\S]*type: "touchMove"/);
+  assert.doesNotMatch(browserTest, /method: "Input\.dispatchMouseEvent"[\s\S]*type: "mouseWheel"/);
 });
