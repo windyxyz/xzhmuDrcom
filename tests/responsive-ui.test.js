@@ -41,10 +41,29 @@ test("所有扩展界面支持动态视口、安全区和粗指针触摸目标",
   assert.deepEqual(missing, []);
 });
 
-test("扩展操作弹窗保持稳定的 420 像素任务宽度", () => {
+test("扩展操作弹窗限制最大宽度但允许 320px 视口收缩", () => {
   const css = read("popup.css");
 
-  assert.match(css, /html\s*\{[^}]*width:\s*420px;/s);
-  assert.doesNotMatch(css, /html\s*\{[^}]*max-width:\s*100vw;/s);
+  assert.match(css, /html\s*\{[^}]*width:\s*min\(420px,\s*100vw\);/s);
+  assert.match(css, /html\s*\{[^}]*max-width:\s*100%;/s);
   assert.match(css, /body\s*\{[^}]*width:\s*100%;/s);
+});
+
+test("四个界面的根容器均可在窄屏收缩", () => {
+  const contracts = [
+    ["popup.css", /\.shell\s*\{[^}]*max-width:\s*100%;/s],
+    ["welcome.css", /\.welcome-shell\s*\{[^}]*max-width:\s*100%;/s],
+    ["options.css", /\.settings-layout\s*\{[^}]*min-width:\s*0;[^}]*max-width:\s*100%;/s],
+    ["portal.css", /#drcom-modern-root\s*\{[^}]*max-width:\s*100%;/s]
+  ];
+
+  for (const [path, contract] of contracts) {
+    assert.match(read(path), contract, `${path} 应允许其根容器收缩至窄视口`);
+  }
+});
+
+test("门户滚动容器为软键盘后的提交操作预留底部空间", () => {
+  const css = read("portal.css");
+
+  assert.match(css, /#drcom-modern-root\s*\{[^}]*scroll-padding-bottom:\s*max\(24px,\s*env\(safe-area-inset-bottom,\s*0px\)\);/s);
 });
