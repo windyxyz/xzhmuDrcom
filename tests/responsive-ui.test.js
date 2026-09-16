@@ -66,7 +66,7 @@ test("门户滚动容器为软键盘后的提交操作预留底部空间", () =>
   const css = read("portal.css");
 
   assert.match(css, /#drcom-modern-root\s*\{[^}]*scroll-padding-bottom:\s*max\(24px,\s*env\(safe-area-inset-bottom,\s*0px\)\);/s);
-  assert.match(css, /#drcom-modern-root\s*\{[^}]*touch-action:\s*pan-y;/s);
+  assert.match(css, /#drcom-modern-root\s*\{[^}]*touch-action:\s*pan-y\s+pinch-zoom;/s);
 });
 
 test("门户密码显示按钮满足 44 像素触控目标", () => {
