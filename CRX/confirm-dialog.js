@@ -1,19 +1,31 @@
 (function (root, factory) {
-  const api = factory();
+  const api = factory(root);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.DrcomConfirmDialog = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (root) {
   "use strict";
 
   let defaultController = null;
 
-  function createController(elements) {
+  function createController(elements, localization = {}) {
     let pendingResolve = null;
+    let pendingOptions = null;
+    const t = (key) => typeof localization.t === "function"
+      ? localization.t(key)
+      : root.DrcomI18n?.t?.(key) || key;
+
+    function render(options = pendingOptions || {}) {
+      elements.title.textContent = options.title || t("confirm_default_title");
+      elements.message.textContent = options.message || t("confirm_default_message");
+      elements.confirmButton.textContent = options.confirmLabel || t("confirm_default_action");
+      elements.cancelButton.textContent = options.cancelLabel || t("cancel");
+    }
 
     function finish(value) {
       if (!pendingResolve) return;
       const resolve = pendingResolve;
       pendingResolve = null;
+      pendingOptions = null;
       if (elements.dialog.open) elements.dialog.close();
       resolve(value);
     }
@@ -35,9 +47,8 @@
     return {
       ask(options = {}) {
         if (pendingResolve) return Promise.resolve(false);
-        elements.title.textContent = options.title || "确认操作？";
-        elements.message.textContent = options.message || "此操作可能无法撤销。";
-        elements.confirmButton.textContent = options.confirmLabel || "确认";
+        pendingOptions = options;
+        render(options);
 
         const answer = new Promise((resolve) => {
           pendingResolve = resolve;
@@ -45,6 +56,11 @@
         elements.dialog.showModal();
         elements.cancelButton.focus();
         return answer;
+      },
+      setLanguage(preference) {
+        localization.setLanguage?.(preference);
+        if (pendingResolve) render();
+        else elements.cancelButton.textContent = t("cancel");
       }
     };
   }
@@ -67,7 +83,7 @@
     actions.className = "confirm-dialog-actions";
     cancelButton.type = "button";
     cancelButton.className = "confirm-dialog-cancel";
-    cancelButton.textContent = "取消";
+    cancelButton.textContent = root.DrcomI18n?.t?.("cancel") || "取消";
     cancelButton.autofocus = true;
     confirmButton.type = "button";
     confirmButton.className = "confirm-dialog-danger";
@@ -85,6 +101,13 @@
     }
     return defaultController.ask(options);
   }
+
+  root.chrome?.runtime?.onMessage?.addListener?.((message, sender) => {
+    if (sender?.id && sender.id !== root.chrome.runtime.id) return;
+    if (message?.action !== "language:changed") return;
+    root.DrcomI18n?.setLanguage?.(message.preference);
+    defaultController?.setLanguage(message.preference);
+  });
 
   return { ask, buildDialog, createController };
 });

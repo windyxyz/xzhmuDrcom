@@ -7,6 +7,11 @@ const test = require("node:test");
 
 const projectRoot = join(__dirname, "..");
 const read = (path) => readFileSync(join(projectRoot, path), "utf8");
+const section = (source, heading, nextHeading) => {
+  const start = source.indexOf(heading);
+  const end = nextHeading ? source.indexOf(nextHeading, start + heading.length) : source.length;
+  return start < 0 ? "" : source.slice(start, end < 0 ? source.length : end);
+};
 
 test("开发指南覆盖最终架构、生命周期、接口、测试、打包和安全边界", () => {
   const guide = read("docs/development-guide.md");
@@ -57,12 +62,19 @@ test("文档说明双语模式、页面入口和移动浏览器边界", () => {
   const product = read("docs/product-design.md");
   const development = read("docs/development-guide.md");
 
-  assert.match(readme, /跟随浏览器.*中文.*English/s);
-  assert.match(readme, /Chrome 桌面.*Edge 桌面.*Edge Android.*Firefox/s);
-  assert.match(readme, /Chrome Android.*(?:不在支持范围|不支持|不宣称支持)/s);
+  const languageSection = section(readme, "## 界面语言", "## 主要功能");
+  const installSection = section(readme, "## 安装", "## 账号保存规则");
+  const productLanguage = section(product, "### 界面语言", "### 连接可靠性");
+  assert.match(languageSection, /跟随浏览器.*中文.*English/s);
+  assert.match(installSection, /Chrome 桌面.*Edge 桌面.*Edge Android.*Firefox/s);
+  assert.match(installSection, /Chrome Android.*(?:不在支持范围|不支持|不宣称支持)/s);
+  assert.doesNotMatch(installSection, /(?:支持|兼容)[^。\n]{0,24}Chrome Android/);
+  assert.match(installSection, /移动视口.*模拟/);
+  assert.match(installSection, /Edge Android 真机.*未验证/);
+  assert.match(installSection, /商店.*(?:上架|可用|审核)/);
 
   for (const page of ["欢迎页", "弹窗", "设置页", "现代门户"]) {
-    assert.match(product, new RegExp(`${page}.*语言|语言.*${page}`, "s"), page);
+    assert.match(productLanguage, new RegExp(`(?:${page}[^。\n]*语言|语言[^。\n]*${page})`), page);
   }
 
   for (const term of [

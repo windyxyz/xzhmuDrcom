@@ -59,3 +59,11 @@ test("弹窗和设置页未运行脚本时仍显示正式中文品牌名", () =>
   assert.match(options, /<title data-i18n="brand_settings_title">徐医校园网xzhmu 设置<\/title>/);
   assert.match(options, /<h2 id="about-title" data-i18n="brand_name">徐医校园网xzhmu<\/h2>/);
 });
+
+test("设置页关于区域从运行时清单读取版本而不硬编码旧版本", () => {
+  const options = readFileSync(join(CRX, "options.html"), "utf8");
+  const script = readFileSync(join(CRX, "options.js"), "utf8");
+  assert.match(options, /id="about-version"/);
+  assert.doesNotMatch(options, /<strong>1\.1\.0<\/strong>/);
+  assert.match(script, /runtime\?\.getManifest\?\.\(\)\.version/);
+});

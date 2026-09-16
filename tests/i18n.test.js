@@ -61,3 +61,10 @@ test("中文运行时品牌和门户更新提示使用正式产品名顺序", ()
   assert.equal(title.textContent, "徐医校园网xzhmu 设置");
   assert.equal(i18n.t("portal_context_lost", undefined, "zh-CN"), "徐医校园网xzhmu 已更新，请刷新页面以恢复登录界面。");
 });
+
+test("只翻译扩展自有的已知网关状态，未知文本保持原样", () => {
+  assert.equal(i18n.localizeKnownMessage("需要登录", "en"), "Sign-in required");
+  assert.equal(i18n.localizeKnownMessage("登录成功。", "en"), "Signed in successfully.");
+  assert.equal(i18n.localizeKnownMessage("正在检查校园网连接状态。", "en"), "Checking the campus network connection.");
+  assert.equal(i18n.localizeKnownMessage("未知网关错误 <734>", "en"), "未知网关错误 <734>");
+});

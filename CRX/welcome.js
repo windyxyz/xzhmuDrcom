@@ -68,6 +68,7 @@ function bindLanguageControls() {
       applyLanguage(response.preference || preference);
     } catch (error) {
       applyLanguage(preference);
+      showLanguageSaveFailure();
     }
   });
   chrome.runtime.onMessage?.addListener((message, sender) => {
@@ -75,6 +76,13 @@ function bindLanguageControls() {
     if (message?.action !== "language:changed") return;
     applyLanguage(message.preference);
   });
+}
+
+function showLanguageSaveFailure() {
+  const status = document.getElementById("language-save-status");
+  if (!status) return;
+  status.textContent = i18n.t("language_not_saved");
+  status.hidden = false;
 }
 
 async function loadLanguage() {

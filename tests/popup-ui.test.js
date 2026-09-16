@@ -99,9 +99,31 @@ test("弹窗切换英文会更新动态状态但不登录或清空密码", async
   await fixture.click("language-toggle");
 
   assert.equal(fixture.elements.get("status-label").textContent, "Sign-in required");
-  assert.equal(fixture.elements.get("status-message").textContent, "当前需要登录");
+  assert.equal(fixture.elements.get("status-message").textContent, "Sign-in required");
   assert.equal(fixture.elements.get("password").value, "secret");
   assert.equal(fixture.sent.filter((item) => /login$/.test(item.action)).length, 0);
+});
+
+test("弹窗语言保存失败时临时应用选择并隐藏底层存储错误", async () => {
+  const fixture = loadPopup({
+    languagePreference: "zh-CN",
+    chrome: { runtime: { lastError: null, sendMessage(message, callback) {
+      if (message.action === "language:set") {
+        this.lastError = { message: "QUOTA_BYTES quota exceeded" };
+        callback();
+        this.lastError = null;
+        return;
+      }
+      callback({ ok: true, preference: "zh-CN" });
+    } } }
+  });
+  fixture.context.bindLanguageControls();
+
+  await fixture.click("language-toggle");
+
+  assert.equal(fixture.elements.get("language-toggle").textContent, "中文");
+  assert.match(fixture.elements.get("toast").textContent, /not saved/i);
+  assert.doesNotMatch(fixture.elements.get("toast").textContent, /quota/i);
 });
 
 test("弹窗明确区分等待重试、需要处理和需要登录", () => {

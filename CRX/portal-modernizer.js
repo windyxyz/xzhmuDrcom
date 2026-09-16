@@ -355,6 +355,7 @@
         applyLanguage(response.preference || preference);
       } catch (error) {
         applyLanguage(preference);
+        setLocalPortalStatus(root, "language_not_saved", "warning");
       }
     });
     root.querySelector("#drcom-restore-original")?.addEventListener("click", (event) => {

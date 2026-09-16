@@ -4,6 +4,9 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const { createController } = require("../CRX/confirm-dialog.js");
+const { readFileSync } = require("node:fs");
+const { join } = require("node:path");
+const vm = require("node:vm");
 
 class FakeTarget {
   constructor() {
@@ -88,5 +91,57 @@ test("危险确认拒绝合成确认点击", async () => {
   await Promise.resolve();
   assert.equal(settled, false);
   elements.cancelButton.emit("click", { isTrusted: true });
+  assert.equal(await answer, false);
+});
+
+test("危险确认默认值与取消按钮支持双语并能在广播后重译", async () => {
+  let language = "zh-CN";
+  const dictionaries = {
+    "zh-CN": { confirm_default_title: "确认操作？", confirm_default_message: "此操作可能无法撤销。", confirm_default_action: "确认", cancel: "取消" },
+    en: { confirm_default_title: "Confirm action?", confirm_default_message: "This action may not be reversible.", confirm_default_action: "Confirm", cancel: "Cancel" }
+  };
+  const elements = createElements();
+  const controller = createController(elements, {
+    t(key) { return dictionaries[language][key]; },
+    setLanguage(next) { language = next; }
+  });
+  const answer = controller.ask();
+  assert.equal(elements.cancelButton.textContent, "取消");
+  assert.equal(elements.title.textContent, "确认操作？");
+
+  controller.setLanguage("en");
+  assert.equal(elements.cancelButton.textContent, "Cancel");
+  assert.equal(elements.title.textContent, "Confirm action?");
+  assert.equal(elements.message.textContent, "This action may not be reversible.");
+  assert.equal(elements.confirmButton.textContent, "Confirm");
+  elements.cancelButton.emit("click", { isTrusted: true });
+  assert.equal(await answer, false);
+});
+
+test("默认确认框收到语言广播后立即重译当前内容", async () => {
+  const listeners = [];
+  const built = createElements();
+  const created = [built.dialog, {}, built.title, built.message, {}, built.cancelButton, built.confirmButton];
+  let index = 0;
+  let language = "zh-CN";
+  const dictionary = {
+    "zh-CN": { confirm_default_title: "确认操作？", confirm_default_message: "此操作可能无法撤销。", confirm_default_action: "确认", cancel: "取消" },
+    en: { confirm_default_title: "Confirm action?", confirm_default_message: "This action may not be reversible.", confirm_default_action: "Confirm", cancel: "Cancel" }
+  };
+  for (const target of created) {
+    target.append ||= () => {};
+    target.setAttribute ||= () => {};
+  }
+  const context = vm.createContext({
+    chrome: { runtime: { id: "test", onMessage: { addListener(listener) { listeners.push(listener); } } } },
+    document: { body: { append() {} }, createElement() { return created[index++]; } },
+    DrcomI18n: { t(key) { return dictionary[language][key]; }, setLanguage(next) { language = next; } }
+  });
+  new vm.Script(readFileSync(join(__dirname, "..", "CRX", "confirm-dialog.js"), "utf8")).runInContext(context);
+  const answer = context.DrcomConfirmDialog.ask();
+  listeners[0]({ action: "language:changed", preference: "en" }, { id: "test" });
+  assert.equal(built.cancelButton.textContent, "Cancel");
+  assert.equal(built.title.textContent, "Confirm action?");
+  built.cancelButton.emit("click", { isTrusted: true });
   assert.equal(await answer, false);
 });

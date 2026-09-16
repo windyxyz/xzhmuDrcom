@@ -73,7 +73,12 @@ function bindLanguageControls() {
   languageControlsBound = true;
   $("language-toggle")?.addEventListener("click", runAsync(async () => {
     const preference = i18n.getLanguage() === "zh-CN" ? "en" : "zh-CN";
-    await sendMessage({ action: "language:set", preference });
+    applyLanguage(preference);
+    try {
+      await sendMessage({ action: "language:set", preference });
+    } catch (error) {
+      toast(i18n.t("language_not_saved"));
+    }
   }));
   chrome.runtime.onMessage?.addListener((message, sender) => {
     if (sender?.id && sender.id !== chrome.runtime.id) return;
@@ -285,7 +290,9 @@ function renderResult(result) {
   const phase = result.phase || (online ? "online" : "offline");
   $("status-dot").dataset.state = phase;
   $("status-label").textContent = i18n.t(STATUS_KEYS[phase] || "status_unknown");
-  $("status-message").textContent = result.message || i18n.t("status_waiting_action");
+  $("status-message").textContent = result.message
+    ? i18n.localizeKnownMessage(result.message)
+    : i18n.t("status_waiting_action");
   $("request-url").textContent = result.url ? i18n.t("request_url", [result.url]) : "";
 }
 

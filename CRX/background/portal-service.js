@@ -1,5 +1,38 @@
 "use strict";
 
+const CUSTOM_PORTAL_SCRIPT = Object.freeze({
+  css: ["design-tokens.css", "portal.css"],
+  js: [
+    "i18n-messages.js",
+    "i18n.js",
+    "account-utils.js",
+    "portal-session.js",
+    "appearance.js",
+    "animated-characters.js",
+    "portal-ui.js",
+    "portal-capture.js",
+    "confirm-dialog.js",
+    "portal-modernizer.js"
+  ],
+  runAt: "document_start",
+  persistAcrossSessions: true
+});
+
+function sameStringArray(left, right) {
+  return Array.isArray(left) && Array.isArray(right)
+    && left.length === right.length
+    && left.every((value, index) => value === right[index]);
+}
+
+function currentPortalScriptMatches(current, pattern) {
+  return Boolean(current
+    && sameStringArray(current.matches, [pattern])
+    && sameStringArray(current.css, CUSTOM_PORTAL_SCRIPT.css)
+    && sameStringArray(current.js, CUSTOM_PORTAL_SCRIPT.js)
+    && current.runAt === CUSTOM_PORTAL_SCRIPT.runAt
+    && current.persistAcrossSessions === CUSTOM_PORTAL_SCRIPT.persistAcrossSessions);
+}
+
 function portalMatchPattern(value) {
   try {
     const url = new URL(value);
@@ -37,26 +70,14 @@ async function syncPortalContentScript(state) {
   if (!hasAccess) return false;
 
   const current = existing[0];
-  if (current && Array.isArray(current.matches) && current.matches.length === 1 && current.matches[0] === pattern) {
+  if (currentPortalScriptMatches(current, pattern)) {
     return true;
   }
   if (existing.length) await scripting.unregisterContentScripts({ ids: [CUSTOM_PORTAL_SCRIPT_ID] });
   await scripting.registerContentScripts([{
     id: CUSTOM_PORTAL_SCRIPT_ID,
     matches: [pattern],
-    css: ["design-tokens.css", "portal.css"],
-    js: [
-      "account-utils.js",
-      "portal-session.js",
-      "appearance.js",
-      "animated-characters.js",
-      "portal-ui.js",
-      "portal-capture.js",
-      "confirm-dialog.js",
-      "portal-modernizer.js"
-    ],
-    runAt: "document_start",
-    persistAcrossSessions: true
+    ...CUSTOM_PORTAL_SCRIPT
   }]);
   return true;
 }

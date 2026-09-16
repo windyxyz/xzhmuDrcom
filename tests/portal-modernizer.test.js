@@ -871,6 +871,21 @@ test("门户语言切换原位更新文案并保留表单节点、值、焦点�
   assert.equal(harness.document.getElementById("drcom-login-form").listeners.has("submit"), true);
 });
 
+test("门户语言保存失败时临时应用并显示本地化未保存提示", async () => {
+  const harness = createHarness({ responses: {
+    "language:set": { ok: false, error: "QUOTA_BYTES quota exceeded" }
+  } });
+  await loadModernizer(harness);
+
+  await harness.document.getElementById("drcom-language-toggle").emit("click", { isTrusted: true });
+  await harness.flush();
+
+  assert.equal(harness.document.documentElement.lang, "en");
+  const status = harness.document.getElementById("drcom-form-status");
+  assert.match(status.textContent, /not saved/i);
+  assert.doesNotMatch(status.textContent, /quota/i);
+});
+
 test("在线门户语言切换复用状态并保留未知网关消息", async () => {
   const harness = createHarness({ online: true, responses: {
     "portal:status:get": { state: "online", message: "未知错误 <734>", checkedAt: 1788339720000, session: { account: "20***18" } }

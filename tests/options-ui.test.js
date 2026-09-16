@@ -147,6 +147,50 @@ test("设置页可恢复跟随浏览器并保持未保存账号编辑", async ()
   assert.deepEqual(fixture.messages.at(-1), { action: "language:set", preference: "auto" });
 });
 
+test("设置页语言控件的冒泡 input/change 不触发主配置自动保存", () => {
+  const fixture = createOptionsHarness();
+  const select = fixture.elements.get("ui-language");
+  select.closest = (selector) => selector.includes("#ui-language") ? select : null;
+  new vm.Script("settingsFormDirty = false; settingsAutoSaveTimer = 0").runInContext(fixture.context);
+
+  fixture.context.handleSettingsFormMutation({ target: select }, "input");
+  fixture.context.handleSettingsFormMutation({ target: select }, "change");
+
+  assert.equal(new vm.Script("settingsFormDirty").runInContext(fixture.context), false);
+  assert.equal(fixture.messages.some((message) => message.action === "config:save"), false);
+});
+
+test("设置页语言保存失败时临时应用且只显示本地化未保存提示", async () => {
+  const fixture = createOptionsHarness({ preference: "zh-CN", sendMessage(message) {
+    if (message.action === "language:set") throw new Error("QUOTA_BYTES quota exceeded");
+    return { ok: true, preference: "zh-CN" };
+  } });
+  fixture.context.bindLanguageControls();
+
+  await fixture.change("ui-language", "en");
+
+  assert.equal(fixture.elements.get("about-title").textContent, "XZHMU Campus Network");
+  assert.match(fixture.elements.get("toast").textContent, /not saved/i);
+  assert.doesNotMatch(fixture.elements.get("toast").textContent, /quota/i);
+  assert.equal(fixture.messages.some((message) => message.action === "config:save"), false);
+});
+
+test("设置页英文模式翻译已知后台状态并在切换后刷新缓存消息", () => {
+  const fixture = createOptionsHarness({ preference: "zh-CN" });
+  fixture.elements.set("settings-connection-status", { textContent: "", dataset: {} });
+  fixture.elements.set("page-connection-status", { dataset: {} });
+  fixture.elements.set("page-status-label", { textContent: "" });
+  const summaryZh = fixture.context.connectionSummary({ phase: "online", message: "登录成功。" });
+  assert.equal(summaryZh.detail, "登录成功。");
+  fixture.context.renderConnectionOverview({ phase: "online", message: "登录成功。" });
+  fixture.context.applyLanguage("en");
+  assert.match(fixture.elements.get("settings-connection-status").textContent, /Signed in successfully/);
+  const summaryEn = fixture.context.connectionSummary({ phase: "online", message: "登录成功。" });
+  assert.equal(summaryEn.detail, "Signed in successfully.");
+  const unknown = fixture.context.connectionSummary({ phase: "offline", message: "网关错误 <734>" });
+  assert.equal(unknown.detail, "网关错误 <734>");
+});
+
 test("设置页切换英文会重新翻译已有动态区域", async () => {
   const capture = {
     id: "capture-english",

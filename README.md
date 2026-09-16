@@ -17,7 +17,7 @@
 
 GitHub Release 同时提供 Chrome 与 Firefox 的审核上传 ZIP 及 SHA-256。ZIP 主要供商店提交、代码审查和开发侧载；它不是经过商店签名的 `.crx` 或 `.xpi`，普通用户应优先使用上面的商店链接。
 
-当前验证和支持范围为 Chrome 桌面、Edge 桌面、Edge Android 和 Firefox。Chrome Android 不在支持范围，本项目不宣称支持；移动端安装请使用 Edge Android，并优先通过上面的 Microsoft Edge 扩展商店页面安装。
+当前验证和支持范围为 Chrome 桌面、Edge 桌面、Edge Android 和 Firefox。Chrome Android 不在支持范围，本项目不宣称支持。Edge Android 已通过移动视口模拟测试，但 Edge Android 真机尚未验证；移动端请优先尝试 Edge Android，实际安装仍取决于该平台的扩展商店上架与可用情况。
 
 开发者也可以从源码加载 Chrome/Edge 版本：
 

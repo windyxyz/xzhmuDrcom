@@ -36,6 +36,7 @@ document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
   setupSettingsNavigation();
+  syncRuntimeVersion();
   if (!globalThis.chrome?.runtime?.sendMessage) return;
   bindEvents();
   try {
@@ -108,11 +109,7 @@ function bindEvents() {
   ["portal-url", "api-url"].forEach((id) => $(id).addEventListener("input", renderGatewaySecurityWarning));
   $("settings-form").addEventListener("submit", runAsync(saveSettings));
   ["input", "change"].forEach((type) => {
-    $("settings-form").addEventListener(type, (event) => {
-      if (event.target.closest("#appearance-section")) return;
-      settingsFormDirty = true;
-      if (type === "change") scheduleSettingsAutoSave();
-    });
+    $("settings-form").addEventListener(type, (event) => handleSettingsFormMutation(event, type));
   });
   $("portal-diagnostics-enabled").addEventListener("change", (event) => {
     const desired = event.target.checked;
@@ -261,13 +258,31 @@ function bindLanguageControls() {
   if (languageControlsBound) return;
   languageControlsBound = true;
   $("ui-language")?.addEventListener("change", runAsync(async (event) => {
-    await sendMessage({ action: "language:set", preference: event.currentTarget.value });
+    const preference = event.currentTarget.value;
+    applyLanguage(preference);
+    try {
+      await sendMessage({ action: "language:set", preference });
+    } catch (error) {
+      toast(i18n.t("language_not_saved"));
+    }
   }));
   chrome.runtime.onMessage?.addListener((message, sender) => {
     if (sender?.id && sender.id !== chrome.runtime.id) return;
     if (message?.action !== "language:changed") return;
     applyLanguage(message.preference);
   });
+}
+
+function handleSettingsFormMutation(event, type) {
+  if (event.target?.closest?.("#appearance-section, #ui-language")) return;
+  settingsFormDirty = true;
+  if (type === "change") scheduleSettingsAutoSave();
+}
+
+function syncRuntimeVersion() {
+  const element = $("about-version");
+  const version = chrome?.runtime?.getManifest?.().version;
+  if (element && version) element.textContent = version;
 }
 
 async function loadLanguage() {
@@ -830,7 +845,9 @@ function connectionSummary(connection) {
   const presentation = presentations[phase] || presentations.offline;
   return {
     ...presentation,
-    detail: String(connection.message || presentation.detail)
+    detail: connection.message
+      ? i18n.localizeKnownMessage(connection.message)
+      : presentation.detail
   };
 }
 

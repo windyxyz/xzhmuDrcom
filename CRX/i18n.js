@@ -11,6 +11,17 @@
 
   const VALID_PREFERENCES = new Set(["auto", "zh-CN", "en"]);
   const FALLBACK_LANGUAGE = "zh-CN";
+  const KNOWN_MESSAGE_KEYS = Object.freeze({
+    "需要登录": "status_sign_in_required",
+    "当前需要登录": "status_sign_in_required",
+    "登录成功": "backend_login_success",
+    "登录成功。": "backend_login_success",
+    "账号已经在线，无需重复登录。": "backend_already_online",
+    "正在检查校园网连接状态。": "backend_checking_connection",
+    "网关提示账号已经在线，正在复核实际状态。": "backend_verifying_online",
+    "已确认校园网会话离线。": "backend_session_offline",
+    "当前校园网会话在线。": "portal_session_online"
+  });
   const SUPPORTED_ATTRIBUTES = [
     ["i18nTitle", "title"],
     ["i18nAriaLabel", "aria-label"],
@@ -71,6 +82,12 @@
     return message === undefined ? messageKey : format(message, substitutions);
   }
 
+  function localizeKnownMessage(value, language) {
+    const message = String(value || "");
+    const key = KNOWN_MESSAGE_KEYS[message];
+    return key ? t(key, undefined, language) : message;
+  }
+
   function dataValue(node, name) {
     if (node.dataset && Object.hasOwn(node.dataset, name)) return node.dataset[name];
     if (typeof node.getAttribute === "function") return node.getAttribute(`data-${name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`);
@@ -100,5 +117,5 @@
     return currentLanguage;
   }
 
-  return { apply, getLanguage, normalizePreference, resolveLanguage, setLanguage, t };
+  return { apply, getLanguage, localizeKnownMessage, normalizePreference, resolveLanguage, setLanguage, t };
 });

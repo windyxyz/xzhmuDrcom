@@ -33,7 +33,7 @@ function loadBackground(options = {}) {
   const badgeUpdates = [];
   const storageAccessLevels = [];
   const warnings = [];
-  const registeredContentScripts = [];
+  const registeredContentScripts = structuredClone(options.registeredContentScripts || []);
   const removedLocalKeys = [];
   const grantedOrigins = new Set(options.grantedOrigins || []);
   const context = vm.createContext({
@@ -1760,6 +1760,8 @@ test("保存自定义门户后会为已授权来源注册现代认证内容脚�
     matches: ["http://192.168.8.1/*"],
     css: ["design-tokens.css", "portal.css"],
     js: [
+      "i18n-messages.js",
+      "i18n.js",
       "account-utils.js",
       "portal-session.js",
       "appearance.js",
@@ -1772,6 +1774,38 @@ test("保存自定义门户后会为已授权来源注册现代认证内容脚�
     runAt: "document_start",
     persistAcrossSessions: true
   }]);
+});
+
+test("后台启动会修复同源但依赖列表过期的自定义门户脚本注册", async () => {
+  const background = loadBackground({
+    grantedOrigins: ["http://192.168.8.1/*"],
+    localStore: {
+      drcomAssistantState: {
+        schemaVersion: 13,
+        accounts: [],
+        selectedAccountId: "",
+        config: {
+          portalUrl: "http://192.168.8.1/login",
+          apiUrl: "http://192.168.8.1:801/eportal/",
+          ui: { modernizePortal: true }
+        }
+      }
+    },
+    registeredContentScripts: [{
+      id: "drcom-custom-portal",
+      matches: ["http://192.168.8.1/*"],
+      css: ["design-tokens.css", "portal.css"],
+      js: ["portal-ui.js", "portal-modernizer.js"],
+      runAt: "document_start",
+      persistAcrossSessions: true
+    }]
+  });
+
+  await background.syncPortalContentScript(await background.getState());
+
+  assert.equal(background.__registeredContentScripts.length, 1);
+  assert.deepEqual(background.__registeredContentScripts[0].js.slice(0, 2), ["i18n-messages.js", "i18n.js"]);
+  assert.ok(background.__registeredContentScripts[0].js.includes("portal-modernizer.js"));
 });
 
 test("后台启动时把 local 和 session 存储限制为可信扩展上下文", async () => {
