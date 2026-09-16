@@ -52,6 +52,32 @@ test("README 只链接仍在维护的正式文档并说明自动化发布命令"
   assert.doesNotMatch(readme, /1\.1\.0 依据生产抓包恢复/);
 });
 
+test("文档说明双语模式、页面入口和移动浏览器边界", () => {
+  const readme = read("README.md");
+  const product = read("docs/product-design.md");
+  const development = read("docs/development-guide.md");
+
+  assert.match(readme, /跟随浏览器.*中文.*English/s);
+  assert.match(readme, /Chrome 桌面.*Edge 桌面.*Edge Android.*Firefox/s);
+  assert.match(readme, /Chrome Android.*(?:不在支持范围|不支持|不宣称支持)/s);
+
+  for (const page of ["欢迎页", "弹窗", "设置页", "现代门户"]) {
+    assert.match(product, new RegExp(`${page}.*语言|语言.*${page}`, "s"), page);
+  }
+
+  for (const term of [
+    "drcomAssistantLanguage",
+    "language:get",
+    "language:set",
+    "language:changed",
+    "auto",
+    "zh-CN",
+    "en"
+  ]) {
+    assert.equal(development.includes(term), true, term);
+  }
+});
+
 test("完成整改后删除过期审阅副本和无版本视觉截图，保留测试预览入口", () => {
   assert.equal(existsSync(join(projectRoot, "docs", "review-and-recommendations.md")), false);
   assert.equal(existsSync(join(projectRoot, "artifacts", "ui-review", "popup-fixed.png")), false);

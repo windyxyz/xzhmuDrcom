@@ -1,8 +1,8 @@
-# DrCom徐医开发指南
+# 徐医校园网xzhmu 开发指南
 
 ## 1. 项目定位
 
-DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩展。当前稳定版本为 1.1.0，源码位于 CRX/，使用原生 HTML、CSS 和 JavaScript，不依赖第三方 npm 包。
+徐医校园网xzhmu（英文名 XZHMU Campus Network）是面向徐州医科大学 DrCOM 校园网的 Manifest V3 扩展。当前开发版本为 1.1.1，源码位于 CRX/，使用原生 HTML、CSS 和 JavaScript，不依赖第三方 npm 包。验证范围为 Chrome 桌面、Edge 桌面、Edge Android 和 Firefox；不宣称支持 Chrome Android。
 
 项目解决以下问题：
 
@@ -13,6 +13,7 @@ DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩
 - 在学校门户上提供可以随时撤回的现代登录界面；
 - 在可信用户提交窗口内捕获原门户账号候选，并由设置页确认后保存；
 - 在欢迎页、弹窗、设置页和门户之间共享主题与自定义背景；
+- 在欢迎页、弹窗、设置页和现代门户之间共享中文、English 与跟随浏览器的语言偏好；
 - 对请求记录、界面文本和诊断信息进行凭据脱敏；
 - 通过无外部依赖的测试、确定性 ZIP 和 SHA-256 完成可复现发布。
 
@@ -30,6 +31,7 @@ DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩
 | 保活 | Chrome Alarm 周期检查，离线后按策略恢复 | connection-service.js |
 | 防跳转 | 登录后短时间最多拦截一次自动离开门户 | portal-service.js |
 | 现代门户 | 覆盖层不删除原 DOM，可以立即恢复学校原页面 | portal-ui.js、portal-modernizer.js |
+| 界面语言 | 跟随浏览器、中文或 English；切换后跨页面同步且保留表单状态 | i18n-messages.js、i18n.js、language-service.js |
 | 在线详情 | 读取状态、换算时间/流量/余额并只展示脱敏字段 | portal-session.js、drcom-client.js |
 | 原请求捕获确认 | portal-capture.js 只在可信用户动作后的短窗口暂存账号候选；options 页确认后才写入 | portal-capture.js、options-account-capture-controller.js |
 | 外观 | 系统/浅色/深色、完整取色器、材质预设与遮罩强度、自定义背景压缩与填充、品牌面板配色、页面过渡与窗格位置 | appearance.js、design-tokens.css |
@@ -45,6 +47,8 @@ DrCom徐医是面向徐州医科大学 DrCOM 校园网的 Chrome Manifest V3 扩
 CRX/
 ├─ manifest.json
 ├─ account-utils.js
+├─ i18n-messages.js
+├─ i18n.js
 ├─ portal-session.js
 ├─ appearance.js
 ├─ animated-characters.js
@@ -58,6 +62,7 @@ CRX/
 │  ├─ drcom-client.js
 │  ├─ account-service.js
 │  ├─ connection-service.js
+│  ├─ language-service.js
 │  ├─ wallpaper-service.js
 │  ├─ portal-service.js
 │  └─ message-router.js
@@ -619,6 +624,8 @@ options.js
 
 schema 13 会合并历史重复自然键账号；成功写回后删除旧顶层 username/password；删除历史账号 note 以及 ui.subtitle、ui.density、ui.hideOriginalPortal，并把旧主状态中的 recentRequests 迁移到 drcomAssistantRecentRequests。只有独立日志键成功写入后才会删除主状态旧字段；稳态下通过最近写入序列化缓存跳过重复的整状态比较。写回失败时不会提前删除旧凭据源字段或旧日志。
 
+语言偏好使用独立的 `chrome.storage.local.drcomAssistantLanguage` 键，不写入 `drcomAssistantState`，也不触发包含账号或背景图片的主状态重写。唯一有效值为 `auto`、`zh-CN` 和 `en`；缺失或损坏值回退为 `auto`。`auto` 根据浏览器语言即时解析，中文语言使用 `zh-CN`，其他语言使用 `en`。
+
 ### 9.2 storage.session
 
 主键为 drcomAssistantSession。
@@ -653,6 +660,8 @@ Session 状态只在当前扩展/浏览器 Session 内使用；activeIdentity �
 | --- | --- | --- | --- |
 | state:get | 完整账号与配置 | 是 | 否 |
 | connection:get | 当前连接状态 | 是 | 否 |
+| language:get | 读取规范化后的语言偏好 | 是 | 是 |
+| language:set | 写入 `auto`、`zh-CN` 或 `en` | 是 | 是 |
 | portal:config:get | 安全门户配置，不含图片 | 是 | 是 |
 | portal:appearance:get | 完整外观，供私有背景层使用 | 是 | 是 |
 | portal:status:get | 裁剪后的状态、检查时间和脱敏在线摘要 | 否 | 是，仅可信顶层门户 |
@@ -675,21 +684,21 @@ Session 状态只在当前扩展/浏览器 Session 内使用；activeIdentity �
 | diagnostics:status/start/append/end | 默认门户诊断会话 | 否 | 是，仅限顶层 `http://10.10.10.2` |
 | diagnostics:set/get/export/clear | 诊断管理与导出 | 是 | 否 |
 
-message-router.js 先判定发送方，再执行白名单，最后裁剪门户可见返回值。门户不能通过包装未知 action 绕过校验。
+message-router.js 先判定发送方，再执行白名单，最后裁剪门户可见返回值。门户不能通过包装未知 action 绕过校验。语言写入成功后，后台向扩展页面和可信门户广播 `{ action: "language:changed", preference }`；接收方只接受本扩展发送者，并重新翻译自己拥有的节点。
 
 ## 11. 页面与交互
 
 ### 11.1 欢迎页
 
-展示三步安装引导、当前门户地址、主按钮和设置入口。主按钮在当前标签打开门户，次按钮打开设置。
+展示三步安装引导、当前门户地址、主按钮和设置入口。主按钮在当前标签打开门户，次按钮打开设置；页首语言按钮在中文与 English 之间切换，并写入共享偏好。
 
 ### 11.2 弹窗
 
-显示连接阶段、脱敏请求 URL、账号表单、登录/保存/下线、账号选择和删除。忙碌状态结束后不会错误启用空账号选择框。
+显示连接阶段、脱敏请求 URL、账号表单、登录/保存/下线、账号选择和删除。页首语言按钮原位翻译界面，不改变表单节点和值；忙碌状态结束后不会错误启用空账号选择框。
 
 ### 11.3 设置页
 
-分为网络、账号、外观、高级和关于。网络提供连接概览、门户、状态测试、启动登录和保活；账号管理密码和每账号网络参数；外观处理主题、强调色取色器（光谱+明度+hex+预设）、材质预设与遮罩强度、背景（纯色/每日壁纸/自定义图）、填充方式与九宫格焦点、品牌面板配色与图案、页面过渡动画、窗格位置及门户在线信息的 `classic/full/minimal/hidden` 显示模式；高级包含门户/API、协议、抓包 URL、短时保护、请求记录、默认关闭的门户诊断卡和恢复默认。诊断卡展示开关、占用、会话数、JSON 导出与确认后的清空。抓包导入若命中已有自然键，会在覆盖名称、密码和网络参数前确认；原页面自动捕获的候选默认只暂存并确认，不再静默自动保存。全部设置修改后立即自动保存生效，不设全局保存按钮；换网关或启用每日壁纸需要的权限在保存瞬间请求。
+分为网络、账号、外观、高级和关于。网络提供连接概览、门户、状态测试、启动登录和保活；账号管理密码和每账号网络参数；外观处理主题、强调色取色器（光谱+明度+hex+预设）、材质预设与遮罩强度、背景（纯色/每日壁纸/自定义图）、填充方式与九宫格焦点、品牌面板配色与图案、页面过渡动画、窗格位置及门户在线信息的 `classic/full/minimal/hidden` 显示模式；关于提供 `auto` / `zh-CN` / `en` 三档界面语言选择；高级包含门户/API、协议、抓包 URL、短时保护、请求记录、默认关闭的门户诊断卡和恢复默认。诊断卡展示开关、占用、会话数、JSON 导出与确认后的清空。抓包导入若命中已有自然键，会在覆盖名称、密码和网络参数前确认；原页面自动捕获的候选默认只暂存并确认，不再静默自动保存。全部设置修改后立即自动保存生效，不设全局保存按钮；换网关或启用每日壁纸需要的权限在保存瞬间请求。
 
 页首提供“自动同步”“立即同步”和“重新加载页面”。`config.ui.autoRefreshSettings` 默认 `true`，保存在 `drcomAssistantState`，不进入门户可见配置。自动同步通过四类信号工作：
 
@@ -700,7 +709,11 @@ message-router.js 先判定发送方，再执行白名单，最后裁剪门户�
 
 所有触发共用单个在途刷新任务，避免重复请求和定时器叠加。账号表单与配置表单分别跟踪未保存状态：存在编辑时，自动或手动同步只更新连接状态和诊断摘要，不重新填充表单，并在页首提示编辑保护；保存、删除、恢复默认或成功重新填充后清除相应标记。自动同步失败只写入页首状态，避免周期性 Toast；用户点击“立即同步”失败时才显示错误。自动同步不会重载 HTML/CSS/JS；“重新加载页面”在有未保存编辑时必须先通过安全确认，取消不会调用 `location.reload()`。
 
-### 11.4 确认对话框
+### 11.4 现代门户
+
+登录态和在线态的主卡片页首都提供语言入口。切换只更新 closed Shadow DOM 中由扩展拥有的文本与状态展示，不替换账号/密码表单节点，也不清空焦点和当前状态；退出接管、遇到验证码或渲染失败时恢复学校原页既有的 `lang` 与 `dir`。
+
+### 11.5 确认对话框
 
 confirm-dialog.js 动态创建原生 dialog，标题和正文使用 textContent，避免把账号标签当成 HTML。对话框支持 Escape、取消、确认和点击遮罩取消；默认焦点明确落在取消按钮。
 
@@ -721,6 +734,8 @@ confirm-dialog.js 动态创建原生 dialog，标题和正文使用 textContent�
 详见根目录 SECURITY.md。
 
 ## 13. 本地开发与验证
+
+新增或修改界面词条时，在 `CRX/i18n-messages.js` 的 `zh-CN` 与 `en` 词典中同时加入同名键；静态文本使用 `data-i18n`，`aria-label` 等属性使用对应的 `data-i18n-*`，动态文本调用 `DrcomI18n.t()`，不得把译文拼成 HTML。中文词典是缺失词条的安全回退，但回退不替代补齐英文词条；扩展名称与描述还要同步维护 `_locales/zh_CN/messages.json` 和 `_locales/en/messages.json`。提交前运行国际化单元测试和真实浏览器的中英文窄屏布局测试。
 
 加载扩展：打开 chrome://extensions/，开启开发者模式，选择“加载已解压的扩展程序”和 CRX/；修改后刷新扩展并重新打开相关页面。
 
@@ -776,15 +791,15 @@ npm run package:firefox
 
 输出：
 
-- dist/drcom-xuzhou-medical-chrome-1.1.0.zip + .sha256（商店校验不允许 manifest 含 `key`，商店会分配扩展 ID 与 key）
-- dist/drcom-xuzhou-medical-firefox-1.1.0.zip + .sha256（基于 CRX/ 白名单，仅替换 manifest：去 key、`options_ui`、`browser_specific_settings.gecko`）
+- dist/drcom-xuzhou-medical-chrome-1.1.1.zip + .sha256（商店校验不允许 manifest 含 `key`，商店会分配扩展 ID 与 key）
+- dist/drcom-xuzhou-medical-firefox-1.1.1.zip + .sha256（基于 CRX/ 白名单，仅替换 manifest：去 key、`options_ui`、`browser_specific_settings.gecko`）
 
 ZIP 根目录直接包含 manifest.json 和 LICENSE。打包器使用显式白名单、固定顺序、1980-01-01 DOS 时间和 STORE 方法。tests/、docs/、portal-preview.*、截图和本地状态不会进入发布包。dist/ 已加入 .gitignore。
 
 ### 14.2 标签校验
 
 ~~~powershell
-npm run verify:release -- v1.1.0
+npm run verify:release -- v1.1.1
 ~~~
 
 脚本要求标签精确等于 v + Manifest 版本，同时检查 package.json 版本，并从 CHANGELOG.md 提取当前版本到 dist/release-notes.md。

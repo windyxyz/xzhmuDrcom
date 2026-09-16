@@ -1,21 +1,23 @@
 <p align="center">
-  <img src="docs/assets/xuyi-helper-this-version-300-transparent.png" width="160" height="160" alt="xzhmu徐医校园网 Logo">
+  <img src="docs/assets/xuyi-helper-this-version-300-transparent.png" width="160" height="160" alt="徐医校园网xzhmu Logo">
 </p>
 
-<h1 align="center">xzhmu徐医校园网</h1>
+<h1 align="center">徐医校园网xzhmu</h1>
 
 <p align="center">为徐州医科大学 Dr.COM 校园网提供现代登录界面、多账号管理、自动登录、连接恢复与可靠下线。</p>
 
-当前稳定版本为 **1.1.0**。扩展默认服务于 `10.10.10.2`，保留学校原始页面作为随时可切换的兜底入口，不代理学校业务，也不会把账号或诊断数据上传到项目服务器。
+当前开发版本为 **1.1.1**。扩展默认服务于 `10.10.10.2`，保留学校原始页面作为随时可切换的兜底入口，不代理学校业务，也不会把账号或诊断数据上传到项目服务器。
 
 ## 安装
 
 推荐从浏览器官方扩展商店安装，浏览器会负责签名校验和后续更新：
 
-- [Firefox Add-ons：xzhmu徐医校园网](https://addons.mozilla.org/zh-CN/firefox/addon/xzhmu%E5%BE%90%E5%8C%BB%E6%A0%A1%E5%9B%AD%E7%BD%91/)
-- [Microsoft Edge 扩展：xzhmu徐医校园网](https://microsoftedge.microsoft.com/addons/detail/xzhmu%E5%BE%90%E5%8C%BB%E6%A0%A1%E5%9B%AD%E7%BD%91/cdcpalakhfpmnkfpogooipghkflmboei)
+- [Firefox Add-ons：徐医校园网xzhmu](https://addons.mozilla.org/zh-CN/firefox/addon/xzhmu%E5%BE%90%E5%8C%BB%E6%A0%A1%E5%9B%AD%E7%BD%91/)
+- [Microsoft Edge 扩展：徐医校园网xzhmu](https://microsoftedge.microsoft.com/addons/detail/xzhmu%E5%BE%90%E5%8C%BB%E6%A0%A1%E5%9B%AD%E7%BD%91/cdcpalakhfpmnkfpogooipghkflmboei)
 
 GitHub Release 同时提供 Chrome 与 Firefox 的审核上传 ZIP 及 SHA-256。ZIP 主要供商店提交、代码审查和开发侧载；它不是经过商店签名的 `.crx` 或 `.xpi`，普通用户应优先使用上面的商店链接。
+
+当前验证和支持范围为 Chrome 桌面、Edge 桌面、Edge Android 和 Firefox。Chrome Android 不在支持范围，本项目不宣称支持；移动端安装请使用 Edge Android，并优先通过上面的 Microsoft Edge 扩展商店页面安装。
 
 开发者也可以从源码加载 Chrome/Edge 版本：
 
@@ -32,6 +34,12 @@ GitHub Release 同时提供 Chrome 与 Firefox 的审核上传 ZIP 及 SHA-256�
 - **学校原始登录页**：扩展只在真实用户提交后的短窗口内捕获候选，并将其暂存并确认。登录跳转后会打开设置页显示来源、脱敏账号和覆盖提示；只有用户确认才写入持久账号，丢弃、超时或来源变化都不会保存。
 
 网页内容脚本不能直接覆盖已经保存的账号，也不能改变当前选择或触发自动登录。
+
+## 界面语言
+
+扩展提供“跟随浏览器”“中文”和“English”三种语言模式。默认为“跟随浏览器”：浏览器首选语言为中文时显示中文，否则显示英文；手动选择中文或 English 后会固定使用该语言。中文品牌为“徐医校园网xzhmu”，英文品牌为“XZHMU Campus Network”。
+
+欢迎页、弹窗、设置页和现代门户都提供语言入口，切换后会立即同步到其他扩展页面；已经填写的账号、密码和设置值不会因切换语言而被重置。学校原始页面不会被扩展翻译。
 
 ## 主要功能
 
@@ -96,13 +104,13 @@ npm run package:firefox
 
 产物位于 `dist/`：
 
-- `drcom-xuzhou-medical-chrome-1.1.0.zip` 与 SHA-256；
-- `drcom-xuzhou-medical-firefox-1.1.0.zip` 与 SHA-256。
+- `drcom-xuzhou-medical-chrome-1.1.1.zip` 与 SHA-256；
+- `drcom-xuzhou-medical-firefox-1.1.1.zip` 与 SHA-256。
 
 发布标签检查：
 
 ```powershell
-npm run verify:release -- v1.1.0
+npm run verify:release -- v1.1.1
 ```
 
 详细发布流程、白名单规则和 GitHub Actions 行为见开发指南。版本说明由 `CHANGELOG.md` 生成，不在 README 重复维护。

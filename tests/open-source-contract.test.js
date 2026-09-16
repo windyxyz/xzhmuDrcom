@@ -35,6 +35,50 @@ test("项目包含 GPL-3.0 许可证、贡献指南、安全策略和当前版�
   assert.ok(packageMetadata.scripts["check:stable"].includes("CRX/portal-capture.js"));
 });
 
+test("README 使用正式品牌且变更日志保留当前发布身份", () => {
+  const readme = read("README.md");
+  const changelog = read("CHANGELOG.md");
+
+  assert.match(readme, /alt="徐医校园网xzhmu Logo"/);
+  assert.match(readme, /<h1 align="center">徐医校园网xzhmu<\/h1>/);
+  assert.equal((changelog.match(/^## \[1\.1\.0\]/gm) || []).length, 1);
+  assert.match(changelog, /^## \[1\.1\.0\] - 2026-09-08$/m);
+});
+
+test("1.1.1 开发版本在元数据、文档和变更日志中保持一致", () => {
+  const packageMetadata = JSON.parse(read("package.json"));
+  const chromeManifest = JSON.parse(read("CRX/manifest.json"));
+  const firefoxManifest = JSON.parse(read("CRX/manifest.firefox.json"));
+  const readme = read("README.md");
+  const development = read("docs/development-guide.md");
+  const changelog = read("CHANGELOG.md");
+
+  assert.equal(packageMetadata.version, "1.1.1");
+  assert.equal(chromeManifest.version, "1.1.1");
+  assert.equal(firefoxManifest.version, "1.1.1");
+  assert.match(readme, /当前开发版本为 \*\*1\.1\.1\*\*/);
+  assert.match(readme, /drcom-xuzhou-medical-chrome-1\.1\.1\.zip/);
+  assert.match(readme, /drcom-xuzhou-medical-firefox-1\.1\.1\.zip/);
+  assert.match(development, /当前开发版本为 1\.1\.1/);
+
+  const current = changelog.match(/^## \[1\.1\.1\] - Unreleased\s+([\s\S]*?)(?=^## \[1\.1\.0\])/m);
+  assert.ok(current, "CHANGELOG 缺少 1.1.1 Unreleased 段");
+  for (const term of [
+    "双语",
+    "徐医校园网xzhmu",
+    "XZHMU Campus Network",
+    "_locales/zh_CN",
+    "_locales/en",
+    "Chrome 桌面",
+    "Edge Android",
+    "响应式",
+    "触控",
+    "双指缩放"
+  ]) {
+    assert.equal(current[1].includes(term), true, term);
+  }
+});
+
 test("CI 分别执行静态、单元、浏览器和双浏览器打包验证", () => {
   const workflow = read(".github/workflows/ci.yml");
   assert.ok(workflow.includes("push:"));

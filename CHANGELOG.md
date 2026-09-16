@@ -1,6 +1,22 @@
 # 变更日志
 
-本文件记录 DrCom徐医的重要变化，格式参考 Keep a Changelog，版本遵循扩展 Manifest 版本。
+本文件记录徐医校园网xzhmu的重要变化，格式参考 Keep a Changelog，版本遵循扩展 Manifest 版本。
+
+## [1.1.1] - Unreleased
+
+### 新增
+
+- 欢迎页、弹窗、设置页和现代门户加入完整双语界面，支持“跟随浏览器”、固定中文和固定 English；偏好使用独立存储和受限消息接口跨页面同步，切换时保留表单、焦点与在线状态。
+- Chrome 与 Firefox 分发包声明并收录 `_locales/zh_CN`、`_locales/en`、`i18n-messages.js` 和 `i18n.js`，打包门禁同时验证两套 locale 与共享语言运行时。
+
+### 变更
+
+- 中文品牌统一为“徐医校园网xzhmu”，英文品牌统一为“XZHMU Campus Network”，并同步到扩展元数据、界面、无障碍名称和文档。
+- Chrome 桌面与 Edge Android 补齐响应式布局、至少 44px 触控目标、软键盘后的操作可达性和安全区适配；现代门户保留双指缩放。支持范围还包括 Edge 桌面与 Firefox，但不宣称支持 Chrome Android。
+
+### 工程
+
+- 新增双语词典完整性、语言持久化与广播、原位重译、移动触控/拖拽、窄屏溢出和双指缩放回归；真实 Chromium 门禁覆盖中英文 320px、360px 与 390px 视口。
 
 ## [1.1.0] - 2026-09-08
 
