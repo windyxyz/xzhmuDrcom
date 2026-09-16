@@ -48,6 +48,7 @@ function readStoredZipEntry(zipBuffer, wantedName) {
   throw new Error("ZIP 中缺少文件：" + wantedName);
 }
 
+
 function buildAndRead(target) {
   const projectRoot = join(__dirname, "..");
   const outputDirectory = mkdtempSync(join(tmpdir(), "drcom-browser-locales-"));
