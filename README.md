@@ -12,7 +12,7 @@
 
 推荐从浏览器官方扩展商店安装，浏览器会负责签名校验和后续更新：
 
-- [Firefox Add-ons：徐医校园网xzhmu](https://addons.mozilla.org/zh-CN/firefox/addon/xzhmu%E5%BE%90%E5%8C%BB%E6%A0%A1%E5%9B%AD%E7%BD%91/)
+- [Firefox Add-ons：徐医校园网xzhmu](https://addons.mozilla.org/zh-CN/firefox/addon/%E5%BE%90%E5%8C%BB%E6%A0%A1%E5%9B%AD%E7%BD%91xzhmu/)
 - [Microsoft Edge 扩展：徐医校园网xzhmu](https://microsoftedge.microsoft.com/addons/detail/xzhmu%E5%BE%90%E5%8C%BB%E6%A0%A1%E5%9B%AD%E7%BD%91/cdcpalakhfpmnkfpogooipghkflmboei)
 
 GitHub Release 同时提供 Chrome 与 Firefox 的审核上传 ZIP 及 SHA-256。ZIP 主要供商店提交、代码审查和开发侧载；它不是经过商店签名的 `.crx` 或 `.xpi`，普通用户应优先使用上面的商店链接。
