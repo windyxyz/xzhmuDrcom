@@ -2,7 +2,7 @@
 
 本文件记录徐医校园网xzhmu的重要变化，格式参考 Keep a Changelog，版本遵循扩展 Manifest 版本。
 
-## [1.1.1] - Unreleased
+## [1.1.1] - 2026-09-23
 
 ### 新增
 
@@ -17,6 +17,12 @@
 ### 工程
 
 - 新增双语词典完整性、语言持久化与广播、原位重译、移动触控/拖拽、窄屏溢出和双指缩放回归；真实 Chromium 门禁覆盖中英文 320px、360px 与 390px 视口。
+- 发布前修复设置页个性化颜色选择器在手机和窄桌面窗口中的横向挤压：1024px 及以下统一改为单列触控布局，并增加真实 Edge Beta 390px 回归用例。
+
+### 发布资产
+
+- Chrome 审核上传包：`drcom-xuzhou-medical-chrome-1.1.1.zip`；Firefox 审核上传包：`drcom-xuzhou-medical-firefox-1.1.1.zip`。
+- Chrome 安装包：`drcom-xuzhou-medical-chrome-1.1.1.crx`；Firefox 安装包：`drcom-xuzhou-medical-firefox-1.1.1.xpi`。
 
 ## [1.1.0] - 2026-09-08
 
