@@ -1039,6 +1039,13 @@ body.app-themed-page {
   color: var(--text-primary);
   font-size: 12px;
 }
+@media (max-width: 1024px) {
+  /* 左侧导航占据固定宽度时，个性化区也必须避免横向挤压 */
+  .cp-main { flex-direction: column; }
+  .cp-spectrum { width: min(256px, 100%); }
+  .cp-side { width: 100%; min-width: 0; }
+}
+
 @media (max-width: 640px) {
   .settings-autosave-status { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
 }

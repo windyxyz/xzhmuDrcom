@@ -62,6 +62,14 @@ test("四个界面的根容器均可在窄屏收缩", () => {
   }
 });
 
+test("设置页个性化颜色选择器在窄窗口统一使用纵向布局", () => {
+  const css = read("options.css");
+
+  assert.match(css, /@media\s*\(max-width:\s*1024px\)[\s\S]*?\.cp-main\s*\{[^}]*flex-direction:\s*column;/);
+  assert.match(css, /@media\s*\(max-width:\s*1024px\)[\s\S]*?\.cp-spectrum\s*\{[^}]*width:\s*min\(256px,\s*100%\);/);
+  assert.match(css, /@media\s*\(max-width:\s*1024px\)[\s\S]*?\.cp-side\s*\{[^}]*min-width:\s*0;/);
+});
+
 test("门户滚动容器为软键盘后的提交操作预留底部空间", () => {
   const css = read("portal.css");
 

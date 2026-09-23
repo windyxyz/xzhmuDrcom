@@ -847,6 +847,65 @@ test("设置页在窄屏使用底部分类栏并且一次只显示一个设置�
   }
 });
 
+test("设置页个性化颜色选择器在手机端点击后不横向溢出", { timeout: 20_000 }, async (t) => {
+  if (typeof WebSocket !== "function") {
+    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
+    return;
+  }
+
+  const browser = findBrowser();
+  if (!browser) {
+    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
+    return;
+  }
+
+  const profile = mkdtempSync(join(tmpdir(), "drcom-options-appearance-mobile-"));
+  const optionsUrl = pathToFileURL(join(__dirname, "..", "CRX", "options.html")).href;
+  const child = spawn(browser, [
+    "--headless=new",
+    "--allow-file-access-from-files",
+    "--disable-gpu",
+    "--no-first-run",
+    "--remote-debugging-port=0",
+    `--user-data-dir=${profile}`,
+    "--window-size=390,844",
+    optionsUrl
+  ], { stdio: ["ignore", "ignore", "pipe"] });
+
+  try {
+    const debuggerUrl = await waitForDebugger(child);
+    const pageUrl = await waitForPage(new URL(debuggerUrl).port, "options.html");
+    const layout = await evaluateAtViewport(pageUrl, 390, 844, `(async () => {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        if (document.readyState === "complete" && globalThis.DrcomI18n) break;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      document.querySelector('[data-settings-target="appearance-section"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const main = document.querySelector('.cp-main');
+      const spectrum = document.querySelector('.cp-spectrum');
+      const side = document.querySelector('.cp-side');
+      return {
+        viewportWidth: window.innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        panel: Array.from(document.querySelectorAll('[data-settings-panel]:not([hidden])')).map((item) => item.id),
+        direction: getComputedStyle(main).flexDirection,
+        spectrumWidth: spectrum.getBoundingClientRect().width,
+        sideWidth: side.getBoundingClientRect().width,
+        workspaceWidth: document.querySelector('.settings-workspace').getBoundingClientRect().width
+      };
+    })()`);
+
+    assert.deepEqual(layout.panel, ["appearance-section"]);
+    assert.equal(layout.direction, "column", JSON.stringify(layout));
+    assert.ok(layout.spectrumWidth <= layout.workspaceWidth, JSON.stringify(layout));
+    assert.ok(layout.sideWidth <= layout.workspaceWidth, JSON.stringify(layout));
+    assert.ok(layout.scrollWidth <= layout.viewportWidth, JSON.stringify(layout));
+  } finally {
+    await cleanupBrowserProfile(child, profile);
+  }
+});
+
 test("800px 设置页使用左侧纵向 WinUI 导航窗格", { timeout: 20_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
     t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
