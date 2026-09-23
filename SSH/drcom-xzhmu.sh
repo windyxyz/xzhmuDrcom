@@ -83,6 +83,7 @@ url_encode() {
 RUNTIME_DIR=""
 REQUEST_URL_FILE=""
 RESPONSE_FILE=""
+RESPONSE_PIPE=""
 WGET_I_SUPPORTED=""
 
 ensure_runtime_dir() {
@@ -95,11 +96,12 @@ ensure_runtime_dir() {
   chmod 700 "$RUNTIME_DIR" 2>/dev/null || true
   REQUEST_URL_FILE="$RUNTIME_DIR/request.url"
   RESPONSE_FILE="$RUNTIME_DIR/response.body"
+  RESPONSE_PIPE="$RUNTIME_DIR/response.pipe"
 }
 
 cleanup_runtime() {
   [ -n "$RUNTIME_DIR" ] || return
-  rm -f "$REQUEST_URL_FILE" "$REQUEST_URL_FILE.probe" "$RESPONSE_FILE" "$RUNTIME_DIR/session.new"
+  rm -f "$REQUEST_URL_FILE" "$REQUEST_URL_FILE.probe" "$RESPONSE_FILE" "$RESPONSE_PIPE" "$RUNTIME_DIR/session.new"
   rmdir "$RUNTIME_DIR" 2>/dev/null || true
 }
 
@@ -118,26 +120,40 @@ probe_wget_i() {
 http_get() {
   url="$1"
   limit="${2:-$API_RESPONSE_LIMIT}"
+  case "$limit" in ''|*[!0-9]*) return 1 ;; esac
+  limit="$(printf '%s' "$limit" | sed 's/^0*//')"
+  [ -n "$limit" ] || limit="0"
+  [ "$limit" -le 2147483646 ] 2>/dev/null || return 1
   ensure_runtime_dir || return 1
   [ -n "$WGET_I_SUPPORTED" ] || probe_wget_i
+  rm -f "$RESPONSE_PIPE"
+  mkfifo "$RESPONSE_PIPE" || return 1
   if [ "$WGET_I_SUPPORTED" = "1" ]; then
     if ! printf '%s' "$url" > "$REQUEST_URL_FILE"; then
+      rm -f "$RESPONSE_PIPE"
       return 1
     fi
-    wget -q -T "$CONNECT_TIMEOUT" -O "$RESPONSE_FILE" -i "$REQUEST_URL_FILE"
-    wget_status="$?"
-    rm -f "$REQUEST_URL_FILE"
+    wget -q -T "$CONNECT_TIMEOUT" -O - -i "$REQUEST_URL_FILE" > "$RESPONSE_PIPE" &
+    wget_pid="$!"
   else
-    wget -q -T "$CONNECT_TIMEOUT" -O "$RESPONSE_FILE" "$url"
-    wget_status="$?"
+    wget -q -T "$CONNECT_TIMEOUT" -O - "$url" > "$RESPONSE_PIPE" &
+    wget_pid="$!"
   fi
-  [ "$wget_status" = "0" ] || { rm -f "$RESPONSE_FILE"; return "$wget_status"; }
+
+  head -c "$((limit + 1))" "$RESPONSE_PIPE" > "$RESPONSE_FILE"
+  head_status="$?"
+  wget_status="0"
+  wait "$wget_pid" || wget_status="$?"
+  rm -f "$REQUEST_URL_FILE"
+  rm -f "$RESPONSE_PIPE"
+  [ "$head_status" = "0" ] || { rm -f "$RESPONSE_FILE"; return 1; }
   bytes="$(wc -c < "$RESPONSE_FILE" | tr -d ' ')"
   case "$bytes" in ''|*[!0-9]*) rm -f "$RESPONSE_FILE"; return 1 ;; esac
   if [ "$bytes" -gt "$limit" ] 2>/dev/null; then
     rm -f "$RESPONSE_FILE"
     return 2
   fi
+  [ "$wget_status" = "0" ] || { rm -f "$RESPONSE_FILE"; return "$wget_status"; }
   cat "$RESPONSE_FILE"
   rm -f "$RESPONSE_FILE"
 }

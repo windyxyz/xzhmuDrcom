@@ -67,6 +67,7 @@ while [ "$#" -gt 0 ]; do
 done
 [ -n "$input" ] && url="$(cat "$input")"
 printf '%s\\n' "$url" >> "$FAKE_WGET_LOG"
+printf '%s\\n' "$output" >> "$FAKE_WGET_OUTPUT_LOG"
 source=""
 case "$url" in
   http://127.0.0.1:1/*) exit 1 ;;
@@ -95,15 +96,19 @@ printf '%s\\n' "$*" >> "$FAKE_SLEEP_LOG"
     config: join(root, "config"),
     session: join(root, "session"),
     requestLog: join(root, "requests.log"),
+    wgetOutputLog: join(root, "wget-output.log"),
     sleepLog: join(root, "sleep.log")
   };
   const exports = [
     `export PATH=${shellQuote(shellPath(bin))}:"$PATH"`,
     `export DRCOM_CONFIG=${shellQuote(shellPath(paths.config))}`,
     `export DRCOM_SESSION=${shellQuote(shellPath(paths.session))}`,
-    `export TMPDIR=${shellQuote(shellPath(root))}`,
+    // DrvFS-backed Windows temp directories do not support named pipes; the
+    // runtime FIFO must live on the WSL/Linux filesystem used to run the script.
+    `export TMPDIR=/tmp`,
     `export FAKE_RESPONSE_DIR=${shellQuote(shellPath(responses))}`,
     `export FAKE_WGET_LOG=${shellQuote(shellPath(paths.requestLog))}`,
+    `export FAKE_WGET_OUTPUT_LOG=${shellQuote(shellPath(paths.wgetOutputLog))}`,
     `export FAKE_SLEEP_LOG=${shellQuote(shellPath(paths.sleepLog))}`
   ];
 
@@ -191,6 +196,20 @@ test("SSH 拒绝超过 64 KiB 的状态响应", () => {
     const result = harness.run("status");
     assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
     assert.match(result.stdout, /state=unknown/);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("SSH 状态响应通过有界管道读取，不让 wget 先写完整临时文件", () => {
+  const largeStatus = `dr1001({"result":1,"msg":"${"a".repeat(70 * 1024)}"})`;
+  const harness = createHarness({ statusOnline: largeStatus, statusAfter: largeStatus });
+  try {
+    const result = harness.run("status");
+    const outputs = readFileSync(harness.paths.wgetOutputLog, "utf8").trim().split(/\r?\n/);
+    assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+    assert.match(result.stdout, /state=unknown/);
+    assert.equal(outputs[1], "-", "chkstatus 应经 stdout 管道进入大小限制读取器");
   } finally {
     harness.cleanup();
   }
