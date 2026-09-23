@@ -11,7 +11,7 @@
 ## 组件与调用链
 
 - LuCI JavaScript 页面：显示状态、账号/后缀/门户地址配置、手动登录和注销/解绑操作。
-- Ucode RPC 后端：只暴露固定的 `status`、`save_config`、`login`、`logout` 方法；每个方法校验输入并返回结构化结果。
+- Ucode RPC 后端：只暴露固定的 `get_config`、`status`、`save_config`、`login`、`logout` 方法；每个方法校验输入并返回结构化结果。
 - rpcd ACL：只授权上述 RPC 方法，不授权 `file.exec`、任意 shell、通用文件读取或网页直接读写 UCI。
 - 现有 `SSH/drcom-xzhmu.sh`：继续作为认证协议核心。仅增加可选的 UCI 配置读取入口；不启用该入口时，现有 `/etc/drcom-xzhmu.conf` 行为保持兼容。
 - `.ipk`：包含 LuCI 页面、菜单、ACL、Ucode 后端、脚本与初始非敏感设置；依赖 LuCI 与 Ucode RPC 运行时。
