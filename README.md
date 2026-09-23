@@ -6,7 +6,7 @@
 
 <p align="center">为徐州医科大学 Dr.COM 校园网提供现代登录界面、多账号管理、自动登录、连接恢复与可靠下线。</p>
 
-当前开发版本为 **1.1.1**。扩展默认服务于 `10.10.10.2`，保留学校原始页面作为随时可切换的兜底入口，不代理学校业务，也不会把账号或诊断数据上传到项目服务器。
+扩展默认服务于 `10.10.10.2`，保留学校原始页面作为随时可切换的兜底入口，不代理学校业务，也不会把账号或诊断数据上传到项目服务器。
 
 ## 安装
 
@@ -15,9 +15,7 @@
 - [Firefox Add-ons：徐医校园网xzhmu](https://addons.mozilla.org/zh-CN/firefox/addon/%E5%BE%90%E5%8C%BB%E6%A0%A1%E5%9B%AD%E7%BD%91xzhmu/)
 - [Microsoft Edge 扩展：徐医校园网xzhmu](https://microsoftedge.microsoft.com/addons/detail/cdcpalakhfpmnkfpogooipghkflmboei)
 
-GitHub Release 同时提供 Chrome 与 Firefox 的审核上传 ZIP 及 SHA-256。ZIP 主要供商店提交、代码审查和开发侧载；它不是经过商店签名的 `.crx` 或 `.xpi`，普通用户应优先使用上面的商店链接。
-
-当前验证和支持范围为 Chrome 桌面、Edge 桌面、Edge Android 和 Firefox。Chrome Android 不在支持范围，本项目不宣称支持。Edge Android 已通过移动视口模拟测试，但 Edge Android 真机尚未验证；移动端请优先尝试 Edge Android，实际安装仍取决于该平台的扩展商店上架与可用情况。
+当前验证和支持范围为 Chrome 桌面、Edge 桌面、Edge Android 和 Firefox。
 
 开发者也可以从源码加载 Chrome/Edge 版本：
 
@@ -37,24 +35,20 @@ GitHub Release 同时提供 Chrome 与 Firefox 的审核上传 ZIP 及 SHA-256�
 
 ## 界面语言
 
-扩展提供“跟随浏览器”“中文”和“English”三种语言模式。默认为“跟随浏览器”：浏览器首选语言为中文时显示中文，否则显示英文；手动选择中文或 English 后会固定使用该语言。中文品牌为“徐医校园网xzhmu”，英文品牌为“XZHMU Campus Network”。
-
-欢迎页、弹窗、设置页和现代门户都提供语言入口，切换后会立即同步到其他扩展页面；已经填写的账号、密码和设置值不会因切换语言而被重置。学校原始页面不会被扩展翻译。
+扩展提供“跟随浏览器”“中文”和“English”三种语言模式。默认为“跟随浏览器”：浏览器首选语言为中文时显示中文，否则显示英文；手动选择中文或 English 后会固定使用该语言。
 
 ## 主要功能
 
 - 校园网、联通、电信、移动账号管理，支持保存账号与一次性临时登录。
 - 现代认证页与学校原始页面无刷新切换；验证码或页面异常时自动恢复原页面。
 - 所有入口共享单一登录任务，避免弹窗、门户、浏览器启动和保活重复认证。
-- 网络失败有限退避，后台重启后恢复连接状态；状态不明确时保活不会发送密码。
-- 下线优先依据实时 `chkstatus` 身份解绑当前终端，必要时按当前 IP 从 `find_mac` 结果选择本机 MAC，再回退完整注销并复核离线。
 - WinUI 3 风格界面、浅色/深色/跟随系统主题、强调色、材质、遮罩、自定义背景与必应每日壁纸。
 - 在线信息可选经典、完整、简化或隐藏模式；账号、IP、MAC 和请求参数在界面、请求日志和导出中脱敏。
 - 门户诊断模式默认关闭，仅在本机保存脱敏结构，最多 10 个会话、总计 1 MiB。
 
 ## 使用提醒
 
-- 二维码和移动端验证码没有复刻；出现验证码时请继续使用学校原始页面。
+- 二维码和移动端验证码没有复刻。
 - 自助服务、账号激活、找回密码和使用说明均在新窗口打开学校官方页面，扩展不会读取这些外部页面。
 - 自定义网关只有在用户保存时才申请对应来源权限；默认网关无需额外授权。
 - 如果更新扩展后旧门户标签页没有响应，请刷新该标签页，让新内容脚本重新注入。
@@ -63,7 +57,7 @@ GitHub Release 同时提供 Chrome 与 Firefox 的审核上传 ZIP 及 SHA-256�
 
 为了实现保存账号和自动登录，密码会以明文保存在当前浏览器配置文件的扩展 `storage.local` 中；它不是独立密码保险库。默认 Dr.COM 协议使用 HTTP GET 发送凭据，扩展无法把学校既有协议升级为 HTTPS。
 
-门户内嵌密码框仍位于 HTTP 宿主页面，宿主脚本可能观察输入或真实用户事件；closed Shadow DOM 不能完整隔离跨文档键盘观察。当前版本保留登录体验，同时阻断原页面候选直接覆盖持久账号的投毒路径。
+门户内嵌密码框仍位于 HTTP 宿主页面，宿主脚本可能观察输入或真实用户事件；closed Shadow DOM 不能完整隔离跨文档键盘观察。
 
 如果本机、浏览器配置文件或扩展权限环境发生设备失陷，或同一浏览器中存在恶意扩展，已保存凭据仍可能被读取；高风险设备建议不要保存账号。
 
@@ -104,13 +98,13 @@ npm run package:firefox
 
 产物位于 `dist/`：
 
-- `drcom-xuzhou-medical-chrome-1.1.1.zip` 与 SHA-256；
-- `drcom-xuzhou-medical-firefox-1.1.1.zip` 与 SHA-256。
+- `drcom-xuzhou-medical-chrome-1.X.X.zip` 与 SHA-256；
+- `drcom-xuzhou-medical-firefox-1.X.X.zip` 与 SHA-256。
 
 发布标签检查：
 
 ```powershell
-npm run verify:release -- v1.1.1
+npm run verify:release -- v1.X.X
 ```
 
 详细发布流程、白名单规则和 GitHub Actions 行为见开发指南。版本说明由 `CHANGELOG.md` 生成，不在 README 重复维护。
