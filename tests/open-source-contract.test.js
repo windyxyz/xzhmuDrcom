@@ -62,8 +62,9 @@ test("1.1.1 开发版本在元数据、文档和变更日志中保持一致", ()
   assert.match(readme, /drcom-xuzhou-medical-firefox-1\.1\.1\.zip/);
   assert.match(development, /当前开发版本为 1\.1\.1/);
 
-  const current = changelog.match(/^## \[1\.1\.1\] - Unreleased\s+([\s\S]*?)(?=^## \[1\.1\.0\])/m);
-  assert.ok(current, "CHANGELOG 缺少 1.1.1 Unreleased 段");
+  /* 开发期该段标记 Unreleased；发布定稿后替换为 YYYY-MM-DD 日期，两者都合法。 */
+  const current = changelog.match(/^## \[1\.1\.1\] - (?:Unreleased|\d{4}-\d{2}-\d{2})\s+([\s\S]*?)(?=^## \[1\.1\.0\])/m);
+  assert.ok(current, "CHANGELOG 缺少 1.1.1 版本段（Unreleased 或发布日期）");
   for (const term of [
     "双语",
     "徐医校园网xzhmu",
