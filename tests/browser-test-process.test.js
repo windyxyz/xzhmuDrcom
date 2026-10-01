@@ -9,6 +9,8 @@ const test = require("node:test");
 
 const {
   cleanupBrowserProfile,
+  discoverBrowserWebSocket,
+  isTransientDevToolsFileError,
   stopBrowser
 } = require("../scripts/browser-test-process.js");
 
@@ -67,4 +69,38 @@ test("finally 清理即使浏览器退出也会删除临时配置目录", async 
   await cleanupBrowserProfile(child, profile, { gracefulTimeoutMs: 20, forceTimeoutMs: 20 });
 
   assert.equal(existsSync(profile), false);
+});
+
+
+test("清理阶段可从 profile 的 DevToolsActivePort 重新发现真实浏览器", () => {
+  const profile = mkdtempSync(join(tmpdir(), "drcom-browser-discover-"));
+  const child = new ImmediateExitChild();
+  child.exitCode = 0;
+  child.__drcomProfile = profile;
+  writeFileSync(
+    join(profile, "DevToolsActivePort"),
+    "46789\n/devtools/browser/late-browser-id\n",
+    "utf8"
+  );
+
+  try {
+    assert.equal(
+      discoverBrowserWebSocket(child),
+      "ws://127.0.0.1:46789/devtools/browser/late-browser-id"
+    );
+    assert.equal(
+      child.__drcomBrowserWebSocketUrl,
+      "ws://127.0.0.1:46789/devtools/browser/late-browser-id"
+    );
+  } finally {
+    require("node:fs").rmSync(profile, { recursive: true, force: true });
+  }
+});
+
+
+test("清理阶段读取 DevToolsActivePort 时也容忍 Windows 瞬时文件锁", () => {
+  for (const code of ["ENOENT", "EACCES", "EPERM", "EBUSY", "EAGAIN"]) {
+    assert.equal(isTransientDevToolsFileError({ code }), true, code);
+  }
+  assert.equal(isTransientDevToolsFileError({ code: "EIO" }), false);
 });

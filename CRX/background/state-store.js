@@ -16,6 +16,7 @@ const ACCOUNT_CAPTURE_TTL_MS = 5 * 60 * 1000;
 const ACCOUNT_CAPTURE_OPTIONS_COOLDOWN_MS = 30 * 1000;
 const CUSTOM_PORTAL_SCRIPT_ID = "drcom-custom-portal";
 const DEPRECATED_UI_FIELDS = ["hideOriginalPortal", "subtitle", "density"];
+const DEFAULT_PORTAL_ORIGINS = new Set(["http://10.10.10.2", "https://10.10.10.2"]);
 
 const DEFAULT_STATE = {
   schemaVersion: SCHEMA_VERSION,
@@ -73,8 +74,77 @@ const DEFAULT_STATE = {
   }
 };
 
-const loginFlights = new Map();
-let logoutFlight = null;
+/* 统一连接操作协调器：login / logout 共用一条严格 FIFO 的操作队列。
+   - 同类型操作若仍在队列中等待执行（尚未开始），后到的重复请求与其合并（single-flight）。
+   - 同类型操作已在执行时，后到的请求排队再执行一次：用户最后点击的操作拥有最终语义
+     （执行时会重新检查网关状态，已在线/已离线的重复请求不会重复发送凭据）。
+   - 自动登录优先级最低：队列中任何位置存在 logout（等待或执行中）时直接放弃，
+     绝不在注销之后自动重连。
+   - 每个操作分配自增 operationId；recordLoginOutcome / recordLogoutOutcome
+     写状态前校验自己仍是最新操作，避免慢请求收尾时覆盖新状态。 */
+let connectionOperationSeq = 0;
+let latestConnectionOperationId = 0;
+let connectionOperationTail = Promise.resolve();
+const pendingConnectionOperations = new Map();
+
+function beginConnectionOperation(type, task, dedupeKey) {
+  const id = ++connectionOperationSeq;
+  latestConnectionOperationId = id;
+  /* dedupeKey 为 null 表示该操作不参与合并（如临时账号登录）：
+     注册表键退化为一次性键，永远不会被后续请求命中。 */
+  const mapKey = dedupeKey == null ? `once:${id}` : dedupeKey;
+  const operation = { type, id, started: false, promise: null };
+  pendingConnectionOperations.set(mapKey, operation);
+  operation.promise = connectionOperationTail
+    .then(() => {
+      operation.started = true;
+      return task(operation);
+    })
+    .finally(() => {
+      if (pendingConnectionOperations.get(mapKey) === operation) {
+        pendingConnectionOperations.delete(mapKey);
+      }
+    });
+  connectionOperationTail = operation.promise.then(() => undefined, () => undefined);
+  return operation.promise;
+}
+
+function runConnectionOperation(type, task, options = {}) {
+  /* 合并按语义键进行而不是仅按类型：logout 固定为 "logout"；
+     登录由调用方给出 "账号 + 手动/自动" 维度的键，不同账号的排队登录
+     必须串行执行，绝不能把登录 B 误合并到登录 A 上。 */
+  const dedupeKey = options.dedupeKey === undefined ? type : options.dedupeKey;
+  const pending = dedupeKey == null ? null : pendingConnectionOperations.get(dedupeKey);
+  if (pending && !pending.started) {
+    /* 同一语义操作还在队列里排队：合并为同一次执行。 */
+    return pending.promise;
+  }
+
+  if (type === "login" && options.automatic === true
+      && pendingConnectionOperations.has("logout")) {
+    /* 自动登录优先级最低：队列中存在注销（等待或执行中）时直接放弃，
+       绝不在注销之前排队、更不会在注销之后自动重连。 */
+    return Promise.resolve({
+      ok: false,
+      success: false,
+      online: false,
+      skipped: true,
+      message: "注销正在进行，已跳过本次自动登录。"
+    });
+  }
+
+  return beginConnectionOperation(type, task, dedupeKey);
+}
+
+function isLatestConnectionOperation(operationId) {
+  const requested = Number(operationId);
+  if (!Number.isFinite(requested)) return true;
+  return requested === latestConnectionOperationId;
+}
+
+function activeConnectionOperationId() {
+  return latestConnectionOperationId;
+}
 const STATE_UNCHANGED = Symbol("state-unchanged");
 const WEB_PAGE_ACTIONS = new Set([
   "language:get",
@@ -378,9 +448,16 @@ function mutateRequestLog(mutator) {
 }
 
 async function saveConfig(patch) {
+  const previous = await getState();
   const { state } = await mutateState((draft) => {
     draft.config = normalizeState({ ...draft, config: mergePatch(draft.config, patch) }).config;
   });
+  /* 用户把自动连接重新打开视为“明确重新启用自动连接”，清除主动注销抑制。 */
+  const wasKeeping = previous.config.automation.keepAlive === true;
+  const nowKeeping = state.config.automation.keepAlive === true;
+  if (!wasKeeping && nowKeeping && await isManualLogoutActive()) {
+    await setManualLogout(false);
+  }
   await setupAutomation(state);
   await syncPortalContentScript(state);
   return { ok: true, state };
@@ -418,8 +495,24 @@ async function getSessionState() {
     },
     activeIdentity: sanitizeActiveIdentity(value && value.activeIdentity),
     pendingAccountCapture: sanitizePendingAccountCapture(value && value.pendingAccountCapture),
-    captureOptionsOpenedAt: Math.max(0, Number(value && value.captureOptionsOpenedAt) || 0)
+    captureOptionsOpenedAt: Math.max(0, Number(value && value.captureOptionsOpenedAt) || 0),
+    /* 用户主动注销后置位，暂停自动登录/keepalive 自动重连；用户再次主动登录或
+       重新启用自动连接时清除。 */
+    manualLogout: (value && value.manualLogout) === true
   };
+}
+
+async function setManualLogout(enabled) {
+  const normalized = enabled === true;
+  await mutateSession((draft) => {
+    draft.manualLogout = normalized;
+  });
+  return normalized;
+}
+
+async function isManualLogoutActive() {
+  const session = await getSessionState();
+  return session.manualLogout === true;
 }
 
 function sanitizePendingAccountCapture(input) {

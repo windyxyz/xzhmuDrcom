@@ -25,6 +25,10 @@ jobs:
         run: npm run test:unit
       - name: Browser tests
         run: npm run test:browser
+        env:
+          # 强制门禁：runner 上没有可用浏览器或 Node 缺少内置 WebSocket 时直接 fail，
+          # 防止浏览器测试被静默 skip 后 CI 依然绿色。
+          REQUIRE_BROWSER_TESTS: "1"
       - name: Reproducible package tests
         run: npm run verify:package
       - name: Build release assets

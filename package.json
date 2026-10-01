@@ -5,17 +5,19 @@
   "license": "GPL-3.0-only",
   "description": "徐医 DrCOM 校园网连接助手",
   "scripts": {
-    "check:stable": "node --check CRX/account-utils.js && node --check CRX/i18n-messages.js && node --check CRX/i18n.js && node --check CRX/portal-session.js && node --check CRX/appearance.js && node --check CRX/confirm-dialog.js && node --check CRX/animated-characters.js && node --check CRX/background.js && node --check CRX/background/state-store.js && node --check CRX/background/response-reader.js && node --check CRX/background/diagnostics-service.js && node --check CRX/background/portal-context.js && node --check CRX/background/drcom-client.js && node --check CRX/background/account-service.js && node --check CRX/background/connection-service.js && node --check CRX/background/wallpaper-service.js && node --check CRX/background/portal-service.js && node --check CRX/background/language-service.js && node --check CRX/background/message-router.js && node --check CRX/options-appearance-images.js && node --check CRX/options-refresh-controller.js && node --check CRX/options-account-capture-controller.js && node --check CRX/options.js && node --check CRX/popup.js && node --check CRX/portal-ui.js && node --check CRX/portal-capture.js && node --check CRX/portal-modernizer.js && node --check CRX/portal-diagnostics-utils.js && node --check CRX/portal-diagnostics.js && node --check CRX/portal-preview.js && node --check CRX/welcome.js && node --check scripts/browser-test-process.js && node --check scripts/package-extension.js && node --check scripts/run-tests.js && node --check scripts/verify-release.js",
-    "check": "npm run check:stable",
+    "check:stable": "node scripts/static-check.js",
+    "check": "node scripts/static-check.js",
     "test:unit": "node scripts/run-tests.js unit",
+    "test:edge": "node scripts/run-tests.js edge",
     "test:browser": "node scripts/run-tests.js browser",
-    "test": "npm run test:unit && npm run test:browser && npm run verify:package",
+    "test:all": "node scripts/run-tests.js all",
+    "test": "npm run test:all",
     "package": "node scripts/package-extension.js",
     "package:chrome": "node scripts/package-extension.js --chrome",
     "package:firefox": "node scripts/package-extension.js --firefox",
     "verify:package": "node scripts/run-tests.js package",
     "verify:release": "node scripts/verify-release.js",
-    "verify": "npm run check && npm test"
+    "verify": "npm run test:all"
   },
   "engines": {
     "node": ">=22"

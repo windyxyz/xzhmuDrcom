@@ -36,7 +36,7 @@ function loadPage(script, options = {}) {
     setTimeout
   });
   const files = script === "options.js"
-    ? ["i18n-messages.js", "i18n.js", "account-utils.js", "options-appearance-images.js", "options-refresh-controller.js", "options-account-capture-controller.js", script]
+    ? ["i18n-messages.js", "i18n.js", "account-utils.js", "portal-url.js", "options-color-utils.js", "options-gateway-controller.js", "options-diagnostics-controller.js", "options-account-controller.js", "options-appearance-images.js", "options-refresh-controller.js", "options-account-capture-controller.js", script]
     : ["i18n-messages.js", "i18n.js", "account-utils.js", script];
   for (const file of files) {
     new vm.Script(readFileSync(join(__dirname, "..", "CRX", file), "utf8"), { filename: file }).runInContext(context);

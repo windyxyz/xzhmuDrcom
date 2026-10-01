@@ -9,7 +9,9 @@
       "id": "xzhmu-campus-net@xzhmu.local",
       "strict_min_version": "128.0",
       "data_collection_permissions": {
-        "required": ["none"]
+        "required": [
+          "none"
+        ]
       }
     }
   },
@@ -22,12 +24,14 @@
       "i18n-messages.js",
       "i18n.js",
       "account-utils.js",
+      "portal-url.js",
       "portal-session.js",
       "portal-diagnostics-utils.js",
       "background/state-store.js",
       "background/response-reader.js",
       "background/diagnostics-service.js",
       "background/portal-context.js",
+      "background/drcom-protocol.js",
       "background/drcom-client.js",
       "background/account-service.js",
       "background/connection-service.js",

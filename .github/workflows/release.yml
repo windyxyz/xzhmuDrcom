@@ -25,6 +25,9 @@ jobs:
           node-version: 24
       - name: Verify source and package contract
         run: npm run verify
+        env:
+          # 发布门禁同样强制浏览器测试真实执行（npm run verify 包含 test:browser）。
+          REQUIRE_BROWSER_TESTS: "1"
       - name: Build release assets
         run: npm run package && npm run package:firefox
       - name: Verify tag and extract changelog

@@ -4,6 +4,7 @@
   let pendingFallbackCapture = null;
   let lastSavedCaptureKey = "";
   let trustedCaptureUntil = 0;
+  let trustedNetworkCaptureUntil = 0;
 
   function installPortalCapture(options = {}) {
     const ui = options.ui || globalThis.DrcomPortalUI;
@@ -24,7 +25,7 @@
                 wlanUserIpv6: params.get("wlan_user_ipv6"),
                 wlanAcIp: params.get("wlan_ac_ip"),
                 wlanAcName: params.get("wlan_ac_name")
-              });
+              }, url.toString());
             } catch (error) {}
           } else if (node.src.includes("a=login") || node.src.includes("login_method")) {
             try {
@@ -75,6 +76,8 @@
           trustedCaptureUntil = Date.now() + 5000;
           markPortalTabBriefly(sendMessage);
         }
+        const logout = target.closest('input[name="logout" i], button[name="logout" i], button[id*="logout" i], button[class*="logout" i], [data-localize*="logout" i], [data-action*="logout" i]');
+        if (logout) trustedNetworkCaptureUntil = Date.now() + 5000;
       }, true);
     });
   }
@@ -122,11 +125,14 @@
     });
   }
 
-  function captureLogoutNetwork(ui, sendMessage, userAccount, extra = {}) {
+  function captureLogoutNetwork(ui, sendMessage, userAccount, extra = {}, sourceUrl = "") {
+    if (Date.now() > trustedNetworkCaptureUntil) return;
+    trustedNetworkCaptureUntil = 0;
     const parsed = ui.parseAccount(userAccount);
     if (!parsed.username) return;
     sendMessage({
       action: "account:network:update",
+      sourceUrl,
       userAccount: parsed.username + parsed.suffix,
       network: {
         wlanUserIp: extra.wlanUserIp || findNetworkValue("wlan_user_ip"),

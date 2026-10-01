@@ -13,23 +13,34 @@ async function loginSelectedAccount(reason, options = {}) {
 
 async function loginAccount(accountId, transientAccount, options = {}) {
   const automatic = options.automatic === true;
-  // 自动登录在单通道外先检查冷却与暂停：被拦截时直接返回，不并入进行中的登录，
-  // 避免并发的手动登录入口拿到“自动跳过”结果。
+  // 自动登录在单通道外先检查冷却、暂停与主动注销抑制：被拦截时直接返回，不并入
+  // 进行中的登录，避免并发的手动登录入口拿到“自动跳过”结果。
   if (automatic) {
     const precheck = await getConnectionState();
-    if (!canAttemptAutomaticLogin(precheck)) {
+    if (!canAttemptAutomaticLogin(precheck) || await isManualLogoutActive()) {
       return automaticLoginSkipped(precheck);
     }
   }
 
-  const key = "drcom-login";
-  return runLoginSingleFlight(key, async () => {
+  /* 所有登录入口共享统一的连接操作通道：与进行中的 logout 互斥，
+     logout 进行中时自动登录直接放弃、手动登录等待其完成后再执行。
+     合并按语义键进行：同一保存账号的同模式并发登录去重为一次执行；
+     自动与手动是不同意图不互相合并；临时账号每次都是独立任务。
+     语义键必须同步构造（不得 await）：并发入口只有在同一微任务阶段
+     比较键才能命中合并窗口。空 accountId 以 "selected" 占位，表示
+     "跟随当前选中账号"的入口。 */
+  const dedupeKey = transientAccount
+    ? null
+    : `login:saved:${accountId || "selected"}:${automatic ? "auto" : "manual"}`;
+  return runConnectionOperation("login", async (operation) => {
     const runtime = await getConnectionState();
-    if (automatic && !canAttemptAutomaticLogin(runtime)) {
+    if (automatic && (!canAttemptAutomaticLogin(runtime) || await isManualLogoutActive())) {
       return automaticLoginSkipped(runtime);
     }
 
     if (!automatic) {
+      /* 用户主动登录解除主动注销抑制，恢复自动连接资格。 */
+      await setManualLogout(false);
       await chrome.alarms.clear(RETRY_ALARM);
       await setConnectionState({
         attempt: 0,
@@ -44,8 +55,8 @@ async function loginAccount(accountId, transientAccount, options = {}) {
       updatedAt: Date.now()
     });
     const result = await performLoginAccount(accountId, transientAccount, options);
-    return recordLoginOutcome(result);
-  });
+    return recordLoginOutcome(result, { operationId: operation.id });
+  }, { automatic, dedupeKey });
 }
 
 async function performLoginAccount(accountId, transientAccount, options = {}) {
@@ -196,20 +207,10 @@ function automaticLoginSkipped(runtime) {
   };
 }
 
+/* 兼容入口：登录单通道已并入统一连接操作协调器（见 state-store.js）。
+   key 参数仅为保留旧签名，现在全局只有一条登录通道。 */
 function runLoginSingleFlight(key, task) {
-  const normalizedKey = stringValue(key) || "default";
-  const existing = loginFlights.get(normalizedKey);
-  if (existing) return existing;
-
-  const pending = Promise.resolve().then(task);
-  loginFlights.set(normalizedKey, pending);
-  const cleanup = () => {
-    if (loginFlights.get(normalizedKey) === pending) {
-      loginFlights.delete(normalizedKey);
-    }
-  };
-  pending.then(cleanup, cleanup);
-  return pending;
+  return runConnectionOperation("login", () => task());
 }
 
 function calculateRetryDelay(attempt, randomValue = Math.random()) {
@@ -221,21 +222,23 @@ function calculateRetryDelay(attempt, randomValue = Math.random()) {
 
 function classifyLoginFailure(result) {
   const message = stringValue(result && result.message);
-  if (/密码|password|账号不存在|用户不存在|userid error/i.test(message)) {
+  const failureCode = stringValue(result && result.failureCode).trim();
+  if (["bad_credentials", "user_not_found"].includes(failureCode)
+      || /密码(?:错误|不正确|失效)|password\s*(?:fail|error|incorrect|invalid|wrong)|账号不存在|用户不存在|userid error/i.test(message)) {
     return {
       category: "credentials",
       retryable: false,
       action: "请检查账号、运营商后缀和认证密码。"
     };
   }
-  if (/设备数量|MAC 冲突|AC999|绑定/i.test(message)) {
+  if (failureCode === "device_limit" || /设备数量|MAC 冲突|AC999|绑定/i.test(message)) {
     return {
       category: "device",
       retryable: false,
       action: "请先下线其他设备，或重新采集当前设备的网络参数。"
     };
   }
-  if (/流量|余额|欠费|停机|flux out|balance/i.test(message)) {
+  if (failureCode === "account_restricted" || /流量|余额|欠费|停机|flux out|balance/i.test(message)) {
     return {
       category: "account",
       retryable: false,
@@ -256,6 +259,13 @@ function canAttemptAutomaticLogin(runtime, now = Date.now()) {
 }
 
 async function recordLoginOutcome(result, options = {}) {
+  /* operationId 防覆盖保险：操作互斥之外的第二层保护。若调用时已有更新的连接
+     操作启动（或调用方直接传入已过期的 operationId），本次不得写入运行时状态。 */
+  if (!isLatestConnectionOperation(options.operationId)) {
+    const publicResult = { ...(result || {}) };
+    delete publicResult.authenticatedIdentity;
+    return { ...publicResult, stale: true };
+  }
   const now = Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
   const runtime = await getConnectionState();
   const authenticatedIdentity = sanitizeActiveIdentity(result && result.authenticatedIdentity);
@@ -323,18 +333,15 @@ async function recordLoginOutcome(result, options = {}) {
 }
 
 function logout() {
-  if (logoutFlight) return logoutFlight;
-
-  const pending = Promise.resolve().then(performLogout);
-  logoutFlight = pending;
-  const cleanup = () => {
-    if (logoutFlight === pending) logoutFlight = null;
-  };
-  pending.then(cleanup, cleanup);
-  return pending;
+  /* 用户点击注销的那一刻就抑制自动重连：即使注销结果未知或失败，
+     也不得在稍后由 keepalive / retry 把用户重新拉上线。 */
+  void setManualLogout(true);
+  /* 注销与登录共用统一连接操作队列：login 进行中时注销排队等其完成再执行；
+     后到的注销操作会拿到新的 operationId，慢登录收尾时不得覆盖注销结果。 */
+  return runConnectionOperation("logout", (operation) => performLogout(operation.id));
 }
 
-async function performLogout() {
+async function performLogout(operationId) {
   const state = await getState();
   const session = await getSessionState();
   let account = session.activeIdentity;
@@ -362,7 +369,7 @@ async function performLogout() {
     if (unbindResult.success) {
       confirmation = await confirmPortalOffline(state.config);
       if (confirmation.state === "offline") {
-        return recordLogoutOutcome(unbindResult, confirmation);
+        return recordLogoutOutcome(unbindResult, confirmation, operationId);
       }
     }
   }
@@ -370,7 +377,7 @@ async function performLogout() {
   const portalResult = await fetchDrcom(buildPortalLogoutRequest(state.config, network), "logout");
   confirmation = await confirmPortalOffline(state.config);
   if (confirmation.state === "offline") {
-    return recordLogoutOutcome(portalResult, confirmation);
+    return recordLogoutOutcome(portalResult, confirmation, operationId);
   }
 
   const stateMessage = confirmation.state === "online"
@@ -387,7 +394,7 @@ async function performLogout() {
   };
 }
 
-async function recordLogoutOutcome(result, confirmation) {
+async function recordLogoutOutcome(result, confirmation, operationId) {
   if (!confirmation || confirmation.state !== "offline") {
     return {
       ...(result || {}),
@@ -396,8 +403,23 @@ async function recordLogoutOutcome(result, confirmation) {
       message: "注销请求已发送，但尚未确认已经离线。"
     };
   }
+  /* 慢操作收尾保护：已经不是最新连接操作时不得覆盖运行时状态。 */
+  if (!isLatestConnectionOperation(operationId)) {
+    return {
+      ...(result || {}),
+      ok: true,
+      success: true,
+      online: false,
+      phase: "offline",
+      message: "已确认校园网会话离线。",
+      confirmationState: "offline",
+      stale: true
+    };
+  }
   await chrome.alarms.clear(RETRY_ALARM);
   await chrome.alarms.clear(KEEPALIVE_ALARM);
+  /* 用户主动注销成功后抑制自动重连，直到用户再次主动登录或重新启用自动连接。 */
+  await setManualLogout(true);
   const { session } = await mutateSession((draft) => {
     draft.activeIdentity = null;
     draft.connection = {
@@ -506,7 +528,9 @@ async function checkStatus() {
 
   const now = Date.now();
   const runtime = await getConnectionState();
-  const phase = resolveStatusPhase(result.state, runtime, previousRuntime, now);
+  let phase = resolveStatusPhase(result.state, runtime, previousRuntime, now);
+  /* 用户主动注销后，offline 不再显示为“门户待认证”，就是普通的离线。 */
+  if (phase === "captive" && await isManualLogoutActive()) phase = "offline";
   if (result.state === "online") await chrome.alarms.clear(RETRY_ALARM);
   await setConnectionState({
     phase,
@@ -568,7 +592,8 @@ async function keepAliveTick() {
   }
 
   const runtime = await getConnectionState();
-  if (!canAttemptAutomaticLogin(runtime)) return;
+  /* 主动注销抑制期间，keepalive 不做状态检查，更不自动重连。 */
+  if (!canAttemptAutomaticLogin(runtime) || await isManualLogoutActive()) return;
 
   const status = await checkStatus();
   if (status.state === "offline") {

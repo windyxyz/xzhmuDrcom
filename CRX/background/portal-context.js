@@ -15,23 +15,28 @@ const PORTAL_IP_QUERY_KEYS = [
 
 function parsePortalRuntimeContext(html, pageUrl) {
   const source = String(html || "");
-  const candidates = [];
+  const liveCandidates = [];
+  const urlCandidates = [];
 
   try {
     const url = new URL(String(pageUrl || ""));
     for (const key of PORTAL_IP_QUERY_KEYS) {
-      candidates.push({ value: url.searchParams.get(key), source: `url:${key}` });
+      urlCandidates.push({ value: url.searchParams.get(key), source: `url:${key}` });
     }
   } catch (error) {}
 
   for (const name of ["v46ip", "ss5", "v4ip"]) {
-    candidates.push({ value: readStaticPortalString(source, name), source: name });
+    liveCandidates.push({ value: readStaticPortalString(source, name), source: name });
   }
 
   const encodedIp = readStaticPortalString(source, "ss3");
-  candidates.push({ value: decodeHexIpv4(encodedIp), source: "ss3" });
+  liveCandidates.push({ value: decodeHexIpv4(encodedIp), source: "ss3" });
 
-  const selected = candidates.find((candidate) => isValidPortalIpv4(candidate.value));
+  // 刚刚从门户重新获取到的页面变量比浏览器地址栏里的旧重定向参数更接近
+  // 当前网络状态。只有页面本身没有有效 IP 时，才回退到页面 URL 参数。
+  const live = liveCandidates.find((candidate) => isValidPortalIpv4(candidate.value));
+  const fromUrl = urlCandidates.find((candidate) => isValidPortalIpv4(candidate.value));
+  const selected = live || fromUrl;
   const wlanUserIp = selected ? String(selected.value).trim() : "";
   return {
     ok: Boolean(wlanUserIp),
@@ -42,7 +47,8 @@ function parsePortalRuntimeContext(html, pageUrl) {
       wlanAcIp: "",
       wlanAcName: ""
     },
-    ipSource: selected ? selected.source : ""
+    ipSource: selected ? selected.source : "",
+    ipConflict: Boolean(live && fromUrl && String(live.value).trim() !== String(fromUrl.value).trim())
   };
 }
 
@@ -64,7 +70,7 @@ async function resolvePortalRuntimeContext(config, pageUrl) {
       return {
         ...parsed,
         statusCode: response.status,
-        diagnostic: { statusCode: response.status, ipSource: parsed.ipSource }
+        diagnostic: { statusCode: response.status, ipSource: parsed.ipSource, ipConflict: parsed.ipConflict === true }
       };
     }
     return portalContextFallback(config, response.status);
@@ -82,7 +88,7 @@ async function resolvePortalRuntimeContext(config, pageUrl) {
       return {
         ...parsed,
         statusCode: 0,
-        diagnostic: { statusCode: 0, ipSource: parsed.ipSource }
+        diagnostic: { statusCode: 0, ipSource: parsed.ipSource, ipConflict: parsed.ipConflict === true }
       };
     }
     const fallback = portalContextFallback(config, 0);

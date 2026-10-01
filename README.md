@@ -10,12 +10,16 @@
 
 ## 安装
 
-推荐从浏览器官方扩展商店安装，浏览器会负责签名校验和后续更新：
+推荐从浏览器官方扩展商店安装，浏览器会负责签名校验和后续更新；商店上架版本由各商店审核分发：
 
 - [Firefox Add-ons：徐医校园网xzhmu](https://addons.mozilla.org/zh-CN/firefox/addon/%E5%BE%90%E5%8C%BB%E6%A0%A1%E5%9B%AD%E7%BD%91xzhmu/)
 - [Microsoft Edge 扩展：徐医校园网xzhmu](https://microsoftedge.microsoft.com/addons/detail/cdcpalakhfpmnkfpogooipghkflmboei)
 
-当前验证和支持范围为 Chrome 桌面、Edge 桌面、Edge Android 和 Firefox。
+当前验证和支持范围为 Chrome 桌面、Edge 桌面、Edge Android 和 Firefox 桌面。
+
+- Chrome Android 不提供常规扩展支持，因此不在支持范围内，本项目不宣称支持。
+- Edge Android 依赖浏览器的移动视口模拟桌面扩展运行；Edge Android 真机表现尚未验证完全部机型，建议先在桌面端完成账号配置。
+- 当前开发版本为 **1.1.1**。
 
 开发者也可以从源码加载 Chrome/Edge 版本：
 
@@ -84,10 +88,11 @@
 项目运行时不依赖第三方 npm 包；真实浏览器测试要求 Node.js 22 或更高版本。
 
 ```powershell
-npm run verify
+npm test
+# 等价命令：npm run test:all / npm run verify
 ```
 
-该命令依次完成静态检查、单元测试、真实 Chromium 界面测试和确定性打包验证。所有测试都使用合成数据，不访问真实校园网。
+统一命令依次完成静态检查、单元与运行测试（其中已经包含 `test:edge`）、真实 Chromium 界面测试和确定性打包验证，并在最后输出阶段汇总。某一阶段失败后仍会继续执行后续阶段，最终以非零状态退出。所有自动化测试都使用合成数据，不访问真实校园网。
 
 生成商店审核包：
 
@@ -98,8 +103,8 @@ npm run package:firefox
 
 产物位于 `dist/`：
 
-- `drcom-xuzhou-medical-chrome-1.X.X.zip` 与 SHA-256；
-- `drcom-xuzhou-medical-firefox-1.X.X.zip` 与 SHA-256。
+- `drcom-xuzhou-medical-chrome-1.1.1.zip` 与 SHA-256；
+- `drcom-xuzhou-medical-firefox-1.1.1.zip` 与 SHA-256。
 
 发布标签检查：
 

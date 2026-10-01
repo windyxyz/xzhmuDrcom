@@ -84,7 +84,7 @@ test("门户密码显示按钮满足 44 像素触控目标", () => {
 });
 
 test("门户软键盘可达性通过 CDP 触摸拖拽而非鼠标滚轮验证", () => {
-  const browserTest = readFileSync(join(__dirname, "welcome-layout.test.js"), "utf8");
+  const browserTest = readFileSync(join(__dirname, "..", "scripts", "browser-test-launcher.js"), "utf8");
 
   assert.match(browserTest, /async function focusAndTouchScroll\(/);
   assert.match(browserTest, /method: "Input\.dispatchTouchEvent"[\s\S]*type: "touchStart"/);

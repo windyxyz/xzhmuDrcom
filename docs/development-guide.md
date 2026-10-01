@@ -47,6 +47,7 @@
 CRX/
 ├─ manifest.json
 ├─ account-utils.js
+├─ portal-url.js
 ├─ i18n-messages.js
 ├─ i18n.js
 ├─ portal-session.js
@@ -59,6 +60,7 @@ CRX/
 │  ├─ state-store.js
 │  ├─ diagnostics-service.js
 │  ├─ portal-context.js
+│  ├─ drcom-protocol.js
 │  ├─ drcom-client.js
 │  ├─ account-service.js
 │  ├─ connection-service.js
@@ -71,12 +73,16 @@ CRX/
 ├─ welcome.html / welcome.css / welcome.js
 ├─ popup.html / popup.css / popup.js
 ├─ options.html / options.css / options.js
+├─ options-account-controller.js / options-gateway-controller.js
+├─ options-diagnostics-controller.js / options-color-utils.js
+├─ options-appearance-images.js / options-refresh-controller.js / options-account-capture-controller.js
 ├─ portal-ui.js / portal-capture.js / portal-modernizer.js / portal.css
 ├─ portal-diagnostics-utils.js / portal-diagnostics.js
 └─ portal-preview.html / portal-preview.js
 
 scripts/
 ├─ browser-test-process.js
+├─ browser-test-launcher.js
 ├─ package-extension.js
 ├─ run-tests.js
 └─ verify-release.js
@@ -92,13 +98,15 @@ docs/product-design.md         产品与界面设计约束
 - **background.js**：按固定顺序调用 importScripts，只注册安装、启动、Alarm、消息和标签更新事件。
 - **background/state-store.js**：schema 13、默认值、迁移、串行写入、容量预算、Session 状态和独立请求记录键。
 - **background/portal-context.js**：请求门户首页，按白名单静态解析实时 IP；不执行页面脚本，也不把正文或具体地址写入日志。
-- **background/drcom-client.js**：请求构造、超时、响应解析、错误分类与敏感信息清理。
+- **background/drcom-protocol.js**：纯协议层，负责 JSON/JSONP/query 响应解析、协议成功/失败归一化、结构化错误分类与错误文案。
+- **background/drcom-client.js**：请求构造、超时、有限响应读取、状态请求以及敏感信息清理；协议结果统一委托给 `DrcomProtocol`。
 - **background/account-service.js**：账号规范化、自然键去重、保存、选择、删除和网络参数更新。
 - **background/connection-service.js**：登录单通道、连接状态、重试、活动身份、下线、状态检查和保活。
 - **background/wallpaper-service.js**：按需获取必应每日壁纸并本地缓存一天；仅在用户启用并授权后才访问 `cn.bing.com`。
-- **background/portal-service.js**：自定义内容脚本注册、标签页短时保护、外观输出和网页 sender 校验。
+- **background/portal-service.js**：自定义内容脚本注册、标签页短时保护、外观输出和网页 sender 校验；origin 比较和匹配模式统一使用 `portal-url.js`。
 - **background/message-router.js**：可信上下文限制、动作白名单和返回数据裁剪。
 - **background/diagnostics-service.js**：门户诊断的二次脱敏、串行写入、容量预留和会话裁剪。
+- **portal-url.js**：扩展页与后台共用的 HTTP(S) URL 解析、origin 比较和 host-permission 匹配模式生成；需要区分端口的安全判断始终比较 `URL.origin`。
 - **portal-session.js**：共享的在线会话字段白名单、单位换算、时间格式化和标识脱敏。
 - **portal-diagnostics-utils.js**：内容脚本和后台共用的 URL、文本、目标和记录脱敏工具。
 - **portal-diagnostics.js**：只在默认门户隔离世界运行的尽力而为诊断记录器。
@@ -698,6 +706,8 @@ message-router.js 先判定发送方，再执行白名单，最后裁剪门户�
 
 ### 11.3 设置页
 
+`options.js` 只保留页面编排和兼容入口，低耦合职责拆到独立模块：`options-account-controller.js` 管理账号编辑/导入/删除，`options-gateway-controller.js` 管理门户/API 权限与明文网关警告，`options-diagnostics-controller.js` 管理诊断状态/导出/清空，`options-color-utils.js` 提供纯颜色换算。旧的全局函数入口仍由 `options.js` 薄包装，避免 UI 行为和既有测试调用方式发生变化。
+
 分为网络、账号、外观、高级和关于。网络提供连接概览、门户、状态测试、启动登录和保活；账号管理密码和每账号网络参数；外观处理主题、强调色取色器（光谱+明度+hex+预设）、材质预设与遮罩强度、背景（纯色/每日壁纸/自定义图）、填充方式与九宫格焦点、品牌面板配色与图案、页面过渡动画、窗格位置及门户在线信息的 `classic/full/minimal/hidden` 显示模式；关于提供 `auto` / `zh-CN` / `en` 三档界面语言选择；高级包含门户/API、协议、抓包 URL、短时保护、请求记录、默认关闭的门户诊断卡和恢复默认。诊断卡展示开关、占用、会话数、JSON 导出与确认后的清空。抓包导入若命中已有自然键，会在覆盖名称、密码和网络参数前确认；原页面自动捕获的候选默认只暂存并确认，不再静默自动保存。全部设置修改后立即自动保存生效，不设全局保存按钮；换网关或启用每日壁纸需要的权限在保存瞬间请求。
 
 页首提供“自动同步”“立即同步”和“重新加载页面”。`config.ui.autoRefreshSettings` 默认 `true`，保存在 `drcomAssistantState`，不进入门户可见配置。自动同步通过四类信号工作：
@@ -741,17 +751,23 @@ confirm-dialog.js 动态创建原生 dialog，标题和正文使用 textContent�
 
 ~~~powershell
 npm run check
+npm run test:edge
 npm run test:unit
 npm run test:browser
 npm run verify:package
-npm run verify
+npm test                 # 一次执行全部阶段
+npm run test:all         # 与 npm test 等价
+npm run verify           # 同样指向完整验证
 ~~~
 
 - npm run check：运行时和构建脚本语法检查。
-- npm run test:unit：账号、迁移、协议、权限、UI 逻辑、文档与开源合约。
-- npm run test:browser：启动本机 Chrome/Edge，验证欢迎页、设置页、弹窗和门户预览的真实布局。
+- npm run test:edge：快速运行高风险边界测试。
+- npm run test:unit：账号、迁移、协议、权限、UI 逻辑、文档与开源合约；该分组已经包含 edge 测试。
+- npm run test:browser：启动一个本机 Chromium 实例，验证欢迎页、设置页、弹窗和门户预览的真实布局；不会因为存在多个候选浏览器而重复跑测试矩阵。浏览器探测顺序为：显式 `CHROME_BIN` / `EDGE_BIN` → Windows 常规 Chrome/Edge 稳定版（含 Chrome 用户级 LOCALAPPDATA）→ 本机兜底 `C:\Program Files (x86)\Microsoft\Edge Beta\Application\msedge.exe` → `D:\Program Files (x86)\RunningCheeseHelium\App\chrome.exe`。Linux 则使用系统 Chrome/Chromium 候选。便携版或其他自定义浏览器仍推荐通过环境变量显式指定。
+- 浏览器测试强制门禁：设置 `REQUIRE_BROWSER_TESTS=1` 后，环境不满足（没有可用浏览器、Node 缺少内置 WebSocket）的测试会直接失败而不是静默 skip。CI 的 Browser tests 步骤和 Release 的 verify 步骤已开启此变量，防止 runner 环境变化后浏览器测试全部跳过、流水线依然绿色导致发布门禁失去意义。本地开发不设置该变量时维持原有 skip 行为。
 - npm run verify:package：验证 ZIP 白名单、固定时间戳、排除规则和重复构建一致性。
-- npm run verify：汇总静态、单元、浏览器和打包测试。
+- npm test / npm run test:all：依次执行静态检查、unit（已含 edge）、browser 与 package，并输出最终阶段汇总；中间失败不阻止后续阶段运行，最终保持非零退出码。
+- npm run verify：与 `npm run test:all` 等价，用于发布前完整验证。
 
 浏览器清理会在 kill 前注册 exit 监听；正常退出有有限等待，超时后使用 SIGKILL，再删除独立临时 profile，任何路径都不会无限等待。
 
@@ -763,10 +779,20 @@ node --test tests/portal-session.test.js tests/portal-ui.test.js tests/portal-di
 
 OpenWrt/BusyBox 脚本位于 `SSH/drcom-xzhmu.sh`，与扩展共享以下已经由生产抓包确认的约束：登录只带本次门户 IPv4，MAC 固定全零，IPv6 与 AC 字段留空；注销先从 `chkstatus` 的 `uid`、`v46ip` 和 `ss4` 恢复在线身份，无有效 `ss4` 时只用完整在线账号查询一次 `find_mac`，并按当前 IP 匹配 `list[].online_mac`。`unbind_mac` 后先等待 5 秒再复核，仍未离线才使用带 `wlan_vlan_id=1` 的完整注销。
 
-脚本的 `API_RESPONSE_LIMIT` 默认为 64 KiB，`PORTAL_RESPONSE_LIMIT` 默认为 1 MiB。响应先写入权限为 0700 的私有运行目录，超限内容不会进入 shell 变量；会话文件只接受 `SESSION_IP`、`SESSION_MAC` 和 `SESSION_AT` 三个数据字段，不通过 `.` 执行。真实 shell 行为测试使用合成网关响应：
+脚本的 `API_RESPONSE_LIMIT` 默认为 64 KiB，`PORTAL_RESPONSE_LIMIT` 默认为 1 MiB。响应先写入权限为 0700 的私有运行目录，超限内容不会进入 shell 变量。配置文件按 `KEY=VALUE` 字段白名单解析，不会作为 shell 脚本执行。会话文件带 `SESSION_VERSION=1` 版本字段，只接受 `SESSION_VERSION`、`SESSION_IP`、`SESSION_MAC` 和 `SESSION_AT`，不通过 `.` 执行；旧格式、损坏或符号链接的会话一律拒绝，会话永远不作为在线状态的权威来源。
+
+并发与安全约束：`login`、`logout`、`keepalive` 共用 `/tmp/drcom-xzhmu.lock` 原子锁文件（`status` 只读不取锁）。获取锁时先写好含本进程 PID 的私有临时文件，再以 `ln` 硬链接原子创建公共锁文件——锁文件一出现即携带完整 PID，不存在"锁已存在但 PID 未写入"的中间窗口；释放前校验锁内 PID 仍为本进程。SIGTERM/SIGINT/HUP 等可捕获退出由 trap 自动释放锁；SIGKILL、异常断电等留下的 PID 缺失、损坏或已不存在的残留锁只会被识别并安全失败，不会自动删除，避免 TOCTOU 竞态下误删另一个进程的新锁；管理员确认没有 `drcom-xzhmu` 进程运行后再手工删除锁文件。认证 URL 经 `wget -i` 发送，wget 不支持 `-i` 时默认拒绝发送密码，只有显式设置 `ALLOW_INSECURE_WGET=1` 才允许降级；安全闸门位于确认网关离线、即将构造登录请求之后，已在线时无需密码也会正常返回。扩展侧 `login`/`logout` 共用统一连接操作协调器，用户主动注销成功后抑制自动重连，直到用户再次主动登录或重新启用自动连接。
+
+真实 shell 行为测试使用合成网关响应（Windows 需 WSL，缺失时自动跳过）：
 
 ~~~powershell
-node --test tests/ssh-runtime.test.js tests/ssh-security.test.js
+node --test tests/ssh-runtime.test.js tests/ssh-concurrency.test.js tests/ssh-security.test.js
+~~~
+
+CRX 连接并发回归位于 `tests/connection-concurrency.test.js`，覆盖 login/logout 互斥、自动登录抑制与过期操作防覆盖：
+
+~~~powershell
+node --test tests/connection-concurrency.test.js
 ~~~
 
 手工回归至少覆盖安装/更新、四种后缀、保存/临时登录、活动身份下线、结构化协议结果、失败重试、保活、防跳转、门户切换、私有背景、危险操作取消/确认、窄屏/触控/高对比，以及所有输出无真实凭据。

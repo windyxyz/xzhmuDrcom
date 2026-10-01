@@ -71,6 +71,7 @@ function loadConnectionRuntime(options = {}) {
     "background/state-store.js",
     "background/response-reader.js",
     "background/portal-context.js",
+    "background/drcom-protocol.js",
     "background/drcom-client.js",
     "background/account-service.js",
     "background/connection-service.js"

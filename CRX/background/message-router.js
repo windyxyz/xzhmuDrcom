@@ -6,12 +6,29 @@ async function validateDefaultPortalDiagnosticsSender(sender) {
   try {
     const senderUrl = new URL(sender.url || "");
     const tabUrl = new URL(sender.tab && sender.tab.url || "");
-    if (senderUrl.origin !== "http://10.10.10.2" || tabUrl.origin !== "http://10.10.10.2") {
+    if (!DEFAULT_PORTAL_ORIGINS.has(senderUrl.origin) || !DEFAULT_PORTAL_ORIGINS.has(tabUrl.origin)) {
       throw new Error("门户诊断只允许默认校园网认证页");
     }
   } catch (error) {
     if (error && error.message === "门户诊断只允许默认校园网认证页") throw error;
     throw new Error("门户诊断只允许默认校园网认证页");
+  }
+}
+
+async function validatePortalNetworkUpdateSource(sourceUrl) {
+  const state = await getState();
+  let source;
+  let api;
+  try {
+    source = new URL(String(sourceUrl || ""));
+    api = new URL(String(state.config.apiUrl || ""));
+  } catch (error) {
+    throw new Error("网络参数更新缺少有效的 DrCOM 来源");
+  }
+  if (source.origin !== api.origin
+      || source.searchParams.get("a") !== "unbind_mac"
+      || source.searchParams.get("c") !== "Portal") {
+    throw new Error("网络参数更新来源不是当前 DrCOM 注销接口");
   }
 }
 async function restrictStorageAccess() {
@@ -148,6 +165,7 @@ async function handleMessage(message, sender) {
       return selectAccount(message.accountId || "");
 
     case "account:network:update": {
+      if (fromWebPage) await validatePortalNetworkUpdateSource(message.sourceUrl);
       const result = await updateAccountNetwork(message.userAccount || "", message.network || {});
       return fromWebPage ? { ok: result.ok, message: result.message || "" } : result;
     }

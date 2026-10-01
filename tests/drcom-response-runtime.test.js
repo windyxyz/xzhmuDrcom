@@ -26,7 +26,7 @@ function loadDrcomClient() {
     trimRaw: (value) => String(value || "").slice(0, 2000),
     addRequestRecord: async () => undefined
   });
-  for (const path of ["account-utils.js", "background/drcom-client.js"]) {
+  for (const path of ["account-utils.js", "background/drcom-protocol.js", "background/drcom-client.js"]) {
     const source = readFileSync(join(__dirname, "..", "CRX", path), "utf8");
     new vm.Script(source, { filename: path }).runInContext(context);
   }

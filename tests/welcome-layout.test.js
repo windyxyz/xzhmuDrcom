@@ -1,259 +1,31 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { existsSync, mkdtempSync, readFileSync } = require("node:fs");
+const { mkdtempSync, readFileSync } = require("node:fs");
 const { createServer } = require("node:http");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
-const { spawn } = require("node:child_process");
 const test = require("node:test");
 const { pathToFileURL } = require("node:url");
 const { cleanupBrowserProfile } = require("../scripts/browser-test-process.js");
+const { findBrowser, launchBrowser, waitForDebugger, waitForPage, runDevToolsCommands, evaluateAtViewport, focusAndTouchScroll } = require("../scripts/browser-test-launcher.js");
 
-function findBrowser() {
-  const candidates = [
-    process.env.CHROME_BIN,
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
-    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser"
-  ];
+/* 强制浏览器测试门禁：REQUIRE_BROWSER_TESTS=1 时（CI / Release 流程），
+   环境不满足必须让测试失败而不是静默 skip——否则 runner 环境变化后
+   浏览器测试可能全部跳过、流水线依然绿色，发布门禁会失去意义。 */
+const REQUIRE_BROWSER_TESTS = process.env.REQUIRE_BROWSER_TESTS === "1";
 
-  return candidates.find((path) => path && existsSync(path));
-}
-
-function waitForDebugger(child) {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("浏览器调试端口启动超时")), 10_000);
-    let output = "";
-
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk) => {
-      output += chunk;
-      const match = output.match(/DevTools listening on (ws:\/\/[^\s]+)/);
-      if (match) {
-        clearTimeout(timeout);
-        resolve(match[1]);
-      }
-    });
-    child.once("exit", (code) => {
-      clearTimeout(timeout);
-      reject(new Error(`浏览器提前退出，退出码 ${code}`));
-    });
-  });
-}
-
-async function waitForPage(port, pageName = "welcome.html") {
-  const endpoint = `http://127.0.0.1:${port}/json/list`;
-
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const pages = await fetch(endpoint).then((response) => response.json());
-    const page = pages.find((entry) => entry.type === "page" && entry.url.includes(pageName));
-    if (page) return page.webSocketDebuggerUrl;
-    await new Promise((resolve) => setTimeout(resolve, 100));
+function skipUnlessRequired(t, reason) {
+  if (REQUIRE_BROWSER_TESTS) {
+    throw new Error(`REQUIRE_BROWSER_TESTS=1 门禁禁止跳过该测试：${reason}`);
   }
-
-  throw new Error("未找到欢迎页浏览器目标");
-}
-
-function runDevToolsCommands(webSocketUrl, commands) {
-  return new Promise((resolve, reject) => {
-    const socket = new WebSocket(webSocketUrl);
-    const timeout = setTimeout(() => {
-      socket.close();
-      reject(new Error("浏览器调试命令超时"));
-    }, 10_000);
-    const results = [];
-    let index = 0;
-
-    const closeWithError = (error) => {
-      clearTimeout(timeout);
-      socket.close();
-      reject(error);
-    };
-
-    const sendNext = () => {
-      if (index >= commands.length) {
-        clearTimeout(timeout);
-        socket.close();
-        resolve(results);
-        return;
-      }
-      const command = commands[index];
-      index += 1;
-      socket.send(JSON.stringify({ id: index, ...command }));
-    };
-
-    socket.addEventListener("open", () => {
-      sendNext();
-    });
-    socket.addEventListener("message", (event) => {
-      const message = JSON.parse(event.data);
-      if (message.id !== index) return;
-      if (message.error) return closeWithError(new Error(message.error.message));
-      results.push(message.result);
-      sendNext();
-    });
-    socket.addEventListener("error", () => {
-      closeWithError(new Error("无法连接浏览器调试目标"));
-    });
-  });
-}
-
-async function evaluateAtViewport(webSocketUrl, width, height, expression, { coarsePointer = false } = {}) {
-  const commands = [{
-    method: "Emulation.setDeviceMetricsOverride",
-    params: { width, height, deviceScaleFactor: 1, mobile: true }
-  }];
-  if (coarsePointer) {
-    commands.push(
-      {
-        method: "Emulation.setTouchEmulationEnabled",
-        params: { enabled: true, maxTouchPoints: 5, configuration: "mobile" }
-      },
-      {
-        method: "Emulation.setEmulatedMedia",
-        params: { features: [{ name: "pointer", value: "coarse" }, { name: "hover", value: "none" }] }
-      }
-    );
-  }
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      const result = (await runDevToolsCommands(webSocketUrl, [...commands, {
-        method: "Runtime.evaluate",
-        params: {
-          // Keep evaluation in the emulation session; Edge resets these CDP
-          // overrides when the WebSocket disconnects.
-          expression: `(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); return await (${expression}); })()`,
-          returnByValue: true,
-          awaitPromise: true
-        }
-      }])).at(-1);
-      if (!result || result.exceptionDetails || !result.result) {
-        const details = result?.exceptionDetails;
-        const description = details?.exception?.description || details?.exception?.value || details?.text;
-        throw new Error(description || "浏览器返回了空结果");
-      }
-      return result.result.value;
-    } catch (error) {
-      const contextWasDestroyed = /Execution context was destroyed/.test(error.message);
-      if (!contextWasDestroyed || attempt === 2) throw error;
-      // Edge may recreate the document context after a mobile viewport transition.
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  }
-}
-
-async function focusAndTouchScroll(webSocketUrl, { x, startY, endY, width, height }) {
-  const touchPoint = (y) => [{ x, y, id: 1, radiusX: 2, radiusY: 2, force: 1 }];
-  const commands = [
-    {
-      method: "Emulation.setDeviceMetricsOverride",
-      params: { width, height, deviceScaleFactor: 1, mobile: true }
-    },
-    {
-      method: "Emulation.setTouchEmulationEnabled",
-      params: { enabled: true, maxTouchPoints: 5, configuration: "mobile" }
-    },
-    {
-      method: "Emulation.setEmulatedMedia",
-      params: { features: [{ name: "pointer", value: "coarse" }, { name: "hover", value: "none" }] }
-    },
-    {
-      method: "Runtime.evaluate",
-      params: {
-        expression: `(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-          const root = document.querySelector("#drcom-modern-root");
-          const password = document.querySelector("#drcom-password");
-          globalThis.__drcomTouchEvents = [];
-          ["touchstart", "touchmove", "touchend"].forEach((type) => {
-            root.addEventListener(type, () => globalThis.__drcomTouchEvents.push(type), { passive: true });
-          });
-          password.focus();
-          globalThis.__drcomFocusedLayout = {
-            passwordFocused: document.activeElement === password,
-            visualViewportHeight: window.visualViewport?.height || window.innerHeight,
-            rootScrollTop: root.scrollTop
-          };
-        })()`,
-        returnByValue: true,
-        awaitPromise: true
-      }
-    },
-    {
-      method: "Input.dispatchTouchEvent",
-      params: { type: "touchStart", touchPoints: touchPoint(startY) }
-    },
-    {
-      method: "Input.dispatchTouchEvent",
-      params: { type: "touchMove", touchPoints: touchPoint(Math.round((startY * 3 + endY) / 4)) }
-    },
-    {
-      method: "Input.dispatchTouchEvent",
-      params: { type: "touchMove", touchPoints: touchPoint(Math.round((startY + endY) / 2)) }
-    },
-    {
-      method: "Input.dispatchTouchEvent",
-      params: { type: "touchMove", touchPoints: touchPoint(Math.round((startY + endY * 3) / 4)) }
-    },
-    {
-      method: "Input.dispatchTouchEvent",
-      params: { type: "touchMove", touchPoints: touchPoint(endY) }
-    },
-    {
-      method: "Input.dispatchTouchEvent",
-      params: { type: "touchEnd", touchPoints: [] }
-    }
-  ];
-  commands.push({
-    method: "Runtime.evaluate",
-    params: {
-      expression: `(async () => {
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        const root = document.querySelector("#drcom-modern-root");
-        const submit = document.querySelector("#drcom-submit");
-        const rootRect = root.getBoundingClientRect();
-        const submitRect = submit.getBoundingClientRect();
-        return {
-          focusedLayout: globalThis.__drcomFocusedLayout,
-          keyboardLayout: {
-            viewportWidth: window.innerWidth,
-            visualViewportHeight: window.visualViewport?.height || window.innerHeight,
-            scrollWidth: document.documentElement.scrollWidth,
-            coarsePointer: matchMedia("(pointer: coarse)").matches,
-            submitHeight: submitRect.height,
-            submitTop: submitRect.top,
-            submitBottom: submitRect.bottom,
-            rootTop: rootRect.top,
-            rootBottom: rootRect.bottom,
-            rootScrollTop: root.scrollTop,
-            rootScrollHeight: root.scrollHeight,
-            rootClientHeight: root.clientHeight,
-            touchEvents: globalThis.__drcomTouchEvents
-          }
-        };
-      })()`,
-      returnByValue: true,
-      awaitPromise: true
-    }
-  });
-  const result = (await runDevToolsCommands(webSocketUrl, commands)).at(-1);
-  if (!result || result.exceptionDetails || !result.result) {
-    const details = result?.exceptionDetails;
-    const description = details?.exception?.description || details?.exception?.value || details?.text;
-    throw new Error(description || "浏览器返回了空结果");
-  }
-  return result.result.value;
+  t.skip(reason);
 }
 
 async function inspectFilePage({ browser, path, width, height, expression, coarsePointer = false }) {
   const profile = mkdtempSync(join(tmpdir(), "drcom-file-layout-"));
   const pageUrl = pathToFileURL(join(__dirname, "..", "CRX", path)).href;
-  const child = spawn(browser, [
+  const child = launchBrowser(browser, [
     "--headless=new",
     "--allow-file-access-from-files",
     "--disable-gpu",
@@ -421,19 +193,19 @@ test("门户 fixture 在后续设置失败或浏览器清理失败后仍恰好�
 
 test("375px 视口下步骤编号留在第一列且标题保持横排", { timeout: 20_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
-    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
     return;
   }
 
   const browser = findBrowser();
   if (!browser) {
-    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
     return;
   }
 
   const profile = mkdtempSync(join(tmpdir(), "drcom-welcome-layout-"));
   const welcomeUrl = pathToFileURL(join(__dirname, "..", "CRX", "welcome.html")).href;
-  const child = spawn(browser, [
+  const child = launchBrowser(browser, [
     "--headless=new",
     "--allow-file-access-from-files",
     "--disable-gpu",
@@ -492,19 +264,19 @@ test("375px 视口下步骤编号留在第一列且标题保持横排", { timeou
 
 test("390px 视口下设置页单列排版且没有横向溢出", { timeout: 20_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
-    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
     return;
   }
 
   const browser = findBrowser();
   if (!browser) {
-    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
     return;
   }
 
   const profile = mkdtempSync(join(tmpdir(), "drcom-options-layout-"));
   const optionsUrl = pathToFileURL(join(__dirname, "..", "CRX", "options.html")).href;
-  const child = spawn(browser, [
+  const child = launchBrowser(browser, [
     "--headless=new",
     "--allow-file-access-from-files",
     "--disable-gpu",
@@ -566,19 +338,19 @@ test("390px 视口下设置页单列排版且没有横向溢出", { timeout: 20_
 
 test("扩展弹窗在标准任务宽度内完整显示且不横向溢出", { timeout: 20_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
-    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
     return;
   }
 
   const browser = findBrowser();
   if (!browser) {
-    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
     return;
   }
 
   const profile = mkdtempSync(join(tmpdir(), "drcom-popup-layout-"));
   const popupUrl = pathToFileURL(join(__dirname, "..", "CRX", "popup.html")).href;
-  const child = spawn(browser, [
+  const child = launchBrowser(browser, [
     "--headless=new",
     "--allow-file-access-from-files",
     "--disable-gpu",
@@ -633,13 +405,13 @@ test("扩展弹窗在标准任务宽度内完整显示且不横向溢出", { tim
 
 test("四个界面在中英文 320、360、390px 粗指针矩阵中保持可触及", { timeout: 120_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
-    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
     return;
   }
 
   const browser = findBrowser();
   if (!browser) {
-    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
     return;
   }
 
@@ -714,19 +486,19 @@ test("四个界面在中英文 320、360、390px 粗指针矩阵中保持可触�
 
 test("弹窗关键操作在标准宽度保持清晰的三列布局", { timeout: 20_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
-    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
     return;
   }
 
   const browser = findBrowser();
   if (!browser) {
-    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
     return;
   }
 
   const profile = mkdtempSync(join(tmpdir(), "drcom-popup-zoom-layout-"));
   const popupUrl = pathToFileURL(join(__dirname, "..", "CRX", "popup.html")).href;
-  const child = spawn(browser, [
+  const child = launchBrowser(browser, [
     "--headless=new",
     "--allow-file-access-from-files",
     "--disable-gpu",
@@ -781,19 +553,19 @@ test("弹窗关键操作在标准宽度保持清晰的三列布局", { timeout: 
 
 test("设置页在窄屏使用底部分类栏并且一次只显示一个设置面板", { timeout: 20_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
-    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
     return;
   }
 
   const browser = findBrowser();
   if (!browser) {
-    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
     return;
   }
 
   const profile = mkdtempSync(join(tmpdir(), "drcom-options-navigation-"));
   const optionsUrl = pathToFileURL(join(__dirname, "..", "CRX", "options.html")).href;
-  const child = spawn(browser, [
+  const child = launchBrowser(browser, [
     "--headless=new",
     "--allow-file-access-from-files",
     "--disable-gpu",
@@ -849,19 +621,19 @@ test("设置页在窄屏使用底部分类栏并且一次只显示一个设置�
 
 test("设置页个性化颜色选择器在手机端点击后不横向溢出", { timeout: 20_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
-    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
     return;
   }
 
   const browser = findBrowser();
   if (!browser) {
-    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
     return;
   }
 
   const profile = mkdtempSync(join(tmpdir(), "drcom-options-appearance-mobile-"));
   const optionsUrl = pathToFileURL(join(__dirname, "..", "CRX", "options.html")).href;
-  const child = spawn(browser, [
+  const child = launchBrowser(browser, [
     "--headless=new",
     "--allow-file-access-from-files",
     "--disable-gpu",
@@ -908,19 +680,19 @@ test("设置页个性化颜色选择器在手机端点击后不横向溢出", { 
 
 test("800px 设置页使用左侧纵向 WinUI 导航窗格", { timeout: 20_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
-    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "当前 Node.js 不提供内置 WebSocket，跳过真实浏览器布局测试");
     return;
   }
 
   const browser = findBrowser();
   if (!browser) {
-    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
+    skipUnlessRequired(t, "未安装 Chrome 或 Edge，跳过真实浏览器布局测试");
     return;
   }
 
   const profile = mkdtempSync(join(tmpdir(), "drcom-options-sidebar-"));
   const optionsUrl = pathToFileURL(join(__dirname, "..", "CRX", "options.html")).href;
-  const child = spawn(browser, [
+  const child = launchBrowser(browser, [
     "--headless=new",
     "--allow-file-access-from-files",
     "--disable-gpu",
@@ -977,19 +749,19 @@ test("800px 设置页使用左侧纵向 WinUI 导航窗格", { timeout: 20_000 }
 
 test("门户预览会在真实浏览器中渲染生产登录表单", { timeout: 20_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
-    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器预览测试");
+    skipUnlessRequired(t, "当前 Node.js 不提供内置 WebSocket，跳过真实浏览器预览测试");
     return;
   }
 
   const browser = findBrowser();
   if (!browser) {
-    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器预览测试");
+    skipUnlessRequired(t, "未安装 Chrome 或 Edge，跳过真实浏览器预览测试");
     return;
   }
 
   const profile = mkdtempSync(join(tmpdir(), "drcom-portal-preview-"));
   const previewUrl = pathToFileURL(join(__dirname, "..", "CRX", "portal-preview.html")).href;
-  const child = spawn(browser, [
+  const child = launchBrowser(browser, [
     "--headless=new",
     "--allow-file-access-from-files",
     "--disable-gpu",
@@ -1065,19 +837,19 @@ test("门户预览会在真实浏览器中渲染生产登录表单", { timeout: 
 
 test("异步出现的门户登录控件会触发真实浏览器接管", { timeout: 20_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
-    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器门户测试");
+    skipUnlessRequired(t, "当前 Node.js 不提供内置 WebSocket，跳过真实浏览器门户测试");
     return;
   }
 
   const browser = findBrowser();
   if (!browser) {
-    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器门户测试");
+    skipUnlessRequired(t, "未安装 Chrome 或 Edge，跳过真实浏览器门户测试");
     return;
   }
 
   const profile = mkdtempSync(join(tmpdir(), "drcom-portal-async-login-"));
   const fixtureUrl = pathToFileURL(join(__dirname, "fixtures", "portal-async.html")).href;
-  const child = spawn(browser, [
+  const child = launchBrowser(browser, [
     "--headless=new",
     "--allow-file-access-from-files",
     "--disable-gpu",
@@ -1122,19 +894,19 @@ test("异步出现的门户登录控件会触发真实浏览器接管", { timeou
 
 test("异步出现的在线标记会渲染真实浏览器连接状态", { timeout: 20_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
-    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器门户测试");
+    skipUnlessRequired(t, "当前 Node.js 不提供内置 WebSocket，跳过真实浏览器门户测试");
     return;
   }
 
   const browser = findBrowser();
   if (!browser) {
-    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器门户测试");
+    skipUnlessRequired(t, "未安装 Chrome 或 Edge，跳过真实浏览器门户测试");
     return;
   }
 
   const profile = mkdtempSync(join(tmpdir(), "drcom-portal-async-online-"));
   const fixtureUrl = `${pathToFileURL(join(__dirname, "fixtures", "portal-async.html")).href}?mode=online`;
-  const child = spawn(browser, [
+  const child = launchBrowser(browser, [
     "--headless=new",
     "--allow-file-access-from-files",
     "--disable-gpu",
@@ -1180,18 +952,18 @@ test("异步出现的在线标记会渲染真实浏览器连接状态", { timeou
 
 test("验证码异步页面保持学校原始控件并显示非阻断提示", { timeout: 20_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
-    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器门户测试");
+    skipUnlessRequired(t, "当前 Node.js 不提供内置 WebSocket，跳过真实浏览器门户测试");
     return;
   }
   const browser = findBrowser();
   if (!browser) {
-    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器门户测试");
+    skipUnlessRequired(t, "未安装 Chrome 或 Edge，跳过真实浏览器门户测试");
     return;
   }
 
   const profile = mkdtempSync(join(tmpdir(), "drcom-portal-captcha-"));
   const fixtureUrl = `${pathToFileURL(join(__dirname, "fixtures", "portal-async.html")).href}?mode=captcha`;
-  const child = spawn(browser, [
+  const child = launchBrowser(browser, [
     "--headless=new",
     "--allow-file-access-from-files",
     "--disable-gpu",
@@ -1232,13 +1004,13 @@ test("验证码异步页面保持学校原始控件并显示非阻断提示", { 
 
 test("真实浏览器诊断支持采集导出、关闭停写且失败不阻断学校控件", { timeout: 30_000 }, async (t) => {
   if (typeof WebSocket !== "function") {
-    t.skip("当前 Node.js 不提供内置 WebSocket，跳过真实浏览器门户诊断测试");
+    skipUnlessRequired(t, "当前 Node.js 不提供内置 WebSocket，跳过真实浏览器门户诊断测试");
     return;
   }
 
   const browser = findBrowser();
   if (!browser) {
-    t.skip("未安装 Chrome 或 Edge，跳过真实浏览器门户诊断测试");
+    skipUnlessRequired(t, "未安装 Chrome 或 Edge，跳过真实浏览器门户诊断测试");
     return;
   }
 
@@ -1248,7 +1020,7 @@ test("真实浏览器诊断支持采集导出、关闭停写且失败不阻断�
     return withBrowserProfileCleanup(async () => {
       profile = mkdtempSync(join(tmpdir(), "drcom-portal-diagnostics-"));
       const fixtureUrl = "http://10.10.10.2/portal-async.html?diagnostics=enabled&modernize=off";
-      child = spawn(browser, [
+      child = launchBrowser(browser, [
         "--headless=new",
         "--disable-gpu",
         "--no-first-run",

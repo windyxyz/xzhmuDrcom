@@ -1,8 +1,10 @@
 "use strict";
 
 var portalSession = globalThis.DrcomPortalSession;
+var drcomProtocol = globalThis.DrcomProtocol;
 
 var accountUtils = globalThis.DrcomAccountUtils;
+if (!drcomProtocol) throw new Error("DrCOM 协议模块未加载");
 const DRCOM_RESPONSE_LIMIT_BYTES = 64 * 1024;
 
 async function fetchDrcom(request, kind) {
@@ -42,6 +44,7 @@ async function fetchDrcom(request, kind) {
       success: false,
       online: false,
       message: error && error.name === "AbortError" ? "DrCOM 接口超时，请确认校园网网关可访问。" : `请求失败：${error.message || error}`,
+      failureCode: error && error.name === "AbortError" ? "request_timeout" : "request_failed",
       statusCode: 0,
       url: request.redactedUrl,
       raw: ""
@@ -271,201 +274,15 @@ function composeLogoutUserAccount(account) {
 }
 
 function parseDrcomText(text) {
-  const clean = stringValue(text).trim().replace(/^\uFEFF/, "");
-  if (!clean) {
-    return {};
-  }
-
-  const direct = tryJson(clean);
-  if (direct && !Array.isArray(direct)) {
-    return direct;
-  }
-
-  const openParen = clean.indexOf("(");
-  const jsonpEnd = clean.endsWith(");") ? clean.length - 2 : clean.endsWith(")") ? clean.length - 1 : -1;
-  if (openParen > 0 && jsonpEnd > openParen) {
-    const callback = clean.slice(0, openParen);
-    if (/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(callback)) {
-      const parsed = tryJson(clean.slice(openParen + 1, jsonpEnd));
-      if (parsed && !Array.isArray(parsed)) return parsed;
-    }
-  }
-
-  if (!clean.startsWith("{") && clean.includes("=")) return parseAnchoredPairs(clean, "&", "=");
-  if (clean.startsWith("{") && clean.endsWith("}")) {
-    return parseAnchoredPairs(clean.slice(1, -1), ",", ":");
-  }
-  return {};
-}
-
-function parseAnchoredPairs(source, separator, assignment) {
-  const parts = splitQuotedPairs(source, separator);
-  if (!parts.length) return {};
-  const result = {};
-  for (const part of parts) {
-    const index = findUnquotedCharacter(part, assignment);
-    if (index <= 0) return {};
-    const rawKey = part.slice(0, index).trim();
-    const key = stripMatchingQuotes(rawKey);
-    if (!/^[A-Za-z][\w-]*$/.test(key)) return {};
-    let value = stripMatchingQuotes(part.slice(index + 1).trim());
-    if (separator === "&") {
-      try { value = decodeURIComponent(value.replace(/\+/g, " ")); } catch (error) { return {}; }
-    }
-    result[key] = value;
-  }
-  return result;
-}
-
-function splitQuotedPairs(source, separator) {
-  const parts = [];
-  let quote = "";
-  let escaped = false;
-  let start = 0;
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index];
-    if (escaped) { escaped = false; continue; }
-    if (quote && char === "\\") { escaped = true; continue; }
-    if (char === "\"" || char === "'") {
-      if (!quote) quote = char;
-      else if (quote === char) quote = "";
-      continue;
-    }
-    if (!quote && char === separator) {
-      parts.push(source.slice(start, index).trim());
-      start = index + 1;
-    }
-  }
-  if (quote || escaped) return [];
-  parts.push(source.slice(start).trim());
-  return parts.every(Boolean) ? parts : [];
-}
-
-function findUnquotedCharacter(source, target) {
-  let quote = "";
-  let escaped = false;
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index];
-    if (escaped) { escaped = false; continue; }
-    if (quote && char === "\\") { escaped = true; continue; }
-    if (char === "\"" || char === "'") {
-      if (!quote) quote = char;
-      else if (quote === char) quote = "";
-    } else if (!quote && char === target) return index;
-  }
-  return -1;
-}
-
-function stripMatchingQuotes(value) {
-  if (value.length >= 2 && ((value[0] === "\"" && value.at(-1) === "\"") || (value[0] === "'" && value.at(-1) === "'"))) {
-    return value.slice(1, -1);
-  }
-  return value;
+  return drcomProtocol.parseText(text);
 }
 
 function normalizeDrcomResult(kind, statusCode, data, rawText) {
-  const msg = decodeMessage(data.msg || data.msga || data.message || data.error || "");
-  const resultValue = data.result ?? data.success;
-  const retValue = data.ret_code ?? data.ret;
-  const resultCode = resultValue === undefined || resultValue === null
-    ? ""
-    : stringValue(resultValue).trim().toLowerCase();
-  const retCode = retValue === undefined || retValue === null ? "" : stringValue(retValue).trim();
-  const protocolValue = resultValue ?? retValue;
-  const protocolCode = protocolValue === undefined || protocolValue === null
-    ? ""
-    : stringValue(protocolValue).trim().toLowerCase();
-  const httpOk = statusCode >= 200 && statusCode < 300;
-  const diagnostic = { statusCode, protocolCode, resultCode, retCode };
-  const failureTokens = new Set(["0", "false", "fail", "failed", "error", "-1"]);
-  const successTokens = new Set(["1", "ok", "true", "success"]);
-  const alreadyOnline = /已经在线|已在线|has been online|already online|E2620/i.test(msg);
+  return drcomProtocol.normalizeResult(kind, statusCode, data, rawText);
+}
 
-  if (!httpOk) {
-    return {
-      success: false,
-      online: false,
-      message: `DrCOM 接口返回 HTTP ${statusCode}，认证请求未成功。`,
-      data,
-      httpOk,
-      diagnostic
-    };
-  }
-
-  if (kind === "login" && resultCode === "0" && retCode === "2" && alreadyOnline) {
-    return {
-      success: false,
-      online: false,
-      requiresStatusConfirmation: true,
-      message: "网关提示账号已经在线，正在复核实际状态。",
-      data,
-      httpOk,
-      diagnostic
-    };
-  }
-
-  if (protocolCode) {
-    if (failureTokens.has(protocolCode)) {
-      return {
-        success: false,
-        online: false,
-        requiresStatusConfirmation: false,
-        message: humanizeError(msg || protocolCode, data, kind),
-        data,
-        httpOk,
-        diagnostic
-      };
-    }
-    if (successTokens.has(protocolCode)) {
-      return {
-        success: true,
-        online: kind !== "logout",
-        message: kind === "logout" ? "下线成功。" : alreadyOnline ? "账号已经在线，无需重复登录。" : "登录成功。",
-        data,
-        httpOk,
-        diagnostic
-      };
-    }
-    return {
-      success: false,
-      online: false,
-      message: `${kind === "logout" ? "下线" : "登录"}失败：网关返回未识别协议代码 ${protocolCode}。`,
-      data,
-      httpOk,
-      diagnostic
-    };
-  }
-
-  if (kind === "logout") {
-    const logoutFailure = /logout\s*(?:fail|error)|unbind_mac\s*(?:fail|error)|注销失败|下线失败|解绑失败|拒绝/i.test(msg);
-    const logoutMessage = /注销成功|下线成功|解绑成功|解除绑定成功|(?:logout|unbind_mac)\s*(?:success|ok)|\boffline\b/i.test(msg);
-    const logoutOk = !logoutFailure && logoutMessage;
-    return {
-      success: logoutOk,
-      online: false,
-      message: logoutOk ? "下线成功。" : logoutFailure
-        ? humanizeError(msg, data, kind)
-        : "下线失败：网关返回未识别结果。",
-      data,
-      httpOk,
-      diagnostic
-    };
-  }
-
-  const explicitStatusSuccess = alreadyOnline || /登录成功|认证成功|(?:login|authentication)\s*(?:success|ok)/i.test(msg);
-  const explicitStatusFailure = /登录失败|认证失败|password\s*(?:fail|error)|userid\s*error|拒绝/i.test(msg);
-  return {
-    success: explicitStatusSuccess && !explicitStatusFailure,
-    online: explicitStatusSuccess && !explicitStatusFailure,
-    message: explicitStatusSuccess && !explicitStatusFailure
-      ? alreadyOnline ? "账号已经在线，无需重复登录。" : "登录成功。"
-      : explicitStatusFailure
-        ? humanizeError(msg, data, kind)
-        : "登录失败：网关返回未识别结果。",
-    data,
-    httpOk,
-    diagnostic
-  };
+function classifyDrcomFailureCode(message, data, kind = "login", fallback = "gateway_rejected") {
+  return drcomProtocol.classifyFailureCode(message, data, kind, fallback);
 }
 
 function parsePortalStatus(statusCode, text, url) {
@@ -488,43 +305,11 @@ function parsePortalStatus(statusCode, text, url) {
 }
 
 function humanizeError(message, data, kind = "login") {
-  const msg = decodeMessage(message);
-
-  if (/AC999|设备数量|终端数量|MAC\s*冲突/i.test(msg)) {
-    return `设备数量超限或 MAC 冲突：${msg}`;
-  }
-  if (/userid error1|用户不存在|账号不存在/i.test(msg)) {
-    return `账号不存在，请检查学号、后缀或抓包账号标识：${msg}`;
-  }
-  if (/userid error2|密码|password/i.test(msg)) {
-    return `密码错误或密钥失效：${msg}`;
-  }
-  if (/flux out|balance|欠费|流量/i.test(msg)) {
-    return `流量或余额异常：${msg}`;
-  }
-  if (/ip|mac|bind|绑定/i.test(msg)) {
-    return `IP/MAC 参数可能不匹配，建议用设置页重新解析抓包 URL：${msg}`;
-  }
-  const action = kind === "logout" ? "下线" : "登录";
-  return msg ? `${action}失败：${msg}` : `${action}失败：网关没有返回明确原因。`;
+  return drcomProtocol.humanizeError(message, data, kind);
 }
 
 function decodeMessage(value) {
-  const text = stringValue(value).trim();
-  if (!text) {
-    return "";
-  }
-
-  try {
-    if (/^[a-zA-Z0-9+/]+={0,2}$/.test(text) && !/[\u4e00-\u9fa5]/.test(text) && text.length % 4 === 0) {
-      const binary = atob(text);
-      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-      return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-    }
-  } catch (error) {
-    return text;
-  }
-  return text;
+  return drcomProtocol.decodeMessage(value);
 }
 
 function redactSensitiveUrl(value) {

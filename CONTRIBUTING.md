@@ -16,7 +16,8 @@
 4. 运行定向测试，再执行完整验证：
 
    ```powershell
-   npm run verify
+   npm test
+   # 或 npm run test:all / npm run verify
    ```
 
 5. 涉及发布内容时再执行：
@@ -32,10 +33,11 @@
 ## 验证要求
 
 - `npm run check`：全部运行时和构建脚本语法检查。
-- `npm run test:unit`：后台、状态迁移、安全边界和 UI 逻辑。
-- `npm run test:browser`：使用本机 Chromium 验证真实页面布局和进程清理。
+- `npm run test:edge`：快速边界测试。
+- `npm run test:unit`：后台、状态迁移、安全边界和 UI 逻辑，并包含 edge 测试。
+- `npm run test:browser`：使用自动发现的一台本机 Chromium 验证真实页面布局和进程清理。
 - `npm run verify:package`：发布白名单、固定时间戳和重复构建一致性。
-- `npm run verify`：汇总以上全部检查。
+- `npm test` / `npm run test:all` / `npm run verify`：一次执行静态检查、unit、browser 和 package 验证并输出总汇。
 
 改动账号、退出、消息来源、DrCOM 解析、迁移或打包逻辑时，必须补充对应边界场景；破坏性操作必须支持取消、键盘操作，并让默认焦点避开危险按钮。
 

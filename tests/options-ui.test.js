@@ -7,7 +7,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 function loadOptions(context) {
-  for (const file of ["i18n-messages.js", "i18n.js", "account-utils.js", "options-appearance-images.js", "options-refresh-controller.js", "options-account-capture-controller.js", "options.js"]) {
+  for (const file of ["i18n-messages.js", "i18n.js", "account-utils.js", "portal-url.js", "options-color-utils.js", "options-gateway-controller.js", "options-diagnostics-controller.js", "options-account-controller.js", "options-appearance-images.js", "options-refresh-controller.js", "options-account-capture-controller.js", "options.js"]) {
     const source = readFileSync(join(__dirname, "..", "CRX", file), "utf8");
     new vm.Script(source, { filename: file }).runInContext(context);
   }
@@ -936,6 +936,38 @@ test("自定义网关只请求对应来源并在现代界面启用时请求脚�
     origins: ["https://gateway.example/*", "http://gateway.example/*"],
     permissions: ["scripting"]
   }]);
+});
+
+test("切换自定义网关后撤销已经不再使用的旧来源权限", async () => {
+  const removals = [];
+  const context = vm.createContext({
+    chrome: {
+      permissions: {
+        async remove(request) {
+          removals.push(structuredClone(request));
+          return true;
+        }
+      }
+    },
+    clearTimeout,
+    console,
+    document: { addEventListener() {}, getElementById() { return null; } },
+    setTimeout,
+    URL
+  });
+  loadOptions(context);
+
+  await context.revokeUnusedGatewayAccess({
+    portalUrl: "https://old.example/login",
+    apiUrl: "https://old.example:801/eportal/",
+    ui: { background: "fresh" }
+  }, {
+    portalUrl: "https://new.example/login",
+    apiUrl: "https://new.example:801/eportal/",
+    ui: { background: "fresh" }
+  });
+
+  assert.deepEqual(removals, [{ origins: ["https://old.example/*"] }]);
 });
 
 test("仅地址变化到自定义 HTTP 网关时显示强警告", () => {

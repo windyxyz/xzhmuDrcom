@@ -28,6 +28,11 @@ test("安全策略禁止在漏洞报告中附带真实凭据", () => {
   assert.match(security, /密码|凭据/);
   assert.match(security, /私密|非公开/);
 });
+
+test("本地诊断目录默认被 Git 忽略，避免 HAR 和抓包误提交", () => {
+  const gitignore = read(".gitignore");
+  assert.match(gitignore, /^\/TEMP\/$/m);
+});
 test("安全策略登记保留体验后的延期和接受风险", () => {
   const security = read("SECURITY.md");
   for (const term of [

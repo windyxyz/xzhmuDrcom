@@ -1016,7 +1016,6 @@ test("网页消息只接受自身扩展顶层 frame 与当前门户标签", asyn
   const invalidSenders = [
     portalSender({ id: "forged-extension" }),
     portalSender({ frameId: 1 }),
-    portalSender({ origin: "https://10.10.10.2", url: "https://10.10.10.2/" }),
     portalSender({ origin: "http://evil.example", url: "http://evil.example/" }),
     portalSender({ tab: { id: null } })
   ];
@@ -1036,6 +1035,49 @@ test("网页消息只接受自身扩展顶层 frame 与当前门户标签", asyn
     staleTabBackground.handleMessage({ action: "portal:config:get" }, portalSender()),
     /标签页|门户/
   );
+});
+
+test("默认 HTTPS 门户与 Manifest 声明一致，可使用网页消息接口", async () => {
+  const background = loadBackground({
+    currentTabs: { 1: { id: 1, url: "https://10.10.10.2/" } }
+  });
+  const result = await background.handleMessage(
+    { action: "portal:config:get" },
+    portalSender({
+      origin: "https://10.10.10.2",
+      url: "https://10.10.10.2/",
+      tab: { id: 1, url: "https://10.10.10.2/" }
+    })
+  );
+  assert.equal(result.ok, true);
+});
+
+test("门户网络参数更新只接受当前 DrCOM unbind_mac 接口来源", async () => {
+  const background = loadBackground();
+  const sender = portalSender();
+  await assert.rejects(
+    background.handleMessage({
+      action: "account:network:update",
+      sourceUrl: "http://evil.example/eportal/?c=Portal&a=unbind_mac",
+      userAccount: "student",
+      network: { wlanUserIp: "192.0.2.9" }
+    }, sender),
+    /来源不是当前 DrCOM 注销接口/
+  );
+
+  const accepted = await background.handleMessage({
+    action: "account:network:update",
+    sourceUrl: "http://10.10.10.2:801/eportal/?c=Portal&a=unbind_mac",
+    userAccount: "student",
+    network: { wlanUserIp: "192.0.2.9" }
+  }, sender);
+  assert.equal(accepted.ok, false, "来源合法但没有匹配账号时只应拒绝写入，不应抛出来源错误");
+});
+
+test("门户 URL 比较包含端口，不把不同服务误判为同一门户", () => {
+  const background = loadBackground();
+  assert.equal(background.isPortalUrl("http://gateway.example:8080/path", "http://gateway.example:8080/"), true);
+  assert.equal(background.isPortalUrl("http://gateway.example:9090/path", "http://gateway.example:8080/"), false);
 });
 
 test("options:open 仅在全部网页来源校验通过后执行", async () => {
@@ -1347,8 +1389,11 @@ test("不同入口同时触发登录时也只发送一个 DrCOM 请求", async (
   });
   background.addRequestRecord = async () => undefined;
 
-  const first = background.loginAccount("account-1", null);
-  const second = background.loginAccount("account-2", null);
+  /* 两个入口都跟随当前选中账号（如弹窗与门户页同时发起登录），
+     语义键相同应合并为一次认证请求；不同账号必须逐个执行的场景
+     由 connection-concurrency.test.js 验证。 */
+  const first = background.loginAccount("", null);
+  const second = background.loginAccount("", null);
   await Promise.resolve();
   await Promise.resolve();
   release();
@@ -2198,4 +2243,30 @@ test("门户诊断后台与导出再次隐藏敏感 URL 组件", async () => {
     "https://redacted-id.example.test/assets/[redacted-secret].js?redacted-id=%5Bredacted%5D"
   );
   assert.doesNotMatch(JSON.stringify(exported), /202600000001|abcdef0123456789abcdef0123456789/);
+});
+
+test("结构化失败码优先于模糊 password 文本，服务故障仍可自动重试", () => {
+  const background = loadBackground();
+  const failure = JSON.parse(JSON.stringify(background.classifyLoginFailure({
+    failureCode: "request_failed",
+    message: "password service unavailable"
+  })));
+  assert.equal(failure.category, "network");
+  assert.equal(failure.retryable, true);
+});
+
+test("DrCOM 只把明确密码错误归类为 bad_credentials", () => {
+  const background = loadBackground();
+  const outage = background.normalizeDrcomResult(
+    "login", 200,
+    { result: "0", msg: "password service unavailable" },
+    '{"result":"0","msg":"password service unavailable"}'
+  );
+  const wrong = background.normalizeDrcomResult(
+    "login", 200,
+    { result: "0", msg: "password error" },
+    '{"result":"0","msg":"password error"}'
+  );
+  assert.equal(outage.failureCode, "gateway_rejected");
+  assert.equal(wrong.failureCode, "bad_credentials");
 });

@@ -65,6 +65,23 @@ function buildAndRead(target) {
   };
 }
 
+test("第二阶段共享协议与设置模块按运行依赖进入分发白名单", () => {
+  const archivePaths = RELEASE_FILES.map((entry) => entry.archivePath);
+  const orderedGroups = [
+    ["account-utils.js", "portal-url.js", "background/portal-context.js", "background/drcom-protocol.js", "background/drcom-client.js"],
+    ["options-color-utils.js", "options-gateway-controller.js", "options-diagnostics-controller.js", "options-account-controller.js", "options.js"]
+  ];
+
+  for (const group of orderedGroups) {
+    let previousIndex = -1;
+    for (const path of group) {
+      const currentIndex = archivePaths.indexOf(path);
+      assert.ok(currentIndex > previousIndex, `${path} must be packaged after its dependencies`);
+      previousIndex = currentIndex;
+    }
+  }
+});
+
 test("诊断运行时模块以依赖顺序进入分发白名单", () => {
   const archivePaths = RELEASE_FILES.map((entry) => entry.archivePath);
   const expected = [

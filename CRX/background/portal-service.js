@@ -1,5 +1,8 @@
 "use strict";
 
+const portalUrlUtils = globalThis.DrcomPortalUrl;
+if (!portalUrlUtils) throw new Error("门户 URL 工具未加载");
+
 const CUSTOM_PORTAL_SCRIPT = Object.freeze({
   css: ["design-tokens.css", "portal.css"],
   js: [
@@ -34,13 +37,7 @@ function currentPortalScriptMatches(current, pattern) {
 }
 
 function portalMatchPattern(value) {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
-    return `${url.protocol}//${url.hostname}/*`;
-  } catch (error) {
-    return "";
-  }
+  return portalUrlUtils.matchPattern(value);
 }
 
 async function syncPortalContentScript(state) {
@@ -153,13 +150,7 @@ async function clearSenderTab(sender) {
 }
 
 function isPortalUrl(targetUrl, portalUrl) {
-  try {
-    const target = new URL(targetUrl);
-    const portal = new URL(portalUrl);
-    return target.protocol === portal.protocol && target.hostname === portal.hostname;
-  } catch (error) {
-    return false;
-  }
+  return portalUrlUtils.sameOrigin(targetUrl, portalUrl);
 }
 
 function normalizeAccent(value) {
@@ -220,13 +211,10 @@ function isWebPageSender(sender) {
 async function trustedPortalOrigins() {
   // 默认门户始终可信；用户显式配置的自定义网关只有在保存时逐来源授权后，
   // 内容脚本才会注册到那里，因此这里的配置来源与注入范围保持一致。
-  const origins = new Set(["http://10.10.10.2"]);
-  try {
-    const configured = new URL(stringValue((await getState()).config.portalUrl));
-    if (configured.protocol === "http:" || configured.protocol === "https:") {
-      origins.add(configured.origin);
-    }
-  } catch (error) {}
+  const origins = new Set(DEFAULT_PORTAL_ORIGINS);
+  const currentState = await getState();
+  const configured = portalUrlUtils.parse(stringValue(currentState?.config?.portalUrl));
+  if (configured) origins.add(configured.origin);
   return origins;
 }
 

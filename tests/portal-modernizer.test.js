@@ -786,6 +786,36 @@ test("页面加载脚本和合成点击不能触发原门户账号捕获", async
   assert.equal(harness.messages.some((message) => message.action === "account:save"), false);
 });
 
+test("原门户注销网络参数只有在可信注销操作后才允许捕获一次", async () => {
+  const harness = createHarness({ pageState: "pending" });
+  await loadModernizer(harness);
+  const mutation = [{
+    addedNodes: [{
+      tagName: "SCRIPT",
+      src: "http://10.10.10.2:801/eportal/?c=Portal&a=unbind_mac&user_account=sample%40telecom&wlan_user_ip=192.0.2.9&wlan_user_mac=58%3A02%3A05%3ADC%3A58%3AC2"
+    }]
+  }];
+
+  harness.triggerMutation(mutation);
+  await harness.flush();
+  assert.equal(harness.messages.some((message) => message.action === "account:network:update"), false);
+
+  const logoutTarget = {
+    closest(selector) {
+      if (selector === "#drcom-modern-root") return null;
+      return /logout/i.test(selector) ? this : null;
+    }
+  };
+  await harness.emitDocument("click", { isTrusted: true, target: logoutTarget });
+  harness.triggerMutation(mutation);
+  harness.triggerMutation(mutation);
+  await harness.flush();
+
+  const updates = harness.messages.filter((message) => message.action === "account:network:update");
+  assert.equal(updates.length, 1);
+  assert.match(updates[0].sourceUrl, /c=Portal.*a=unbind_mac|a=unbind_mac.*c=Portal/);
+});
+
 test("禁用现代门户时只保留原始登录捕获观察器", async () => {
   const harness = createHarness({
     pageState: "pending",

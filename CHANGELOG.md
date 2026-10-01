@@ -2,12 +2,13 @@
 
 本文件记录徐医校园网xzhmu的重要变化，格式参考 Keep a Changelog，版本遵循扩展 Manifest 版本。
 
-## [1.1.1] - 2026-09-23
+## [1.1.1] - Unreleased
 
 ### 新增
 
 - 欢迎页、弹窗、设置页和现代门户加入完整双语界面，支持“跟随浏览器”、固定中文和固定 English；偏好使用独立存储和受限消息接口跨页面同步，切换时保留表单、焦点与在线状态。
 - Chrome 与 Firefox 分发包声明并收录 `_locales/zh_CN`、`_locales/en`、`i18n-messages.js` 和 `i18n.js`，打包门禁同时验证两套 locale 与共享语言运行时。
+- CRX 连接操作改为统一互斥协调器：login/logout 串行执行，排队中的登录按"账号 + 手动/自动"语义去重，不同账号不会被误合并，用户主动注销后抑制自动重连；SSH 增加跨进程原子锁文件（`ln` 硬链接创建，锁内始终携带完整持锁 PID，释放前校验所有权）、登录密码安全闸门（wget 不支持 `-i` 时默认拒绝发送密码，可用 `ALLOW_INSECURE_WGET=1` 显式放行，已在线时无需密码不触发闸门）和会话文件版本化。
 
 ### 变更
 
@@ -16,7 +17,11 @@
 
 ### 工程
 
+- 修复 Windows 统一 `npm test` 静态检查阶段通过 `spawnSync npm.cmd` 可能触发 `EINVAL` 的问题：新增跨平台 `scripts/static-check.js`，直接使用当前 Node 的 `--check` 自动扫描 `CRX/` 与 `scripts/` JavaScript 文件；统一入口与 `npm run check` 共用同一实现。
+- 新增统一 `npm test` / `npm run test:all` 入口，按静态检查、unit（已含 edge）、真实浏览器和打包验证执行，阶段失败后继续收集后续结果并在末尾统一汇总；保留 `npm run test:edge` 作为快速高风险回归入口。
+- Windows 浏览器自动发现保持显式 `CHROME_BIN` / `EDGE_BIN` 和常规稳定版优先；只有找不到常规浏览器时才依次使用 Edge Beta 与 RunningCheese Helium 本机路径作为单实例兜底，不增加重复浏览器测试矩阵。
 - 新增双语词典完整性、语言持久化与广播、原位重译、移动触控/拖拽、窄屏溢出和双指缩放回归；真实 Chromium 门禁覆盖中英文 320px、360px 与 390px 视口。
+- CI 的 Browser tests 步骤与 Release 的 verify 步骤设置 `REQUIRE_BROWSER_TESTS=1` 强制门禁：环境不满足时浏览器测试直接失败而不是静默 skip，防止 runner 环境变化后真实浏览器测试全部跳过、流水线依然绿色导致发布门禁失去意义。
 - 发布前修复设置页个性化颜色选择器在手机和窄桌面窗口中的横向挤压：1024px 及以下统一改为单列触控布局，并增加真实 Edge Beta 390px 回归用例。
 
 ### 发布资产

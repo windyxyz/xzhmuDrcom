@@ -32,7 +32,8 @@ test("项目包含 GPL-3.0 许可证、贡献指南、安全策略和当前版�
   assert.ok(changelog.includes("账号自然键") || changelog.includes("账号去重"));
   assert.ok(changelog.includes("确定性") || changelog.includes("可复现"));
   assert.equal(packageMetadata.engines.node, ">=22");
-  assert.ok(packageMetadata.scripts["check:stable"].includes("CRX/portal-capture.js"));
+  assert.equal(packageMetadata.scripts["check"], "node scripts/static-check.js");
+  assert.equal(packageMetadata.scripts["check:stable"], "node scripts/static-check.js");
 });
 
 test("README 使用正式品牌且变更日志保留当前发布身份", () => {

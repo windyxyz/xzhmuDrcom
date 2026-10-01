@@ -1,2 +1,10 @@
 # Shell scripts must stay LF or BusyBox ash fails on checkout.
 SSH/*.sh text eol=lf
+
+# 统一以 LF 入库，避免 Windows 检出把整个仓库变成行尾噪声 diff
+* text=auto
+*.png binary
+*.ttf binary
+*.zip binary
+*.crx binary
+*.xpi binary

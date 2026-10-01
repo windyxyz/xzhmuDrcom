@@ -19,7 +19,7 @@ function loadPortalContext(overrides = {}) {
   return context;
 }
 
-test("当前门户 URL 的标准 IP 参数优先于页面脚本变量", () => {
+test("刚获取的门户脚本变量优先于地址栏里的旧 IP 参数", () => {
   const background = loadPortalContext();
   const html = readFileSync(join(__dirname, "fixtures", "portal-runtime.html"), "utf8");
 
@@ -29,8 +29,21 @@ test("当前门户 URL 的标准 IP 参数优先于页面脚本变量", () => {
   );
 
   assert.equal(result.ok, true);
+  assert.notEqual(result.network.wlanUserIp, "192.0.2.7");
+  assert.equal(result.ipSource.startsWith("url:"), false);
+  assert.equal(result.ipConflict, true);
+});
+
+test("页面没有有效 IP 时仍可回退到当前门户 URL 参数", () => {
+  const background = loadPortalContext();
+  const result = background.parsePortalRuntimeContext(
+    '<html><body>no runtime ip</body></html>',
+    "http://10.10.10.2/?station_ip=192.0.2.7"
+  );
+  assert.equal(result.ok, true);
   assert.equal(result.network.wlanUserIp, "192.0.2.7");
   assert.equal(result.ipSource, "url:station_ip");
+  assert.equal(result.ipConflict, false);
 });
 
 test("门户上下文严格按 v46ip、ss5、v4ip、ss3 顺序选择 IP", () => {

@@ -11,9 +11,17 @@ i18n.setLanguage("zh-CN");
 const optionsAppearanceImages = globalThis.DrcomOptionsAppearanceImages;
 const optionsRefresh = globalThis.DrcomOptionsRefresh;
 const optionsAccountCapture = globalThis.DrcomOptionsAccountCapture;
+const optionsAccountControllerModule = globalThis.DrcomOptionsAccountController;
+const optionsGateway = globalThis.DrcomOptionsGateway;
+const optionsDiagnostics = globalThis.DrcomOptionsDiagnostics;
+const optionsColorUtils = globalThis.DrcomOptionsColorUtils;
 if (!optionsAppearanceImages) throw new Error("外观图片模块未加载");
 if (!optionsRefresh) throw new Error("设置刷新模块未加载");
 if (!optionsAccountCapture) throw new Error("账号捕获确认模块未加载");
+if (!optionsAccountControllerModule) throw new Error("账号编辑模块未加载");
+if (!optionsGateway) throw new Error("网关配置模块未加载");
+if (!optionsDiagnostics) throw new Error("门户诊断模块未加载");
+if (!optionsColorUtils) throw new Error("颜色工具模块未加载");
 const createSettingsRefreshController = optionsRefresh.createSettingsRefreshController;
 const createPendingAccountCaptureController = optionsAccountCapture.createPendingAccountCaptureController;
 const optimizeBackgroundImage = optionsAppearanceImages.optimizeBackgroundImage;
@@ -26,6 +34,8 @@ let settingsFormDirty = false;
 let accountFormDirty = false;
 let settingsRefreshController = null;
 let pendingAccountCaptureController = null;
+let accountController = null;
+let portalDiagnosticsController = null;
 let languagePreference = "auto";
 let languageControlsBound = false;
 let latestConnection;
@@ -59,6 +69,17 @@ function bindEvents() {
     setState: (nextState) => { state = nextState; },
     toast,
     t: (key, substitutions) => i18n.t(key, substitutions)
+  });
+
+  portalDiagnosticsController = optionsDiagnostics.createController({
+    $,
+    sendMessage,
+    toast,
+    t: (key, substitutions) => i18n.t(key, substitutions),
+    confirmDialog: globalThis.DrcomConfirmDialog,
+    BlobCtor: Blob,
+    URLApi: URL,
+    documentRef: document
   });
 
   settingsRefreshController = createSettingsRefreshController({
@@ -416,111 +437,58 @@ async function refreshConnectionState() {
 }
 
 function portalDiagnosticsLimitBytes(diagnostics) {
-  return Number(diagnostics && diagnostics.limits && (diagnostics.limits.maxBytes ?? diagnostics.limits.bytes)) || 1024 * 1024;
+  return optionsDiagnostics.limitBytes(diagnostics);
 }
 
 function portalDiagnosticsLimitSessions(diagnostics) {
-  return Number(diagnostics && diagnostics.limits && (diagnostics.limits.maxSessions ?? diagnostics.limits.sessions)) || 10;
+  return optionsDiagnostics.limitSessions(diagnostics);
 }
 
 function formatPortalDiagnosticsSize(bytes) {
-  const value = Math.max(0, Number(bytes) || 0);
-  if (value < 1024) return Math.round(value) + " B";
-  if (value < 1024 * 1024) return Math.round(value / 102.4) / 10 + " KB";
-  return Math.round(value / (1024 * 1024) * 10) / 10 + " MiB";
+  return optionsDiagnostics.formatSize(bytes);
 }
 
 function renderPortalDiagnostics(diagnostics) {
   latestDiagnostics = diagnostics;
-  const input = $("portal-diagnostics-enabled");
-  const status = $("portal-diagnostics-status");
-  const storage = $("portal-diagnostics-storage");
-  const sessions = $("portal-diagnostics-sessions");
-  const dropped = $("portal-diagnostics-dropped");
-  if (!diagnostics || diagnostics.ok === false) return;
-  const enabled = diagnostics.enabled === true;
-  const bytes = Math.max(0, Number(diagnostics.bytes) || 0);
-  const sessionCount = Math.max(0, Number(diagnostics.sessionCount) || 0);
-  const droppedRecords = Math.max(0, Math.floor(Number(diagnostics.droppedRecords) || 0));
-  if (input) input.checked = enabled;
-  if (status) status.textContent = diagnostics.paused === true
-    ? i18n.t("diagnostics_paused")
-    : enabled ? i18n.t("diagnostics_enabled") : i18n.t("diagnostics_disabled");
-  if (storage) storage.textContent = formatPortalDiagnosticsSize(bytes) + " / " + formatPortalDiagnosticsSize(portalDiagnosticsLimitBytes(diagnostics));
-  if (sessions) sessions.textContent = sessionCount + " / " + portalDiagnosticsLimitSessions(diagnostics);
-  if (dropped) dropped.textContent = i18n.t("record_count", [droppedRecords]);
+  ensurePortalDiagnosticsController().render(diagnostics);
 }
 
 async function loadPortalDiagnostics() {
-  const result = await sendMessage({ action: "diagnostics:get" });
-  renderPortalDiagnostics(result);
+  const result = await ensurePortalDiagnosticsController().load();
+  latestDiagnostics = result;
   return result;
 }
 
 function portalDiagnosticsExportFilename(now = new Date()) {
-  return "drcom-portal-diagnostics-" + now.toISOString().replace(/[:.]/g, "-") + ".json";
+  return optionsDiagnostics.exportFilename(now);
 }
 
 async function setPortalDiagnosticsEnabled(enabled, previous = null) {
-  const input = $("portal-diagnostics-enabled");
-  const before = previous === null ? Boolean(input && input.checked) : Boolean(previous);
-  if (input) {
-    input.checked = before;
-    input.disabled = true;
-  }
-  try {
-    const result = await sendMessage({ action: "diagnostics:set", enabled: enabled === true });
-    await loadPortalDiagnostics();
-    return result;
-  } catch (error) {
-    if (input) input.checked = before;
-    toast(error.message || String(error));
-    return false;
-  } finally {
-    if (input) input.disabled = false;
-  }
+  const result = await ensurePortalDiagnosticsController().setEnabled(enabled, previous);
+  latestDiagnostics = ensurePortalDiagnosticsController().latest();
+  return result;
 }
 
 async function exportPortalDiagnostics() {
-  const button = $("export-portal-diagnostics");
-  if (button) button.disabled = true;
-  try {
-    const result = await sendMessage({ action: "diagnostics:export" });
-    const blob = new Blob([JSON.stringify(result.export, null, 2) + "\n"], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    try {
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = portalDiagnosticsExportFilename();
-      link.click();
-    } finally {
-      URL.revokeObjectURL(url);
-    }
-    return true;
-  } finally {
-    if (button) button.disabled = false;
-  }
+  return ensurePortalDiagnosticsController().exportData();
 }
 
 async function clearPortalDiagnostics() {
-  const confirmer = globalThis.DrcomConfirmDialog;
-  if (!confirmer || typeof confirmer.ask !== "function") throw new Error(i18n.t("confirm_unavailable"));
-  const confirmed = await confirmer.ask({
-    title: i18n.t("clear_diagnostics_title"),
-    message: i18n.t("clear_diagnostics_message"),
-    confirmLabel: i18n.t("clear_records"),
-    danger: true
-  });
-  if (!confirmed) return false;
-  const button = $("clear-portal-diagnostics");
-  if (button) button.disabled = true;
-  try {
-    await sendMessage({ action: "diagnostics:clear" });
-    await loadPortalDiagnostics();
-    return true;
-  } finally {
-    if (button) button.disabled = false;
+  const result = await ensurePortalDiagnosticsController().clear();
+  latestDiagnostics = ensurePortalDiagnosticsController().latest();
+  return result;
+}
+
+function ensurePortalDiagnosticsController() {
+  if (!portalDiagnosticsController) {
+    portalDiagnosticsController = optionsDiagnostics.createController({
+      $, sendMessage, toast,
+      t: (key, substitutions) => i18n.t(key, substitutions),
+      confirmDialog: globalThis.DrcomConfirmDialog,
+      BlobCtor: Blob, URLApi: URL, documentRef: document
+    });
   }
+  return portalDiagnosticsController;
 }
 
 function hydrateForm() {
@@ -599,10 +567,12 @@ async function ensureWallpaperPermission() {
   }
 }
 
-function normalizeAccentHex(value) {
-  const raw = String(value || "").trim();
-  return /^#[0-9a-f]{6}$/i.test(raw) ? raw.toLowerCase() : "";
-}
+function normalizeAccentHex(value) { return optionsColorUtils.normalizeHex(value); }
+function hsvToRgb(h, s, v) { return optionsColorUtils.hsvToRgb(h, s, v); }
+function rgbToHex(r, g, b) { return optionsColorUtils.rgbToHex(r, g, b); }
+function hexToRgb(hex) { return optionsColorUtils.hexToRgb(hex); }
+function rgbToHsv(r, g, b) { return optionsColorUtils.rgbToHsv(r, g, b); }
+function hexToHsv(hex) { return optionsColorUtils.hexToHsv(hex); }
 
 function syncAccentControls() {
   const accent = normalizeAccentHex($("appearance-accent").value) || "#007aff";
@@ -618,54 +588,6 @@ function syncAccentControls() {
 /* ---------- WinUI ColorPicker（光谱 + 明度 + hex，即时生效） ---------- */
 
 const colorPicker = { h: 212, s: 1, v: 0.5 };
-
-function hsvToRgb(h, s, v) {
-  const segment = ((h % 360) + 360) % 360 / 60;
-  const i = Math.floor(segment);
-  const f = segment - i;
-  const p = v * (1 - s);
-  const q = v * (1 - f * s);
-  const t = v * (1 - (1 - f) * s);
-  const map = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]];
-  const [r, g, b] = map[i % 6];
-  return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
-}
-
-function rgbToHex(r, g, b) {
-  return `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
-}
-
-function hexToRgb(hex) {
-  const match = /^#([0-9a-f]{6})$/i.exec(String(hex || "").trim());
-  if (!match) return null;
-  return {
-    r: parseInt(match[1].slice(0, 2), 16),
-    g: parseInt(match[1].slice(2, 4), 16),
-    b: parseInt(match[1].slice(4, 6), 16)
-  };
-}
-
-function rgbToHsv(r, g, b) {
-  const rn = r / 255;
-  const gn = g / 255;
-  const bn = b / 255;
-  const max = Math.max(rn, gn, bn);
-  const min = Math.min(rn, gn, bn);
-  const d = max - min;
-  let h = 0;
-  if (d !== 0) {
-    if (max === rn) h = 60 * (((gn - bn) / d) % 6);
-    else if (max === gn) h = 60 * ((bn - rn) / d + 2);
-    else h = 60 * ((rn - gn) / d + 4);
-  }
-  if (h < 0) h += 360;
-  return { h, s: max === 0 ? 0 : d / max, v: max };
-}
-
-function hexToHsv(hex) {
-  const rgb = hexToRgb(hex);
-  return rgb ? rgbToHsv(rgb.r, rgb.g, rgb.b) : null;
-}
 
 function pickerHex() {
   const { r, g, b } = hsvToRgb(colorPicker.h, colorPicker.s, colorPicker.v);
@@ -1122,55 +1044,51 @@ function syncIntervalControls(preserveInput = false) {
 }
 
 function gatewayHost(value) {
-  try { return new URL(value).host || i18n.t("portal_short"); }
-  catch (error) { return i18n.t("portal_short"); }
+  return optionsGateway.host(value, i18n.t("portal_short"));
 }
 
 function gatewayOriginPattern(value) {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
-    return `${url.protocol}//${url.hostname}/*`;
-  } catch (error) {
-    return "";
-  }
+  return optionsGateway.originPattern(value);
+}
+
+function customGatewayOrigins(config) {
+  return optionsGateway.customOrigins(config);
 }
 
 async function requestGatewayAccess(config) {
-  if (!globalThis.chrome?.permissions?.request) return true;
-  const builtIn = new Set(["http://10.10.10.2/*", "https://10.10.10.2/*"]);
-  const origins = Array.from(new Set([
-    gatewayOriginPattern(config?.portalUrl),
-    gatewayOriginPattern(config?.apiUrl)
-  ].filter((origin) => origin && !builtIn.has(origin))));
-  if (!origins.length) return true;
-
-  const request = { origins };
-  if (config?.ui?.modernizePortal !== false) request.permissions = ["scripting"];
-  const granted = await chrome.permissions.request(request);
-  if (!granted) throw new Error(i18n.t("gateway_permission_required"));
-  return true;
+  return optionsGateway.requestAccess(config, {
+    chromeApi: globalThis.chrome,
+    permissionError: i18n.t("gateway_permission_required")
+  });
 }
 
-function renderAccounts() {
-  const list = $("account-list");
-  const sidebarSummary = $("sidebar-account-summary");
-  const selected = state.accounts.find((account) => account.id === state.selectedAccountId) || state.accounts[0] || null;
-  if (sidebarSummary) sidebarSummary.textContent = selected ? (selected.label || maskAccount(selected)) : i18n.t("no_account_saved");
-  if (!state.accounts.length) {
-    list.innerHTML = `<p class="empty-note">${escapeHtml(i18n.t("no_saved_accounts_long"))}</p>`;
-    return;
+async function revokeUnusedGatewayAccess(previousConfig, nextConfig) {
+  return optionsGateway.revokeUnusedAccess(previousConfig, nextConfig, {
+    chromeApi: globalThis.chrome,
+    retainedOrigins: nextConfig?.ui?.background === "daily" ? WALLPAPER_ORIGINS : []
+  });
+}
+
+function ensureAccountController() {
+  if (!accountController) {
+    accountController = optionsAccountControllerModule.createController({
+      $,
+      getState: () => state,
+      setState: (nextState) => { state = nextState; },
+      getEditingId: () => editingAccountId,
+      setEditingId: (value) => { editingAccountId = value; },
+      setAccountFormDirty: (value) => { accountFormDirty = value; },
+      setSettingsFormDirty: (value) => { settingsFormDirty = value; },
+      splitAccount, suffixLabel, makeAccountLabel, naturalAccountKey, maskAccount, escapeHtml,
+      t: (key, substitutions) => i18n.t(key, substitutions),
+      sendMessage, renderRequestLog, loadState, toast,
+      confirmDialog: globalThis.DrcomConfirmDialog
+    });
   }
-  list.innerHTML = state.accounts.map((account) => {
-    const parsed = splitAccount(account.username, account.suffix);
-    const accountLabel = account.label || makeAccountLabel(parsed.username, parsed.suffix);
-    return '<div class="simple-account' + (account.id === state.selectedAccountId ? ' active' : '') + '">' +
-      '<button type="button" class="account-row" data-edit="' + escapeHtml(account.id) + '">' +
-      '<strong>' + escapeHtml(accountLabel) + '</strong>' +
-      '<span>' + escapeHtml(maskAccount(account)) + '</span></button>' +
-      '<button type="button" class="small-danger" title="' + escapeHtml(i18n.t("delete_account_label", [accountLabel])) + '" aria-label="' + escapeHtml(i18n.t("delete_account_label", [accountLabel])) + '" data-delete="' + escapeHtml(account.id) + '">' + escapeHtml(i18n.t("delete_short")) + '</button></div>';
-  }).join("");
+  return accountController;
 }
+
+function renderAccounts() { return ensureAccountController().renderAccounts(); }
 
 function renderRequestLog() {
   const list = $("request-log");
@@ -1203,166 +1121,17 @@ function isRequestRecordOk(record) {
   return Boolean(record.success || record.online);
 }
 
-async function handleAccountListClick(event) {
-  const editButton = event.target.closest("[data-edit]");
-  const deleteButton = event.target.closest("[data-delete]");
-  if (deleteButton) {
-    await deleteAccount(deleteButton.dataset.delete);
-    return;
-  }
-  if (editButton) {
-    const account = state.accounts.find((item) => item.id === editButton.dataset.edit);
-    fillAccountEditor(account);
-    await selectAccount(editButton.dataset.edit);
-  }
-}
-
-function fillAccountEditor(account) {
-  const parsed = account ? splitAccount(account.username, account.suffix) : { username: "", suffix: "" };
-  editingAccountId = account ? account.id : "";
-  $("account-id").value = editingAccountId;
-  $("account-label").value = account ? account.label : "";
-  $("account-suffix").value = parsed.suffix;
-  $("account-username").value = parsed.username;
-  $("account-password").value = account ? account.password : "";
-  $("account-ip").value = account && account.network ? account.network.wlanUserIp : "";
-  $("account-mac").value = account && account.network ? account.network.wlanUserMac : "000000000000";
-  $("account-ipv6").value = account && account.network ? account.network.wlanUserIpv6 : "";
-  $("account-ac-ip").value = account && account.network ? account.network.wlanAcIp : "";
-  $("account-ac-name").value = account && account.network ? account.network.wlanAcName : "";
-  accountFormDirty = false;
-}
-
-function readEditedAccount() {
-  const parsed = splitAccount($("account-username").value.trim(), $("account-suffix").value.trim());
-  const label = $("account-label").value.trim() || makeAccountLabel(parsed.username, parsed.suffix);
-  return {
-    id: editingAccountId,
-    label,
-    username: parsed.username,
-    suffix: parsed.suffix,
-    password: $("account-password").value,
-    network: {
-      wlanUserIp: $("account-ip").value.trim(),
-      wlanUserMac: $("account-mac").value.trim() || "000000000000",
-      wlanUserIpv6: $("account-ipv6").value.trim(),
-      wlanAcIp: $("account-ac-ip").value.trim(),
-      wlanAcName: $("account-ac-name").value.trim()
-    }
-  };
-}
-
-async function saveEditedAccount(event) {
-  event.preventDefault();
-  const response = await sendMessage({ action: "account:save", account: readEditedAccount() });
-  state = response.state;
-  fillAccountEditor(response.account);
-  renderAccounts();
-  renderRequestLog();
-  toast(i18n.t("account_saved"));
-}
-
-async function loginEditedAccount() {
-  const saved = await sendMessage({ action: "account:save", account: readEditedAccount() });
-  state = saved.state;
-  fillAccountEditor(saved.account);
-  renderAccounts();
-  const result = await sendMessage({ action: "drcom:login", accountId: saved.account.id });
-  await loadState();
-  toast(result.message || i18n.t("login_request_sent"));
-}
-
-async function logoutAccount() {
-  const result = await sendMessage({ action: "drcom:logout" });
-  await loadState();
-  toast(result.message || i18n.t("logout_request_sent"));
-}
-
-async function deleteEditedAccount() {
-  if (!editingAccountId) return;
-  await deleteAccount(editingAccountId);
-}
-
-async function deleteAccount(accountId) {
-  const account = state.accounts.find((item) => item.id === accountId);
-  if (!account) return;
-  const accountLabel = account.label || makeAccountLabel(account.username, account.suffix);
-  const confirmed = await globalThis.DrcomConfirmDialog.ask({
-    title: i18n.t("delete_account_title"),
-    message: i18n.t("delete_account_message", [accountLabel, maskAccount(account)]),
-    confirmLabel: i18n.t("delete_account_confirm")
-  });
-  if (!confirmed) return;
-
-  const response = await sendMessage({ action: "account:delete", accountId });
-  state = response.state;
-  renderAccounts();
-  renderRequestLog();
-  fillAccountEditor(state.accounts.find((account) => account.id === state.selectedAccountId) || state.accounts[0] || null);
-  toast(i18n.t("account_deleted"));
-}
-
-async function selectAccount(accountId) {
-  const response = await sendMessage({ action: "account:select", accountId });
-  state = response.state;
-  renderAccounts();
-}
-
-function parseCapturedUrl() {
-  const raw = $("raw-url").value.trim();
-  if (!raw) return toast(i18n.t("paste_capture_url_first"));
-  try {
-    const url = new URL(raw);
-    const params = url.searchParams;
-    const parsed = splitAccount(params.get("user_account") || "");
-    $("api-url").value = url.origin + url.pathname;
-    $("parsed-label").value = makeAccountLabel(parsed.username, parsed.suffix);
-    $("parsed-username").value = parsed.username;
-    $("parsed-suffix").value = parsed.suffix;
-    $("parsed-password").value = params.get("user_password") || "";
-    $("parsed-ip").value = params.get("wlan_user_ip") || "";
-    $("parsed-mac").value = params.get("wlan_user_mac") || "000000000000";
-    $("login-method").value = params.get("login_method") || $("login-method").value || "1";
-    $("js-version").value = params.get("jsVersion") || $("js-version").value || "3.3.2";
-    settingsFormDirty = true;
-    const parsedSuffix = { "": "carrier_campus", "@telecom": "carrier_telecom", "@unicom": "carrier_unicom", "@cmcc": "carrier_mobile" }[parsed.suffix];
-    toast(i18n.t("parse_success", [parsedSuffix ? i18n.t(parsedSuffix) : suffixLabel(parsed.suffix)]));
-  } catch (error) {
-    toast(i18n.t("invalid_url"));
-  }
-}
-
-async function saveParsedAccount() {
-  const parsed = splitAccount($("parsed-username").value.trim(), $("parsed-suffix").value.trim());
-  const account = {
-    label: $("parsed-label").value.trim() || makeAccountLabel(parsed.username, parsed.suffix),
-    username: parsed.username,
-    suffix: parsed.suffix,
-    password: $("parsed-password").value,
-    network: {
-      wlanUserIp: $("parsed-ip").value.trim(),
-      wlanUserMac: $("parsed-mac").value.trim() || "000000000000"
-    }
-  };
-  const existing = state.accounts.find((item) => naturalAccountKey(item) === naturalAccountKey(account));
-  if (existing) {
-    const existingLabel = existing.label || makeAccountLabel(existing.username, existing.suffix);
-    const confirmed = await globalThis.DrcomConfirmDialog.ask({
-      title: i18n.t("overwrite_import_title"),
-      message: i18n.t("overwrite_import_message", [existingLabel]),
-      confirmLabel: i18n.t("overwrite_import_confirm")
-    });
-    if (!confirmed) return;
-    account.id = existing.id;
-  }
-  const response = await sendMessage({ action: "account:save", account });
-  state = response.state;
-  fillAccountEditor(response.account);
-  renderAccounts();
-  renderRequestLog();
-  const savedSuffix = { "": "carrier_campus", "@telecom": "carrier_telecom", "@unicom": "carrier_unicom", "@cmcc": "carrier_mobile" }[response.account.suffix];
-  toast(i18n.t("account_saved_with_provider", [savedSuffix ? i18n.t(savedSuffix) : suffixLabel(response.account.suffix)]));
-}
+async function handleAccountListClick(event) { return ensureAccountController().handleListClick(event); }
+function fillAccountEditor(account) { return ensureAccountController().fillEditor(account); }
+function readEditedAccount() { return ensureAccountController().readEdited(); }
+async function saveEditedAccount(event) { return ensureAccountController().saveEdited(event); }
+async function loginEditedAccount() { return ensureAccountController().loginEdited(); }
+async function logoutAccount() { return ensureAccountController().logout(); }
+async function deleteEditedAccount() { return ensureAccountController().deleteEdited(); }
+async function deleteAccount(accountId) { return ensureAccountController().deleteAccount(accountId); }
+async function selectAccount(accountId) { return ensureAccountController().selectAccount(accountId); }
+function parseCapturedUrl() { return ensureAccountController().parseCapturedUrl(); }
+async function saveParsedAccount() { return ensureAccountController().saveParsed(); }
 
 async function saveSettings(event) {
   event.preventDefault();
@@ -1394,6 +1163,7 @@ function markSettingsAutoSaved() {
 
 async function autoSaveSettings({ announce = false } = {}) {
   if (!settingsFormDirty || !state) return false;
+  const previousConfig = state.config;
   const config = readConfig();
   const gatewayWarning = gatewaySecurityWarning(state.config, config);
   if (gatewayWarning) {
@@ -1411,6 +1181,11 @@ async function autoSaveSettings({ announce = false } = {}) {
   }
   const response = await sendMessage({ action: "config:save", config });
   state = response.state;
+  try {
+    await revokeUnusedGatewayAccess(previousConfig, state?.config || config);
+  } catch (error) {
+    console.warn("未能撤销旧的自定义网关权限；已保留新配置。");
+  }
   settingsFormDirty = false;
   /* 焦点仍在文本框中时跳过回填，避免打断输入；失焦提交后会再次自动保存 */
   const active = document.activeElement;
@@ -1427,18 +1202,7 @@ async function autoSaveSettings({ announce = false } = {}) {
 }
 
 function gatewaySecurityWarning(previous, next) {
-  const previousUrls = [previous && previous.portalUrl, previous && previous.apiUrl].map((value) => String(value || "").trim());
-  const nextUrls = [next && next.portalUrl, next && next.apiUrl].map((value) => String(value || "").trim());
-  if (previousUrls.every((value, index) => value === nextUrls[index])) return "";
-  const insecureCustom = nextUrls.some((value) => {
-    try {
-      const url = new URL(value);
-      return url.protocol === "http:" && url.hostname !== "10.10.10.2";
-    } catch (error) {
-      return false;
-    }
-  });
-  return insecureCustom ? i18n.t("custom_http_gateway_warning") : "";
+  return optionsGateway.securityWarning(previous, next, i18n.t("custom_http_gateway_warning"));
 }
 
 function renderGatewaySecurityWarning() {

@@ -1,138 +1,25 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require("node:fs");
-const { tmpdir } = require("node:os");
+const { existsSync, readFileSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
-const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const {
+  createHarness,
+  requestUrls,
+  shellPath,
+  shellQuote,
+  sshEnvironmentReady,
+  writeFixture
+} = require("./fixtures/ssh-harness");
 
-const projectRoot = join(__dirname, "..");
-const scriptPath = join(projectRoot, "SSH", "drcom-xzhmu.sh");
+/* 有条件执行：WSL/POSIX 环境缺失时跳过，避免在 Windows 上报假失败。 */
+const testSsh = (name, fn) => test(name, async (t) => {
+  if (!(await sshEnvironmentReady(t))) return;
+  return fn(t);
+});
 
-function shellPath(path) {
-  if (process.platform !== "win32") return path;
-  const match = String(path).match(/^([A-Za-z]):[\\/](.*)$/);
-  if (!match) return String(path).replaceAll("\\", "/");
-  return `/mnt/${match[1].toLowerCase()}/${match[2].replaceAll("\\", "/")}`;
-}
-
-function shellQuote(value) {
-  return `'${String(value).replaceAll("'", `'"'"'`)}'`;
-}
-
-function writeFixture(path, content) {
-  writeFileSync(path, content, "utf8");
-}
-
-function createHarness(options = {}) {
-  const root = mkdtempSync(join(tmpdir(), "drcom-ssh-"));
-  const bin = join(root, "bin");
-  const responses = join(root, "responses");
-  mkdirSync(bin);
-  mkdirSync(responses);
-
-  const ip = options.ip || "172.28.180.144";
-  writeFixture(join(root, "config"), [
-    "USERNAME='configured-user'",
-    "PASSWORD='test-password'",
-    "SUFFIX=''",
-    "PORTAL='http://10.10.10.2'",
-    "ENABLE_FIND_MAC='1'",
-    "CONNECT_TIMEOUT='1'",
-    ""
-  ].join("\n"));
-  writeFixture(join(responses, "portal"), `var v46ip = "${ip}";\n`);
-  writeFixture(join(responses, "status-online"), options.statusOnline ||
-    `dr1001({"result":1,"uid":"student@telecom","v46ip":"${ip}","ss4":"580205DC58C2"})`);
-  writeFixture(join(responses, "status-after"), options.statusAfter ||
-    "dr1001({\"result\":0,\"msg\":\"offline\"})");
-  writeFixture(join(responses, "find-mac"), options.findMac ||
-    "dr1004({\"result\":0})");
-  writeFixture(join(responses, "login"), "dr1002({\"result\":1,\"msg\":\"login success\"})");
-  writeFixture(join(responses, "unbind"), "dr1002({\"result\":1,\"msg\":\"unbind success\"})");
-  writeFixture(join(responses, "logout"), "dr1002({\"result\":1,\"msg\":\"logout success\"})");
-
-  writeFixture(join(bin, "wget"), `#!/bin/sh
-input=""
-url=""
-output="-"
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    -i) shift; input="$1" ;;
-    -O) shift; output="$1" ;;
-    http://*|https://*) url="$1" ;;
-  esac
-  shift
-done
-[ -n "$input" ] && url="$(cat "$input")"
-printf '%s\\n' "$url" >> "$FAKE_WGET_LOG"
-printf '%s\\n' "$output" >> "$FAKE_WGET_OUTPUT_LOG"
-source=""
-case "$url" in
-  http://127.0.0.1:1/*) exit 1 ;;
-  *chkstatus*)
-    count="$(grep -c 'chkstatus' "$FAKE_WGET_LOG")"
-    if [ "$count" -eq 1 ]; then source="$FAKE_RESPONSE_DIR/status-online"; else source="$FAKE_RESPONSE_DIR/status-after"; fi
-    ;;
-  *a=find_mac*) source="$FAKE_RESPONSE_DIR/find-mac" ;;
-  *a=login*) source="$FAKE_RESPONSE_DIR/login" ;;
-  *a=unbind_mac*) source="$FAKE_RESPONSE_DIR/unbind" ;;
-  *a=logout*) source="$FAKE_RESPONSE_DIR/logout" ;;
-  *) source="$FAKE_RESPONSE_DIR/portal" ;;
-esac
-if [ "$output" = "-" ]; then cat "$source"; else cat "$source" > "$output"; fi
-`);
-  writeFixture(join(bin, "sleep"), `#!/bin/sh
-printf '%s\\n' "$*" >> "$FAKE_SLEEP_LOG"
-`);
-  chmodSync(join(bin, "wget"), 0o755);
-  chmodSync(join(bin, "sleep"), 0o755);
-
-  const paths = {
-    root,
-    bin,
-    responses,
-    config: join(root, "config"),
-    session: join(root, "session"),
-    requestLog: join(root, "requests.log"),
-    wgetOutputLog: join(root, "wget-output.log"),
-    sleepLog: join(root, "sleep.log")
-  };
-  const exports = [
-    `export PATH=${shellQuote(shellPath(bin))}:"$PATH"`,
-    `export DRCOM_CONFIG=${shellQuote(shellPath(paths.config))}`,
-    `export DRCOM_SESSION=${shellQuote(shellPath(paths.session))}`,
-    // DrvFS-backed Windows temp directories do not support named pipes; the
-    // runtime FIFO must live on the WSL/Linux filesystem used to run the script.
-    `export TMPDIR=/tmp`,
-    `export FAKE_RESPONSE_DIR=${shellQuote(shellPath(responses))}`,
-    `export FAKE_WGET_LOG=${shellQuote(shellPath(paths.requestLog))}`,
-    `export FAKE_WGET_OUTPUT_LOG=${shellQuote(shellPath(paths.wgetOutputLog))}`,
-    `export FAKE_SLEEP_LOG=${shellQuote(shellPath(paths.sleepLog))}`
-  ];
-
-  return {
-    paths,
-    run(command) {
-      const invocation = `${exports.join("; ")}; sh ${shellQuote(shellPath(scriptPath))} ${command}`;
-      return spawnSync(process.platform === "win32" ? "bash" : "sh", ["-c", invocation], {
-        encoding: "utf8",
-        timeout: 15000
-      });
-    },
-    cleanup() {
-      rmSync(root, { recursive: true, force: true });
-    }
-  };
-}
-
-function requestUrls(path) {
-  if (!existsSync(path)) return [];
-  return readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean);
-}
-
-test("SSH 无本地会话时使用 chkstatus 的在线身份和 ss4 解绑", () => {
+testSsh("SSH 无本地会话时使用 chkstatus 的在线身份和 ss4 解绑", () => {
   const harness = createHarness();
   try {
     const result = harness.run("logout");
@@ -152,7 +39,7 @@ test("SSH 无本地会话时使用 chkstatus 的在线身份和 ss4 解绑", () 
   }
 });
 
-test("SSH 的 ss4 无效时只采用 find_mac 中当前 IP 对应的 MAC", () => {
+testSsh("SSH 的 ss4 无效时只采用 find_mac 中当前 IP 对应的 MAC", () => {
   const harness = createHarness({
     statusOnline: "dr1001({\"result\":1,\"uid\":\"student\",\"v46ip\":\"172.28.180.144\",\"ss4\":\"111111111111\"})",
     findMac: "dr1004({\"result\":1,\"list\":[{\"online_ip\":\"172.28.180.99\",\"online_mac\":\"11:22:33:44:55:66\"},{\"online_ip\":\"172.28.180.144\",\"online_mac\":\"58:02:05:DC:58:C2\"}]})"
@@ -172,7 +59,7 @@ test("SSH 的 ss4 无效时只采用 find_mac 中当前 IP 对应的 MAC", () =>
   }
 });
 
-test("SSH 会话文件按数据解析，不执行其中的 shell 内容", () => {
+testSsh("SSH 会话文件按数据解析，不执行其中的 shell 内容", () => {
   const harness = createHarness();
   const marker = join(harness.paths.root, "executed");
   try {
@@ -189,7 +76,7 @@ test("SSH 会话文件按数据解析，不执行其中的 shell 内容", () => 
   }
 });
 
-test("SSH 拒绝超过 64 KiB 的状态响应", () => {
+testSsh("SSH 拒绝超过 64 KiB 的状态响应", () => {
   const largeStatus = `dr1001({"result":1,"msg":"${"a".repeat(70 * 1024)}"})`;
   const harness = createHarness({ statusOnline: largeStatus, statusAfter: largeStatus });
   try {
@@ -201,7 +88,7 @@ test("SSH 拒绝超过 64 KiB 的状态响应", () => {
   }
 });
 
-test("SSH 状态响应通过有界管道读取，不让 wget 先写完整临时文件", () => {
+testSsh("SSH 状态响应通过有界管道读取，不让 wget 先写完整临时文件", () => {
   const largeStatus = `dr1001({"result":1,"msg":"${"a".repeat(70 * 1024)}"})`;
   const harness = createHarness({ statusOnline: largeStatus, statusAfter: largeStatus });
   try {
@@ -215,7 +102,7 @@ test("SSH 状态响应通过有界管道读取，不让 wget 先写完整临时�
   }
 });
 
-test("SSH 登录沿用生产请求：不查询 find_mac 且网络身份字段保持空值", () => {
+testSsh("SSH 登录沿用生产请求：不查询 find_mac 且网络身份字段保持空值", () => {
   const harness = createHarness({
     statusOnline: "dr1001({\"result\":0,\"msg\":\"offline\"})",
     statusAfter: "dr1001({\"result\":1,\"uid\":\"configured-user\",\"v46ip\":\"172.28.180.144\"})"
@@ -236,7 +123,7 @@ test("SSH 登录沿用生产请求：不查询 find_mac 且网络身份字段保
   }
 });
 
-test("SSH 完整注销兜底携带学校页面要求的 VLAN 标记", () => {
+testSsh("SSH 完整注销兜底携带学校页面要求的 VLAN 标记", () => {
   const harness = createHarness({
     statusOnline: "dr1001({\"result\":1,\"v46ip\":\"172.28.180.144\",\"ss4\":\"111111111111\"})"
   });
@@ -249,5 +136,128 @@ test("SSH 完整注销兜底携带学校页面要求的 VLAN 标记", () => {
     assert.equal(logout.searchParams.get("wlan_vlan_id"), "1");
   } finally {
     harness.cleanup();
+  }
+});
+
+testSsh("SSH 状态解析不会把 notresult 误识别成 result", () => {
+  const harness = createHarness({
+    statusOnline: 'dr1001({"notresult":1,"msg":"synthetic"})'
+  });
+  try {
+    const result = harness.run("status");
+    assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+    assert.match(result.stdout, /state=unknown/);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+testSsh("SSH 保留带空格的 already online 消息并正确复核在线", () => {
+  const harness = createHarness({
+    statusOnline: 'dr1001({"result":0,"msg":"offline"})',
+    statusAfter: 'dr1001({"result":1,"uid":"configured-user","v46ip":"172.28.180.144"})',
+    loginResponse: 'dr1002({"result":0,"ret_code":2,"msg":"already online"})'
+  });
+  try {
+    const result = harness.run("login");
+    assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+    assert.match(result.stdout, /already online confirmed/);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+testSsh("SSH 自定义 HTTP 门户带端口时不会生成双端口 API URL", () => {
+  const harness = createHarness({
+    portal: "http://gateway.example:8080/login",
+    statusOnline: 'dr1001({"result":0,"msg":"offline"})',
+    statusAfter: 'dr1001({"result":1,"uid":"configured-user","v46ip":"172.28.180.144"})'
+  });
+  try {
+    const result = harness.run("login");
+    assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+    const requests = requestUrls(harness.paths.requestLog).map((value) => new URL(value));
+    const login = requests.find((url) => url.searchParams.get("a") === "login");
+    assert.ok(login, "应发送 Portal/login");
+    assert.equal(login.hostname, "gateway.example");
+    assert.equal(login.port, "801");
+    assert.doesNotMatch(login.toString(), /:8080:801/);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+testSsh("SSH API_URL 可显式覆盖自定义门户的 API 来源", () => {
+  const harness = createHarness({
+    portal: "http://gateway.example:8080/login",
+    apiUrl: "https://api.example:9443/eportal/",
+    statusOnline: 'dr1001({"result":0,"msg":"offline"})',
+    statusAfter: 'dr1001({"result":1,"uid":"configured-user","v46ip":"172.28.180.144"})'
+  });
+  try {
+    const result = harness.run("login");
+    assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+    const requests = requestUrls(harness.paths.requestLog).map((value) => new URL(value));
+    const login = requests.find((url) => url.searchParams.get("a") === "login");
+    assert.ok(login, "应发送 Portal/login");
+    assert.equal(login.origin, "https://api.example:9443");
+    assert.equal(login.pathname, "/eportal/");
+  } finally {
+    harness.cleanup();
+  }
+});
+
+testSsh("SSH 门户正文实时 IP 优先于 PORTAL 中的旧查询参数", () => {
+  const harness = createHarness({
+    portal: "http://10.10.10.2/?station_ip=192.0.2.7",
+    ip: "192.0.2.46",
+    statusOnline: 'dr1001({"result":0,"msg":"offline"})',
+    statusAfter: 'dr1001({"result":1,"uid":"configured-user","v46ip":"192.0.2.46"})'
+  });
+  try {
+    const result = harness.run("login");
+    assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+    const requests = requestUrls(harness.paths.requestLog).map((value) => new URL(value));
+    const login = requests.find((url) => url.searchParams.get("a") === "login");
+    assert.ok(login, "应发送 Portal/login");
+    assert.equal(login.searchParams.get("wlan_user_ip"), "192.0.2.46");
+    assert.match(result.stdout, /source=v46ip/);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+testSsh("SSH 登录失败输出与扩展一致的结构化凭据错误代码", () => {
+  const harness = createHarness({
+    statusOnline: 'dr1001({"result":0,"msg":"offline"})',
+    loginResponse: 'dr1002({"result":0,"msg":"password invalid"})'
+  });
+  try {
+    const result = harness.run("login");
+    assert.notEqual(result.status, 0, `${result.stderr}\n${result.stdout}`);
+    assert.match(result.stderr, /code=bad_credentials/);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+testSsh("SSH 登录失败区分账号不存在和网络参数错误", () => {
+  const cases = [
+    ['dr1002({"result":0,"msg":"userid error1"})', "user_not_found"],
+    ['dr1002({"result":0,"msg":"ip mismatch"})', "network_parameters"]
+  ];
+
+  for (const [loginResponse, expectedCode] of cases) {
+    const harness = createHarness({
+      statusOnline: 'dr1001({"result":0,"msg":"offline"})',
+      loginResponse
+    });
+    try {
+      const result = harness.run("login");
+      assert.notEqual(result.status, 0, `${result.stderr}\n${result.stdout}`);
+      assert.match(result.stderr, new RegExp(`code=${expectedCode}`));
+    } finally {
+      harness.cleanup();
+    }
   }
 });
