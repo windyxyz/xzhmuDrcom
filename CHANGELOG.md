@@ -2,7 +2,7 @@
 
 本文件记录徐医校园网xzhmu的重要变化，格式参考 Keep a Changelog，版本遵循扩展 Manifest 版本。
 
-## [1.1.1] - Unreleased
+## [1.1.1] - 2026-10-01
 
 ### 新增
 
