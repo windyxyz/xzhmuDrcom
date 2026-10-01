@@ -60,10 +60,18 @@ function launchBrowser(browser, args, options = {}) {
     ? ["--no-sandbox", ...languageArgs, ...args]
     : [...languageArgs, ...args];
   const spawnOptions = { ...options };
-  if (process.platform !== "win32" && spawnOptions.detached === undefined) {
-    // Give Chromium and its helper processes their own process group so cleanup
-    // can terminate the complete tree instead of only the browser parent.
-    spawnOptions.detached = true;
+  if (process.platform !== "win32") {
+    spawnOptions.detached = spawnOptions.detached ?? true;
+    /* Linux 上 Chromium 的 navigator.language 跟随 LANG/LANGUAGE 环境变量，
+       基本不理会 --lang；CI runner 是 POSIX locale，"跟随浏览器"默认语言
+       会取到英文。统一注入中文 locale，双语布局测试仍通过页面内
+       DrcomI18n.setLanguage 显式切换，不受影响。 */
+    spawnOptions.env = {
+      ...process.env,
+      ...spawnOptions.env,
+      LANG: spawnOptions.env?.LANG ?? "zh_CN.UTF-8",
+      LANGUAGE: spawnOptions.env?.LANGUAGE ?? "zh_CN.UTF-8"
+    };
   }
   const child = spawn(browser, launchArgs, spawnOptions);
   child.__drcomProcessGroup = spawnOptions.detached === true && process.platform !== "win32";
