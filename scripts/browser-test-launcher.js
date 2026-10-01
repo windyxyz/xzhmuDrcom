@@ -50,9 +50,15 @@ function findBrowser(options = {}) {
 function launchBrowser(browser, args, options = {}) {
   const noSandbox = process.env.CHROME_NO_SANDBOX === "1"
     || (typeof process.getuid === "function" && process.getuid() === 0);
+  /* 测试默认在中文环境断言"跟随浏览器"的界面语言；CI Linux runner 的
+     系统语言是 en，会让默认语言断言随机失败。显式固定 --lang=zh-CN，
+     双语布局测试仍通过页面内 DrcomI18n.setLanguage 显式切换，不受影响。 */
+  const languageArgs = args.some((arg) => arg.startsWith("--lang="))
+    ? []
+    : ["--lang=zh-CN"];
   const launchArgs = noSandbox && !args.includes("--no-sandbox")
-    ? ["--no-sandbox", ...args]
-    : args;
+    ? ["--no-sandbox", ...languageArgs, ...args]
+    : [...languageArgs, ...args];
   const spawnOptions = { ...options };
   if (process.platform !== "win32" && spawnOptions.detached === undefined) {
     // Give Chromium and its helper processes their own process group so cleanup
@@ -84,7 +90,9 @@ function readDevToolsActivePort(profile) {
 }
 
 function waitForDebugger(child, options = {}) {
-  const timeoutMs = options.timeoutMs ?? 10_000;
+  /* CI runner 冷启动 Chromium 可能超过 10 秒（首轮最慢，后续复用进程更快），
+     10 秒会让第一个浏览器测试随机超时，放宽到 30 秒。 */
+  const timeoutMs = options.timeoutMs ?? 30_000;
   const pollIntervalMs = options.pollIntervalMs ?? 50;
 
   return new Promise((resolve, reject) => {
@@ -151,7 +159,7 @@ function waitForDebugger(child, options = {}) {
           fail(new Error(
             `浏览器启动器以退出码 0 结束，但真实浏览器未在限定时间内创建 DevToolsActivePort${stderrTail ? `\n浏览器 stderr 尾部：\n${stderrTail}` : ""}`
           ));
-        }, options.launcherHandoffTimeoutMs ?? 2_000);
+        }, options.launcherHandoffTimeoutMs ?? 5_000);
         return;
       }
       const stderrTail = output.trim().slice(-2048);
