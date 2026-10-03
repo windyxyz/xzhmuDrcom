@@ -2,7 +2,7 @@
 
 ## 1. 项目定位
 
-徐医校园网xzhmu（英文名 XZHMU Campus Network）是面向徐州医科大学 DrCOM 校园网的 Manifest V3 扩展。当前开发版本为 1.1.1，源码位于 CRX/，使用原生 HTML、CSS 和 JavaScript，不依赖第三方 npm 包。验证范围为 Chrome 桌面、Edge 桌面、Edge Android 和 Firefox；不宣称支持 Chrome Android。
+徐医校园网xzhmu（英文名 XZHMU Campus Network）是面向徐州医科大学 DrCOM 校园网的 Manifest V3 扩展。当前开发版本为 1.1.2，源码位于 CRX/，使用原生 HTML、CSS 和 JavaScript，不依赖第三方 npm 包。验证范围为 Chrome 桌面、Edge 桌面、Edge Android 和 Firefox；不宣称支持 Chrome Android。
 
 项目解决以下问题：
 
@@ -817,15 +817,15 @@ npm run package:firefox
 
 输出：
 
-- dist/drcom-xuzhou-medical-chrome-1.1.1.zip + .sha256（商店校验不允许 manifest 含 `key`，商店会分配扩展 ID 与 key）
-- dist/drcom-xuzhou-medical-firefox-1.1.1.zip + .sha256（基于 CRX/ 白名单，仅替换 manifest：去 key、`options_ui`、`browser_specific_settings.gecko`）
+- dist/drcom-xuzhou-medical-chrome-1.1.2.zip + .sha256（商店校验不允许 manifest 含 `key`，商店会分配扩展 ID 与 key）
+- dist/drcom-xuzhou-medical-firefox-1.1.2.zip + .sha256（基于 CRX/ 白名单，仅替换 manifest：去 key、`options_ui`、`browser_specific_settings.gecko`）
 
 ZIP 根目录直接包含 manifest.json 和 LICENSE。打包器使用显式白名单、固定顺序、1980-01-01 DOS 时间和 STORE 方法。tests/、docs/、portal-preview.*、截图和本地状态不会进入发布包。dist/ 已加入 .gitignore。
 
 ### 14.2 标签校验
 
 ~~~powershell
-npm run verify:release -- v1.1.1
+npm run verify:release -- v1.1.2
 ~~~
 
 脚本要求标签精确等于 v + Manifest 版本，同时检查 package.json 版本，并从 CHANGELOG.md 提取当前版本到 dist/release-notes.md。

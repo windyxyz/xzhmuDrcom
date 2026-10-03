@@ -1,6 +1,6 @@
 # DrCom徐医 OpenWrt 脚本
 
-`drcom-xzhmu.sh` 是一个独立的 OpenWrt/BusyBox `ash` 脚本，用于在路由器上完成徐医 DrCOM 校园网登录、状态检查、保活和注销。它同步浏览器扩展 1.1.1 经生产抓包验证的登录与终端解绑逻辑，但不依赖 Chrome、Node.js、curl、jq 或 Python。
+`drcom-xzhmu.sh` 是一个独立的 OpenWrt/BusyBox `ash` 脚本，用于在路由器上完成徐医 DrCOM 校园网登录、状态检查、保活和注销。它同步浏览器扩展 1.1.2 经生产抓包验证的登录与终端解绑逻辑，但不依赖 Chrome、Node.js、curl、jq 或 Python。
 
 ## 部署
 

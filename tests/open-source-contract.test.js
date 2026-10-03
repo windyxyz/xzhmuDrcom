@@ -46,7 +46,7 @@ test("README 使用正式品牌且变更日志保留当前发布身份", () => {
   assert.match(changelog, /^## \[1\.1\.0\] - 2026-09-08$/m);
 });
 
-test("1.1.1 开发版本在元数据、文档和变更日志中保持一致", () => {
+test("1.1.2 开发版本在元数据、文档和变更日志中保持一致", () => {
   const packageMetadata = JSON.parse(read("package.json"));
   const chromeManifest = JSON.parse(read("CRX/manifest.json"));
   const firefoxManifest = JSON.parse(read("CRX/manifest.firefox.json"));
@@ -54,30 +54,31 @@ test("1.1.1 开发版本在元数据、文档和变更日志中保持一致", ()
   const development = read("docs/development-guide.md");
   const changelog = read("CHANGELOG.md");
 
-  assert.equal(packageMetadata.version, "1.1.1");
-  assert.equal(chromeManifest.version, "1.1.1");
-  assert.equal(firefoxManifest.version, "1.1.1");
-  assert.match(readme, /当前开发版本为 \*\*1\.1\.1\*\*/);
-  assert.match(readme, /drcom-xuzhou-medical-chrome-1\.1\.1\.zip/);
-  assert.match(readme, /drcom-xuzhou-medical-firefox-1\.1\.1\.zip/);
-  assert.match(development, /当前开发版本为 1\.1\.1/);
+  assert.equal(packageMetadata.version, "1.1.2");
+  assert.equal(chromeManifest.version, "1.1.2");
+  assert.equal(firefoxManifest.version, "1.1.2");
+  assert.match(readme, /当前开发版本为 \*\*1\.1\.2\*\*/);
+  assert.match(readme, /drcom-xuzhou-medical-chrome-1\.1\.2\.zip/);
+  assert.match(readme, /drcom-xuzhou-medical-firefox-1\.1\.2\.zip/);
+  assert.match(development, /当前开发版本为 1\.1\.2/);
 
   /* 开发期该段标记 Unreleased；发布定稿后替换为 YYYY-MM-DD 日期，两者都合法。 */
-  const current = changelog.match(/^## \[1\.1\.1\] - (?:Unreleased|\d{4}-\d{2}-\d{2})\s+([\s\S]*?)(?=^## \[1\.1\.0\])/m);
-  assert.ok(current, "CHANGELOG 缺少 1.1.1 版本段（Unreleased 或发布日期）");
+  const current = changelog.match(/^## \[1\.1\.2\] - (?:Unreleased|\d{4}-\d{2}-\d{2})\s+([\s\S]*?)(?=^## \[1\.1\.1\])/m);
+  assert.ok(current, "CHANGELOG 缺少 1.1.2 版本段（Unreleased 或发布日期）");
   for (const term of [
-    "双语",
-    "徐医校园网xzhmu",
-    "XZHMU Campus Network",
-    "_locales/zh_CN",
-    "_locales/en",
-    "Chrome 桌面",
-    "Edge Android",
-    "响应式",
-    "触控",
-    "双指缩放"
+    "原子锁",
+    "语义去重",
+    "REQUIRE_BROWSER_TESTS",
+    "navigator.language"
   ]) {
     assert.equal(current[1].includes(term), true, term);
+  }
+
+  /* 已发布的 1.1.1 段落必须保持 9/23 定稿原文，商店审核版本不受后续迭代影响。 */
+  const released = changelog.match(/^## \[1\.1\.1\] - 2026-09-23\s+([\s\S]*?)(?=^## \[1\.1\.0\])/m);
+  assert.ok(released, "CHANGELOG 的 1.1.1 段应保持 2026-09-23 定稿状态");
+  for (const term of ["双语", "_locales/zh_CN", "XZHMU Campus Network", "双指缩放"]) {
+    assert.equal(released[1].includes(term), true, term);
   }
 });
 

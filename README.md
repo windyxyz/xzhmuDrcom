@@ -19,7 +19,7 @@
 
 - Chrome Android 不提供常规扩展支持，因此不在支持范围内，本项目不宣称支持。
 - Edge Android 依赖浏览器的移动视口模拟桌面扩展运行；Edge Android 真机表现尚未验证完全部机型，建议先在桌面端完成账号配置。
-- 当前开发版本为 **1.1.1**。
+- 当前开发版本为 **1.1.2**。
 
 开发者也可以从源码加载 Chrome/Edge 版本：
 
@@ -103,8 +103,8 @@ npm run package:firefox
 
 产物位于 `dist/`：
 
-- `drcom-xuzhou-medical-chrome-1.1.1.zip` 与 SHA-256；
-- `drcom-xuzhou-medical-firefox-1.1.1.zip` 与 SHA-256。
+- `drcom-xuzhou-medical-chrome-1.1.2.zip` 与 SHA-256；
+- `drcom-xuzhou-medical-firefox-1.1.2.zip` 与 SHA-256。
 
 发布标签检查：
 

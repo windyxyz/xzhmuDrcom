@@ -2,13 +2,41 @@
 
 本文件记录徐医校园网xzhmu的重要变化，格式参考 Keep a Changelog，版本遵循扩展 Manifest 版本。
 
-## [1.1.1] - 2026-10-01
+## [1.1.2] - 2026-10-04
+
+### 新增
+
+- CRX 连接操作改为统一互斥协调器：login/logout 串行执行，排队中的登录按“账号 + 手动/自动”语义去重，不同账号不会被误合并，用户主动注销后抑制自动重连。
+- SSH 增加跨进程原子锁文件（`ln` 硬链接创建，锁内始终携带完整持锁 PID，释放前校验所有权）、登录密码安全闸门（wget 不支持 `-i` 时默认拒绝发送密码，可用 `ALLOW_INSECURE_WGET=1` 显式放行，已在线时无需密码不触发闸门）和会话文件版本化。
+- 新增 `scripts/static-check.js` 跨平台静态检查、`scripts/test-all-runner.js` 统一测试入口和 `scripts/browser-test-launcher.js` 真实浏览器启动器；新增 `docs/testing-guide.md` 与 protocol、URL 账号、门户上下文、SSH、浏览器基础设施五组 edge 回归测试。
+
+### 修复
+
+- 修复 SSH 目录锁的竞态窗口：原 `mkdir` 锁存在“锁目录已创建但 PID 未写入”的中间状态，两个进程可能同时认为持锁；改为原子锁文件后锁一出现即携带完整持锁进程 PID。
+- 修复排队登录被误合并：注销执行中排队的不同账号登录会合并到先到者，导致最终登录身份与用户请求不符；改为按语义键去重，并禁止用密码作为去重键。
+- 修复 Windows 统一 `npm test` 静态检查阶段通过 `spawnSync npm.cmd` 可能触发 `EINVAL` 的问题。
+- 修复真实浏览器测试在 Linux runner 上的两处平台差异：冷启动等待上限从 10 秒放宽到 30 秒；Chromium 在 Linux 上 `navigator.language` 跟随 `LANG`/`LANGUAGE` 环境变量，统一注入中文 locale 与 `--lang=zh-CN`，避免“跟随浏览器”默认语言在英文 runner 上取到英文。
+- 修复版本合约测试只认 `Unreleased` 格式，导致 CHANGELOG 定稿后发布流程的 verify 步骤失败。
+
+### 工程
+
+- CI 的 Browser tests 步骤与 Release 的 verify 步骤设置 `REQUIRE_BROWSER_TESTS=1` 强制门禁：环境不满足时浏览器测试直接失败而不是静默 skip，防止 runner 环境变化后真实浏览器测试全部跳过、流水线依然绿色导致发布门禁失去意义。
+- 新增统一 `npm test` / `npm run test:all` 入口，按静态检查、unit（已含 edge）、真实浏览器和打包验证执行，阶段失败后继续收集后续结果并在末尾统一汇总；保留 `npm run test:edge` 作为快速高风险回归入口。
+- Windows 浏览器自动发现保持显式 `CHROME_BIN` / `EDGE_BIN` 和常规稳定版优先；只有找不到常规浏览器时才依次使用 Edge Beta 与 RunningCheese Helium 本机路径作为单实例兜底，不增加重复浏览器测试矩阵。
+- 主要模块继续拆分：`drcom-protocol.js`、`portal-url.js` 与设置页账号、颜色、诊断、网关四个控制器从原入口中独立出来。
+- 仓库卫生：统一行尾入库规则（`SSH/*.sh` 保持 LF）、忽略本地工作目录、删除未落地的 OpenWrt LuCI/IPK 设计文档。
+
+### 发布资产
+
+- Chrome 审核上传包：`drcom-xuzhou-medical-chrome-1.1.2.zip`；Firefox 审核上传包：`drcom-xuzhou-medical-firefox-1.1.2.zip`。
+- Chrome 安装包：`drcom-xuzhou-medical-chrome-1.1.2.crx`；Firefox 安装包：`drcom-xuzhou-medical-firefox-1.1.2.xpi`。
+
+## [1.1.1] - 2026-09-23
 
 ### 新增
 
 - 欢迎页、弹窗、设置页和现代门户加入完整双语界面，支持“跟随浏览器”、固定中文和固定 English；偏好使用独立存储和受限消息接口跨页面同步，切换时保留表单、焦点与在线状态。
 - Chrome 与 Firefox 分发包声明并收录 `_locales/zh_CN`、`_locales/en`、`i18n-messages.js` 和 `i18n.js`，打包门禁同时验证两套 locale 与共享语言运行时。
-- CRX 连接操作改为统一互斥协调器：login/logout 串行执行，排队中的登录按"账号 + 手动/自动"语义去重，不同账号不会被误合并，用户主动注销后抑制自动重连；SSH 增加跨进程原子锁文件（`ln` 硬链接创建，锁内始终携带完整持锁 PID，释放前校验所有权）、登录密码安全闸门（wget 不支持 `-i` 时默认拒绝发送密码，可用 `ALLOW_INSECURE_WGET=1` 显式放行，已在线时无需密码不触发闸门）和会话文件版本化。
 
 ### 变更
 
@@ -17,11 +45,7 @@
 
 ### 工程
 
-- 修复 Windows 统一 `npm test` 静态检查阶段通过 `spawnSync npm.cmd` 可能触发 `EINVAL` 的问题：新增跨平台 `scripts/static-check.js`，直接使用当前 Node 的 `--check` 自动扫描 `CRX/` 与 `scripts/` JavaScript 文件；统一入口与 `npm run check` 共用同一实现。
-- 新增统一 `npm test` / `npm run test:all` 入口，按静态检查、unit（已含 edge）、真实浏览器和打包验证执行，阶段失败后继续收集后续结果并在末尾统一汇总；保留 `npm run test:edge` 作为快速高风险回归入口。
-- Windows 浏览器自动发现保持显式 `CHROME_BIN` / `EDGE_BIN` 和常规稳定版优先；只有找不到常规浏览器时才依次使用 Edge Beta 与 RunningCheese Helium 本机路径作为单实例兜底，不增加重复浏览器测试矩阵。
 - 新增双语词典完整性、语言持久化与广播、原位重译、移动触控/拖拽、窄屏溢出和双指缩放回归；真实 Chromium 门禁覆盖中英文 320px、360px 与 390px 视口。
-- CI 的 Browser tests 步骤与 Release 的 verify 步骤设置 `REQUIRE_BROWSER_TESTS=1` 强制门禁：环境不满足时浏览器测试直接失败而不是静默 skip，防止 runner 环境变化后真实浏览器测试全部跳过、流水线依然绿色导致发布门禁失去意义。
 - 发布前修复设置页个性化颜色选择器在手机和窄桌面窗口中的横向挤压：1024px 及以下统一改为单列触控布局，并增加真实 Edge Beta 390px 回归用例。
 
 ### 发布资产
