@@ -3,9 +3,18 @@
 const { createHash } = require("node:crypto");
 const { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
+const { deflateRawSync } = require("node:zlib");
 
 const FIXED_DOS_TIME = 0;
 const FIXED_DOS_DATE = 0x0021;
+/* Edge Add-ons 的包校验器会拒绝 STORE（不压缩）方式的产物，
+   即使条目、CRC 与中央目录都合法也报"不是有效的 ZIP"；
+   改用固定压缩级别的 DEFLATE，产物体积从约 1.06 MB 降到约 375 KB。
+   deflateRawSync 对相同输入是确定性的，配合固定 DOS 时间戳
+   仍能保证同一 Node 版本下重复构建字节一致。 */
+const DEFLATE_LEVEL = 9;
+const STORED_METHOD = 0;
+const DEFLATED_METHOD = 8;
 const RELEASE_FILES = [
   ["CRX/manifest.json", "manifest.json"],
   ["LICENSE", "LICENSE"],
@@ -106,34 +115,34 @@ function crc32(buffer) {
   return (value ^ 0xffffffff) >>> 0;
 }
 
-function makeLocalHeader(nameBuffer, content, checksum) {
+function makeLocalHeader(nameBuffer, method, compressedSize, contentSize, checksum) {
   const header = Buffer.alloc(30);
   header.writeUInt32LE(0x04034b50, 0);
   header.writeUInt16LE(20, 4);
   header.writeUInt16LE(0, 6);
-  header.writeUInt16LE(0, 8);
+  header.writeUInt16LE(method, 8);
   header.writeUInt16LE(FIXED_DOS_TIME, 10);
   header.writeUInt16LE(FIXED_DOS_DATE, 12);
   header.writeUInt32LE(checksum, 14);
-  header.writeUInt32LE(content.length, 18);
-  header.writeUInt32LE(content.length, 22);
+  header.writeUInt32LE(compressedSize, 18);
+  header.writeUInt32LE(contentSize, 22);
   header.writeUInt16LE(nameBuffer.length, 26);
   header.writeUInt16LE(0, 28);
   return header;
 }
 
-function makeCentralHeader(nameBuffer, content, checksum, localOffset) {
+function makeCentralHeader(nameBuffer, method, compressedSize, contentSize, checksum, localOffset) {
   const header = Buffer.alloc(46);
   header.writeUInt32LE(0x02014b50, 0);
   header.writeUInt16LE(20, 4);
   header.writeUInt16LE(20, 6);
   header.writeUInt16LE(0, 8);
-  header.writeUInt16LE(0, 10);
+  header.writeUInt16LE(method, 10);
   header.writeUInt16LE(FIXED_DOS_TIME, 12);
   header.writeUInt16LE(FIXED_DOS_DATE, 14);
   header.writeUInt32LE(checksum, 16);
-  header.writeUInt32LE(content.length, 20);
-  header.writeUInt32LE(content.length, 24);
+  header.writeUInt32LE(compressedSize, 20);
+  header.writeUInt32LE(contentSize, 24);
   header.writeUInt16LE(nameBuffer.length, 28);
   header.writeUInt16LE(0, 30);
   header.writeUInt16LE(0, 32);
@@ -152,12 +161,24 @@ function createZip(entries) {
   for (const entry of entries) {
     const nameBuffer = Buffer.from(entry.archivePath, "utf8");
     const checksum = crc32(entry.content);
-    const localHeader = makeLocalHeader(nameBuffer, entry.content, checksum);
-    const centralHeader = makeCentralHeader(nameBuffer, entry.content, checksum, localOffset);
+    /* 压缩后反而更大的条目回退为 STORE，避免个别小文件出现负收益。 */
+    const deflated = deflateRawSync(entry.content, { level: DEFLATE_LEVEL });
+    const useDeflate = deflated.length < entry.content.length;
+    const payload = useDeflate ? deflated : entry.content;
+    const method = useDeflate ? DEFLATED_METHOD : STORED_METHOD;
+    const localHeader = makeLocalHeader(nameBuffer, method, payload.length, entry.content.length, checksum);
+    const centralHeader = makeCentralHeader(
+      nameBuffer,
+      method,
+      payload.length,
+      entry.content.length,
+      checksum,
+      localOffset
+    );
 
-    localParts.push(localHeader, nameBuffer, entry.content);
+    localParts.push(localHeader, nameBuffer, payload);
     centralParts.push(centralHeader, nameBuffer);
-    localOffset += localHeader.length + nameBuffer.length + entry.content.length;
+    localOffset += localHeader.length + nameBuffer.length + payload.length;
   }
 
   const centralDirectory = Buffer.concat(centralParts);

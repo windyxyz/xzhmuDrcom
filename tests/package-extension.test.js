@@ -5,6 +5,7 @@ const { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSyn
 const { tmpdir } = require("node:os");
 const { dirname, join } = require("node:path");
 const test = require("node:test");
+const { inflateRawSync } = require("node:zlib");
 
 const {
   FIXED_DOS_DATE,
@@ -23,6 +24,8 @@ function readCentralDirectory(zipBuffer) {
     entries.push({
       name: zipBuffer.subarray(offset + 46, offset + 46 + nameLength).toString("utf8"),
       method: zipBuffer.readUInt16LE(offset + 10),
+      compressedSize: zipBuffer.readUInt32LE(offset + 20),
+      size: zipBuffer.readUInt32LE(offset + 24),
       dosTime: zipBuffer.readUInt16LE(offset + 12),
       dosDate: zipBuffer.readUInt16LE(offset + 14)
     });
@@ -34,6 +37,7 @@ function readCentralDirectory(zipBuffer) {
 function readStoredZipEntry(zipBuffer, wantedName) {
   for (let offset = 0; offset <= zipBuffer.length - 30;) {
     if (zipBuffer.readUInt32LE(offset) !== 0x04034b50) break;
+    const method = zipBuffer.readUInt16LE(offset + 8);
     const contentLength = zipBuffer.readUInt32LE(offset + 18);
     const nameLength = zipBuffer.readUInt16LE(offset + 26);
     const extraLength = zipBuffer.readUInt16LE(offset + 28);
@@ -41,7 +45,8 @@ function readStoredZipEntry(zipBuffer, wantedName) {
     const contentStart = nameStart + nameLength + extraLength;
     const name = zipBuffer.subarray(nameStart, nameStart + nameLength).toString("utf8");
     if (name === wantedName) {
-      return zipBuffer.subarray(contentStart, contentStart + contentLength);
+      const payload = zipBuffer.subarray(contentStart, contentStart + contentLength);
+      return method === 8 ? inflateRawSync(payload) : payload;
     }
     offset = contentStart + contentLength;
   }
@@ -113,7 +118,17 @@ test("扩展 ZIP 只包含固定顺序的运行白名单并排除预览与源码
       .map((entry) => entry.archivePath);
 
     assert.deepEqual(entries.map((entry) => entry.name), expected);
-    assert.ok(entries.every((entry) => entry.method === 0), "固定使用 STORE 方法，避免压缩器版本导致结果漂移");
+    /* Edge Add-ons 会拒绝 STORE 方式的包（报"不是有效的 ZIP"），
+       因此除极小文件外必须使用 DEFLATE；同时保留固定 DOS 时间戳，
+       保证同一 Node 版本下重复构建字节一致。 */
+    assert.ok(
+      entries.every((entry) => entry.method === 0 || entry.method === 8),
+      "只允许 STORE 或 DEFLATE 压缩方法"
+    );
+    assert.ok(
+      entries.filter((entry) => entry.compressedSize < entry.size).length >= entries.length - 2,
+      "绝大多数条目应实际被压缩"
+    );
     assert.ok(entries.every((entry) => entry.dosTime === FIXED_DOS_TIME));
     assert.ok(entries.every((entry) => entry.dosDate === FIXED_DOS_DATE));
     assert.ok(!entries.some((entry) => entry.name.includes("portal-preview")));

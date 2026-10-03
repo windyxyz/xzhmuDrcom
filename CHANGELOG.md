@@ -17,6 +17,7 @@
 - 修复 Windows 统一 `npm test` 静态检查阶段通过 `spawnSync npm.cmd` 可能触发 `EINVAL` 的问题。
 - 修复真实浏览器测试在 Linux runner 上的两处平台差异：冷启动等待上限从 10 秒放宽到 30 秒；Chromium 在 Linux 上 `navigator.language` 跟随 `LANG`/`LANGUAGE` 环境变量，统一注入中文 locale 与 `--lang=zh-CN`，避免“跟随浏览器”默认语言在英文 runner 上取到英文。
 - 修复版本合约测试只认 `Unreleased` 格式，导致 CHANGELOG 定稿后发布流程的 verify 步骤失败。
+- 修复 Edge Add-ons 商店以“不是有效的 ZIP”拒收分发包：该商店的包校验器不接受 STORE（不压缩）方式的产物，即使条目、CRC 与中央目录全部合法也会被拒。分发包改用固定压缩级别的 DEFLATE，产物体积从约 1.06 MB 降到约 375 KB，同时保留固定 DOS 时间戳以维持重复构建一致性。
 
 ### 工程
 
