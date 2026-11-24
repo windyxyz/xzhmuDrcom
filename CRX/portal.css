@@ -147,12 +147,11 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
 .drcom-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.5;
+  opacity: 0.65;
   pointer-events: none;
 }
-.drcom-blob-a { width: 300px; height: 300px; top: -80px; right: -60px; background: rgba(167, 139, 250, 0.55); }
-.drcom-blob-b { width: 260px; height: 260px; bottom: -70px; left: -60px; background: rgba(129, 140, 248, 0.5); }
+.drcom-blob-a { width: 420px; height: 420px; top: -140px; right: -120px; background: radial-gradient(circle, rgba(167, 139, 250, 0.5) 0%, rgba(167, 139, 250, 0) 70%); }
+.drcom-blob-b { width: 380px; height: 380px; bottom: -130px; left: -120px; background: radial-gradient(circle, rgba(129, 140, 248, 0.45) 0%, rgba(129, 140, 248, 0) 70%); }
 
 .drcom-brand-stage {
   position: relative;
@@ -228,6 +227,10 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   background-position: right 10px center;
   background-size: 10px;
 }
+#drcom-modern-root[data-theme="dark"] select,
+#drcom-modern-root[data-resolved-theme="dark"] select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8.098 4.598'%3E%3Cpath fill='%23c8c8c8' d='M.195.195C.39 0 .708 0 .903.195L4.049 3.342 7.195.195C7.39 0 7.708 0 7.903.195C8.098.39 8.098.708 7.903.903L4.403 4.403C4.208 4.598 3.89 4.598 3.695 4.403L.195.903C0 .708 0 .39 .195.195Z'/%3E%3C/svg%3E");
+}
 #drcom-modern-root input:not([type="checkbox"]):hover,
 #drcom-modern-root select:hover { background: var(--ctrl-fill-secondary); }
 #drcom-modern-root input:not([type="checkbox"]):focus,
@@ -282,7 +285,7 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
 .drcom-password-wrapper input::-ms-clear { display: none; }
 .drcom-password-toggle {
   position: absolute;
-  right: 5px;
+  right: 2px;
   top: 50%;
   transform: translateY(-50%);
   display: inline-flex;
@@ -296,8 +299,16 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   color: var(--text-tertiary);
   cursor: pointer;
 }
-.drcom-password-toggle:hover { background: var(--subtle-fill-hover); color: var(--text-primary); }
-.drcom-password-toggle .win-glyph { font-size: 14px; }
+.drcom-password-toggle::before {
+  content: "";
+  position: absolute;
+  inset: 7px 6px;
+  border-radius: var(--control-radius);
+  transition: background-color var(--fast-duration) var(--fast-out-slow-in);
+}
+.drcom-password-toggle:hover { color: var(--text-primary); }
+.drcom-password-toggle:hover::before { background: var(--subtle-fill-hover); }
+.drcom-password-toggle .win-glyph { position: relative; z-index: 1; font-size: 14px; }
 
 .drcom-form-status {
   margin: 0;
@@ -417,6 +428,10 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   background: var(--card-bg-secondary);
 }
 #drcom-session-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 10px 14px;
   cursor: pointer;
   color: var(--accent-fill-default);
@@ -424,6 +439,15 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
   list-style: none;
 }
 #drcom-session-details summary::-webkit-details-marker { display: none; }
+#drcom-session-details summary::after {
+  content: "\E76C";
+  font-family: "Segoe Fluent Icons";
+  font-size: 11px;
+  color: var(--text-tertiary);
+  transform: rotate(90deg);
+  transition: transform var(--fast-duration) var(--fast-out-slow-in);
+}
+#drcom-session-details[open] summary::after { transform: rotate(-90deg); }
 .drcom-session-list {
   margin: 0;
   padding: 4px 14px 12px;
@@ -555,12 +579,25 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
 }
 
 @media (max-width: 560px) {
-  .drcom-header { flex-wrap: wrap; }
-  .drcom-header strong { min-width: 0; overflow-wrap: anywhere; }
-  .drcom-header-actions { width: 100%; margin-left: 0; justify-content: flex-end; flex-wrap: wrap; }
+  .drcom-header { flex-wrap: nowrap; gap: 6px; padding: 6px 10px; }
+  .drcom-header strong { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+  .drcom-header-actions { width: auto; flex: none; margin-left: auto; justify-content: flex-end; flex-wrap: nowrap; gap: 4px; }
+  .drcom-language-toggle { min-height: 36px; padding: 4px 8px; font-size: 11px; white-space: nowrap; }
+  #drcom-restore-original { min-height: 36px; padding: 4px 8px; font-size: 12px; white-space: nowrap; }
   .drcom-surface { border: 0; background: transparent; box-shadow: none; padding: 4px 0 0; }
+  #drcom-modern-root[data-appearance-background="custom"] .drcom-surface {
+    border: 1px solid var(--card-stroke);
+    background: color-mix(in srgb, var(--layer-fill-default) calc(var(--scrim-strength, 1) * 100%), transparent);
+    box-shadow: var(--shadow-flyout);
+    padding: 18px 16px;
+  }
   .drcom-login-actions { grid-template-columns: 1fr; }
   .drcom-session-summary { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 340px) {
+  .drcom-header { flex-wrap: wrap; }
+  .drcom-header-actions { width: 100%; margin-left: 0; }
 }
 
 @media (max-height: 540px) and (orientation: landscape) {
@@ -590,6 +627,7 @@ html.drcom-modern-active body > :not(#drcom-modern-root):not(#drcom-private-appe
 @media (forced-colors: active) {
   .drcom-surface { border: 1px solid CanvasText; background: Canvas; }
   #drcom-modern-root .drcom-primary-button { border: 1px solid ButtonText; }
+  #drcom-modern-root select { appearance: auto; background-image: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

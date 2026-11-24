@@ -512,13 +512,15 @@ test("门户安全配置不携带背景数据且专用外观接口单独返回�
       accent: "#0f766e",
       background: "custom",
       backgroundImage: "data:image/webp;base64,AAAA",
-        backgroundBlur: 18,
-        backgroundDim: 0.46,
-        backgroundScale: 1.06,
-        backgroundPosition: "center",
-        panelColor: "",
-        panelPattern: "grid",
-        scrimStrength: 1
+      backgroundBlur: 18,
+      backgroundDim: 0.46,
+      backgroundScale: 1.06,
+      backgroundPosition: "center",
+      backgroundFit: "cover",
+      material: "acrylic",
+      panelColor: "",
+      panelPattern: "grid",
+      scrimStrength: 1
     }
   });
   assert.doesNotMatch(JSON.stringify(plain), /accounts|password|apiUrl|wlanUserIp/);
@@ -2269,4 +2271,143 @@ test("DrCOM 只把明确密码错误归类为 bad_credentials", () => {
   );
   assert.equal(outage.failureCode, "gateway_rejected");
   assert.equal(wrong.failureCode, "bad_credentials");
+});
+
+test("handleTabRedirect 无守卫时直接返回不写 session，且 clearTabGuard 仅在存在守卫时清理", async () => {
+  let sessionSetCalls = 0;
+  const background = loadBackground();
+  const originalSet = background.chrome.storage.session.set;
+  background.chrome.storage.session.set = async (...args) => {
+    sessionSetCalls += 1;
+    return originalSet(...args);
+  };
+
+  await background.handleTabRedirect(42, "https://example.com/");
+  await background.clearTabGuard(42);
+  assert.equal(sessionSetCalls, 0);
+
+  await background.setTabGuard(42, { until: Date.now() + 5000 });
+  assert.equal(sessionSetCalls, 1);
+
+  await background.clearTabGuard(42);
+  assert.equal(sessionSetCalls, 2);
+  assert.equal(await background.getTabGuard(42), null);
+});
+
+test("非网页来源的 drcom:login 不会给 Options 标签页挂跳转守卫，网页登录失败会清理守卫", async () => {
+  const background = loadBackground({
+    fetch: async (url) => {
+      const text = String(url);
+      if (text.includes("chkstatus")) return { ok: true, status: 200, text: async () => 'dr1001({"result":0})' };
+      if (text.includes("a=login")) return { ok: true, status: 200, text: async () => 'dr1002({"result":0,"msg":"password error"})' };
+      return { ok: true, status: 200, text: async () => 'var v46ip="10.0.0.8";' };
+    }
+  });
+  await background.saveAccount({ label: "测试", username: "20220001", suffix: "@cmcc", password: "wrong" });
+
+  const optionsSender = {
+    id: background.chrome.runtime.id,
+    url: `${background.chrome.runtime.getURL("")}options.html`,
+    tab: { id: 88 }
+  };
+  await background.handleMessage({ action: "drcom:login" }, optionsSender);
+  assert.equal(await background.getTabGuard(88), null);
+
+  const webSender = portalSender({ tabId: 99 });
+  background.chrome.tabs.get = async () => ({ id: 99, url: "http://10.10.10.2/" });
+  const failed = await background.handleMessage({ action: "drcom:login" }, webSender);
+  assert.equal(failed.success, false);
+  assert.equal(await background.getTabGuard(99), null);
+});
+
+test("publicAppearance 保留 backgroundFit 与 material 自定义配置", () => {
+  const background = loadBackground();
+  const result = background.publicAppearance({
+    theme: "dark",
+    accent: "#ca5010",
+    background: "daily",
+    backgroundFit: "contain",
+    material: "mica"
+  });
+  assert.equal(result.backgroundFit, "contain");
+  assert.equal(result.material, "mica");
+});
+
+test("callbackPrefix 清洗非法或空值并在请求构建时回退为 dr", () => {
+  const background = loadBackground();
+  const normalized = background.normalizeState({
+    config: { login: { callbackPrefix: "123bad!", loginMethod: "", jsVersion: "" } }
+  });
+  assert.equal(normalized.config.login.callbackPrefix, "dr");
+  assert.equal(normalized.config.login.loginMethod, "1");
+  assert.equal(normalized.config.login.jsVersion, "3.3.2");
+
+  const cfg = { ...normalized.config, login: { ...normalized.config.login, callbackPrefix: "" } };
+  const acct = { username: "20220001", suffix: "@cmcc", password: "pw", network: {} };
+  assert.match(new URL(background.buildLoginRequest(acct, cfg).url).searchParams.get("callback"), /^dr\d+$/);
+  assert.match(new URL(background.buildUnbindRequest(acct, cfg).url).searchParams.get("callback"), /^dr\d+$/);
+  assert.match(new URL(background.buildPortalLogoutRequest(cfg).url).searchParams.get("callback"), /^dr\d+$/);
+});
+
+test("redactSensitiveText 脱敏 uid/username/account/user_name/DDDDD 且 getState 会清理脏请求日志", async () => {
+  const background = loadBackground();
+  const redacted = background.redactSensitiveText(
+    '{"uid":"20220001@cmcc","username":"alice123","account":"bob999","user_name":"charlie7","DDDDD":",0,20220002@unicom"}'
+  );
+  assert.doesNotMatch(redacted, /20220001|alice123|bob999|charlie7|20220002/);
+
+  const baseState = await background.getState();
+  await background.chrome.storage.local.set({
+    drcomAssistantRecentRequests: [{
+      id: "dirty-1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      kind: "login",
+      ok: false,
+      success: false,
+      online: false,
+      statusCode: 200,
+      message: "uid=20229999",
+      url: "http://10.10.10.2/?user_password=secret",
+      raw: '{"uid":"20229999"}'
+    }]
+  });
+
+  const reloaded = await background.getState();
+  assert.doesNotMatch(reloaded.recentRequests[0].raw, /20229999/);
+  const persisted = await background.chrome.storage.local.get(["drcomAssistantRecentRequests"]);
+  assert.doesNotMatch(persisted.drcomAssistantRecentRequests[0].raw, /20229999/);
+  assert.ok(baseState.schemaVersion >= 13);
+});
+
+test("updateActionBadge 默认回退标题使用正式品牌名", async () => {
+  const titles = [];
+  const background = loadBackground();
+  background.chrome.action.setTitle = async (payload) => { titles.push(payload.title); };
+  await background.updateActionBadge({ phase: "idle", message: "" });
+  assert.equal(titles.at(-1), "徐医校园网xzhmu");
+});
+
+test("fetchDrcom 识别 opaqueredirect 并返回明确重定向失败码", async () => {
+  const background = loadBackground({
+    fetch: async () => ({ type: "opaqueredirect", ok: false, status: 0, text: async () => "" })
+  });
+  const result = await background.fetchDrcom({ url: "http://10.10.10.2:801/eportal/", redactedUrl: "http://10.10.10.2:801/eportal/" }, "login");
+  assert.equal(result.ok, false);
+  assert.equal(result.failureCode, "unexpected_redirect");
+  assert.match(result.message, /重定向/);
+});
+
+test("诊断关闭时无操作调用不会触发 storage.local.set", async () => {
+  const background = loadBackground();
+  let setCalls = 0;
+  const originalSet = background.chrome.storage.local.set;
+  background.chrome.storage.local.set = async (...args) => {
+    setCalls += 1;
+    return originalSet(...args);
+  };
+
+  await background.startPortalDiagnosticsSession({ pageKind: "login" }, portalSender());
+  await background.appendPortalDiagnosticRecord("missing-session", { type: "event", name: "test" });
+  await background.endPortalDiagnosticsSession("missing-session");
+  assert.equal(setCalls, 0);
 });

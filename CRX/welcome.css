@@ -22,7 +22,7 @@ body {
   max-width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
   gap: clamp(16px, 4vw, 40px);
   align-items: stretch;
   min-height: 560px;
@@ -45,12 +45,16 @@ body {
 .welcome-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.5;
   pointer-events: none;
 }
-.welcome-blob-a { width: 300px; height: 300px; top: -80px; right: -60px; background: rgba(167, 139, 250, 0.55); }
-.welcome-blob-b { width: 260px; height: 260px; bottom: -70px; left: -60px; background: rgba(129, 140, 248, 0.5); }
+.welcome-blob-a {
+  width: 440px; height: 440px; top: -150px; right: -130px;
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.36) 0%, rgba(167, 139, 250, 0.12) 45%, transparent 72%);
+}
+.welcome-blob-b {
+  width: 400px; height: 400px; bottom: -140px; left: -130px;
+  background: radial-gradient(circle, rgba(129, 140, 248, 0.32) 0%, rgba(129, 140, 248, 0.1) 45%, transparent 72%);
+}
 
 .welcome-brand-stage {
   position: relative;
@@ -85,8 +89,15 @@ body {
   padding: clamp(4px, 2vw, 16px) 0;
 }
 
+.intro-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
 .intro h1 {
   margin: 0;
+  min-width: 0;
   font-size: clamp(26px, 4vw, 36px);
   font-weight: 600;
   line-height: 1.25;
@@ -94,18 +105,21 @@ body {
 }
 .intro p { margin: 10px 0 0; color: var(--text-secondary); font-size: 14px; line-height: 1.6; max-width: 46ch; }
 .welcome-language-toggle {
-  float: right;
+  flex: 0 0 auto;
   min-height: 44px;
   min-width: 64px;
-  margin: 0 0 8px 12px;
   padding: 8px 12px;
   border: 1px solid var(--stroke-default);
+  border-bottom-color: var(--stroke-secondary);
   border-radius: var(--control-radius);
   background: var(--ctrl-fill-default);
   color: var(--text-primary);
   font: inherit;
   cursor: pointer;
+  transition: background-color var(--fast-duration) var(--fast-out-slow-in), color var(--fast-duration) var(--fast-out-slow-in);
 }
+.welcome-language-toggle:hover { background: var(--ctrl-fill-secondary); }
+.welcome-language-toggle:active { background: var(--ctrl-fill-tertiary); color: var(--text-secondary); }
 
 .setup-steps {
   list-style: none;
@@ -117,7 +131,7 @@ body {
 }
 .setup-steps li {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
   grid-template-rows: auto auto;
   column-gap: 14px;
   row-gap: 2px;
@@ -158,6 +172,7 @@ body {
   font-weight: 600;
   color: var(--accent-fill-default);
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 .portal-panel-copy > p:last-child { margin: 4px 0 0; color: var(--text-secondary); font-size: 12px; }
 
@@ -217,7 +232,7 @@ body :focus-visible {
 }
 
 @media (max-width: 420px) {
-  body { padding: 0; overflow-x: hidden; }
+  body { padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); overflow-x: hidden; }
   .welcome-shell { min-height: 100dvh; border-radius: 0; }
   .welcome-brand { border-radius: 0; border-left: 0; border-right: 0; border-top: 0; }
   .welcome-content { padding: 16px; }

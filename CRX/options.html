@@ -90,12 +90,13 @@
     </section>
 
     <section id="accounts-section" class="settings-section" data-settings-panel hidden aria-labelledby="accounts-title">
-      <header class="section-heading with-icon">
+      <header class="section-heading with-icon section-heading-with-action">
         <span class="section-icon win-glyph" aria-hidden="true">&#xE77B;</span>
-        <div>
+        <div class="section-heading-copy">
           <h2 id="accounts-title" data-i18n="nav_accounts">账号</h2>
           <p data-i18n="accounts_description">选择账号后可以编辑、登录或下线。</p>
         </div>
+        <button id="account-new" class="secondary compact-button account-new-button" type="button" data-i18n-aria-label="new_account" data-i18n-title="new_account" aria-label="新建账号" title="新建账号"><span class="win-glyph win-glyph--16" aria-hidden="true">&#xE710;</span><span data-i18n="new_account">新建账号</span></button>
       </header>
 
       <div id="account-list" class="simple-account-list"></div>
@@ -328,7 +329,7 @@
               </label>
                 <button id="clear-background" class="secondary" type="button" data-i18n="clear_image">清除图片</button>
             </div>
-              <p id="background-storage-note" class="appearance-note" data-i18n="background_storage_note">选择后立即保存并应用；超过 3 MB 时自动高质量压缩</p>
+              <p id="background-storage-note" class="appearance-note" data-i18n="background_storage_note">选择后立即保存并应用；超过 1.9 MB 时自动高质量压缩</p>
           </div>
 
               <div id="background-preview" class="background-preview" role="img" data-i18n-aria-label="current_background_preview">
@@ -445,7 +446,7 @@
           </section>
 
           <section class="diagnostics-card" aria-labelledby="portal-diagnostics-title">
-            <div class="setting-row diagnostics-heading">
+            <div class="settings-row diagnostics-heading">
               <div>
               <h3 id="portal-diagnostics-title" data-i18n="portal_diagnostics">门户诊断模式</h3>
               <p data-i18n="portal_diagnostics_help">仅在本机记录脱敏后的页面结构和操作类型；不会记录输入值、密码、账号、IP 或 MAC。</p>

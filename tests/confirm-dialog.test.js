@@ -145,3 +145,18 @@ test("默认确认框收到语言广播后立即重译当前内容", async () =>
   built.cancelButton.emit("click", { isTrusted: true });
   assert.equal(await answer, false);
 });
+
+test("危险确认关闭时会将焦点恢复至打开前的触发元素", async () => {
+  const trigger = new FakeTarget();
+  const elements = createElements();
+  elements.dialog.ownerDocument = { activeElement: trigger };
+  const controller = createController(elements);
+
+  const answer = controller.ask({ title: "删除账号？", message: "确认删除？" });
+  assert.equal(elements.cancelButton.focused, true);
+  assert.equal(trigger.focused, false);
+
+  elements.cancelButton.emit("click", { isTrusted: true });
+  assert.equal(await answer, false);
+  assert.equal(trigger.focused, true);
+});

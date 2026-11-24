@@ -540,6 +540,7 @@ test("保活关闭时禁用间隔输入，开启后恢复", () => {
     ["interval-seconds", seconds]
   ]);
   const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
     clearTimeout,
     console,
     document: {
@@ -568,6 +569,7 @@ test("保活间隔支持分钟和秒并遵守 Chrome 的三十秒下限", () => 
     ["interval-seconds", { value: "30" }]
   ]);
   const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
     clearTimeout,
     console,
     document: {
@@ -585,6 +587,7 @@ test("保活间隔支持分钟和秒并遵守 Chrome 的三十秒下限", () => 
 
 test("设置页连接概览会把在线、待登录和错误状态转换为明确文案", () => {
   const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
     clearTimeout,
     console,
     document: { addEventListener() {}, getElementById() { return null; } },
@@ -610,6 +613,7 @@ test("外观表单会保存主题、自定义背景和可读性参数", () => {
     ["background-scale", { value: "1.06" }]
   ]);
   const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
     clearTimeout,
     console,
     document: {
@@ -655,6 +659,7 @@ test("未选图时的自定义背景不会持久化，避免保存时被弹回�
     ["background-scale", { value: "1.04" }]
   ]);
   const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
     clearTimeout,
     console,
     document: {
@@ -733,6 +738,7 @@ test("外观图片选择后会立即持久化，不依赖页面底部的总保�
 
 test("背景图片预算会拒绝超过三兆字节的数据", () => {
   const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
     clearTimeout,
     console,
     document: {
@@ -766,6 +772,7 @@ test("设置页会显示当前背景图片占用与预算上限", () => {
     ["background-storage-note", note]
   ]);
   const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
     clearTimeout,
     console,
     document: {
@@ -820,6 +827,7 @@ test("超过保存预算的高分辨率背景会自动多轮压缩到内联样�
   }
 
   const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
     clearTimeout,
     console,
     createImageBitmap: async () => ({
@@ -861,6 +869,7 @@ test("背景图片处理失败后会清空文件输入以便重试同一文件",
   const toastElement = { hidden: true, textContent: "" };
   const elements = new Map([["toast", toastElement]]);
   const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
     clearTimeout,
     console,
     document: {
@@ -879,6 +888,7 @@ test("背景图片处理失败后会清空文件输入以便重试同一文件",
 test("设置页账号删除按钮包含具体账号的无障碍名称", () => {
   const list = { innerHTML: "" };
   const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
     clearTimeout,
     console,
     document: {
@@ -972,6 +982,7 @@ test("切换自定义网关后撤销已经不再使用的旧来源权限", async
 
 test("仅地址变化到自定义 HTTP 网关时显示强警告", () => {
   const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
     clearTimeout, console,
     document: { addEventListener() {}, getElementById() { return null; } },
     setTimeout, URL
@@ -1019,6 +1030,7 @@ function createRefreshControllerHarness(overrides = {}) {
   let reloads = 0;
   let confirmResult = true;
   const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
     clearTimeout,
     console,
     document: { addEventListener() {}, getElementById() { return null; } },
@@ -1152,4 +1164,277 @@ test("设置页自动同步失败静默，主动同步失败才提示", async ()
 
   await harness.controller.requestRefresh({ full: false, diagnostics: false, manual: true });
   assert.equal(harness.calls.some((item) => item.manualError === "offline"), true);
+});
+
+test("必应每日壁纸与自定义图片均显示背景调节控件，简洁底色时隐藏", () => {
+  const controls = { hidden: true };
+  const background = { value: "daily" };
+  const elements = new Map([
+    ["appearance-background", background],
+    ["background-image-data", { value: "" }],
+    ["background-controls", controls],
+    ["clear-background", { disabled: false }],
+    ["background-blur", { value: "14" }],
+    ["background-dim", { value: "0.42" }],
+    ["background-scale", { value: "1.04" }],
+    ["background-blur-value", { value: "" }],
+    ["background-dim-value", { value: "" }],
+    ["background-scale-value", { value: "" }],
+    ["background-storage-note", { textContent: "" }]
+  ]);
+  const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
+    clearTimeout,
+    console,
+    document: { addEventListener() {}, getElementById: (id) => elements.get(id) || null },
+    setTimeout
+  });
+  loadOptions(context);
+
+  context.syncAppearanceControls();
+  assert.equal(controls.hidden, false);
+
+  background.value = "fresh";
+  context.syncAppearanceControls();
+  assert.equal(controls.hidden, true);
+});
+
+test("账号编辑器的独立新建模式会清空表单并禁用删除按钮", () => {
+  const accountControllerMod = require("../CRX/options-account-controller.js");
+  let focused = false;
+  let editingId = "acc-1";
+  const elements = new Map([
+    ["account-id", { value: "acc-1" }],
+    ["account-label", { value: "主账号" }],
+    ["account-suffix", { value: "@telecom" }],
+    ["account-username", { value: "20230001", focus() { focused = true; } }],
+    ["account-password", { value: "secret" }],
+    ["account-ip", { value: "10.0.0.1" }],
+    ["account-mac", { value: "112233445566" }],
+    ["account-ipv6", { value: "" }],
+    ["account-ac-ip", { value: "" }],
+    ["account-ac-name", { value: "" }],
+    ["account-delete", { disabled: false }]
+  ]);
+  const controller = accountControllerMod.createController({
+    $: (id) => elements.get(id) || null,
+    getState: () => ({ accounts: [], selectedAccountId: "" }),
+    setState() {},
+    getEditingId: () => editingId,
+    setEditingId: (id) => { editingId = id; },
+    setAccountFormDirty() {},
+    setSettingsFormDirty() {},
+    splitAccount: (u, s) => ({ username: u || "", suffix: s || "" }),
+    suffixLabel: (s) => s,
+    makeAccountLabel: (u) => u,
+    naturalAccountKey: (a) => a.username,
+    maskAccount: (a) => a.username,
+    escapeHtml: (v) => String(v),
+    t: (k) => k,
+    sendMessage: async () => ({}),
+    renderRequestLog() {},
+    loadState: async () => {},
+    toast() {},
+    confirmDialog: { ask: async () => true }
+  });
+
+  controller.startNew();
+  assert.equal(editingId, "");
+  assert.equal(elements.get("account-username").value, "");
+  assert.equal(elements.get("account-delete").disabled, true);
+  assert.equal(focused, true);
+
+  controller.fillEditor({ id: "acc-2", label: "副账号", username: "20230002", suffix: "", password: "pw", network: {} });
+  assert.equal(editingId, "acc-2");
+  assert.equal(elements.get("account-delete").disabled, false);
+});
+
+test("解析抓包 URL 后会刷新网关安全警告并触发自动保存调度", () => {
+  const accountControllerMod = require("../CRX/options-account-controller.js");
+  let warningChecks = 0;
+  let autoSaves = 0;
+  let dirty = false;
+  const elements = new Map([
+    ["raw-url", { value: "http://10.20.30.40:801/eportal/?c=Portal&a=login&user_account=,0,20230001@telecom&user_password=pw&login_method=1&jsVersion=3.3.2" }],
+    ["api-url", { value: "" }],
+    ["parsed-label", { value: "" }],
+    ["parsed-username", { value: "" }],
+    ["parsed-suffix", { value: "" }],
+    ["parsed-password", { value: "" }],
+    ["parsed-ip", { value: "" }],
+    ["parsed-mac", { value: "" }],
+    ["login-method", { value: "" }],
+    ["js-version", { value: "" }]
+  ]);
+  const controller = accountControllerMod.createController({
+    $: (id) => elements.get(id) || null,
+    getState: () => ({ accounts: [] }),
+    setState() {},
+    getEditingId: () => "",
+    setEditingId() {},
+    setAccountFormDirty() {},
+    setSettingsFormDirty: (v) => { dirty = v; },
+    renderGatewaySecurityWarning: () => { warningChecks += 1; },
+    scheduleSettingsAutoSave: () => { autoSaves += 1; },
+    splitAccount: () => ({ username: "20230001", suffix: "@telecom" }),
+    suffixLabel: () => "电信",
+    makeAccountLabel: () => "20230001",
+    naturalAccountKey: () => "20230001",
+    maskAccount: () => "20***01",
+    escapeHtml: (v) => String(v),
+    t: (k) => k,
+    sendMessage: async () => ({}),
+    renderRequestLog() {},
+    loadState: async () => {},
+    toast() {},
+    confirmDialog: { ask: async () => true }
+  });
+
+  controller.parseCapturedUrl();
+  assert.equal(dirty, true);
+  assert.equal(warningChecks, 1);
+  assert.equal(autoSaves, 1);
+  assert.equal(elements.get("api-url").value, "http://10.20.30.40:801/eportal/");
+});
+
+test("取色器同步十六进制颜色时会更新明度滑块并缓存光谱避免重复重绘", () => {
+  let putImageDataCalls = 0;
+  const valueSlider = { value: "50", style: {}, disabled: false };
+  const canvas = {
+    width: 16,
+    height: 16,
+    getContext() {
+      return {
+        createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+        putImageData() { putImageDataCalls += 1; }
+      };
+    }
+  };
+  const elements = new Map([
+    ["cp-spectrum", {}],
+    ["cp-handle", { style: { setProperty() {} } }],
+    ["cp-preview", { style: {} }],
+    ["cp-value", valueSlider],
+    ["cp-canvas", canvas],
+    ["appearance-accent", { value: "#007aff" }],
+    ["appearance-accent-hex", { value: "#007aff" }],
+    ["online-detail-mode", { value: "classic" }],
+    ["appearance-theme", { value: "system" }],
+    ["appearance-background", { value: "fresh" }],
+    ["background-image-data", { value: "" }],
+    ["background-blur", { value: "14" }],
+    ["background-dim", { value: "0.42" }],
+    ["background-scale", { value: "1.04" }],
+    ["background-preview", { style: { setProperty() {} }, dataset: {} }]
+  ]);
+  const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
+    clearTimeout,
+    console,
+    document: {
+      activeElement: null,
+      documentElement: { dataset: {}, style: { setProperty() {} } },
+      addEventListener() {},
+      getElementById: (id) => elements.get(id) || null
+    },
+    setTimeout
+  });
+  loadOptions(context);
+
+  context.syncPickerFromHex("#007aff");
+  assert.equal(valueSlider.value, "100");
+  assert.equal(putImageDataCalls, 1);
+
+  context.syncPickerFromHex("#ff0000");
+  assert.equal(valueSlider.value, "100");
+  assert.equal(putImageDataCalls, 1);
+
+  context.syncPickerFromHex("#404040");
+  assert.equal(valueSlider.value, "25");
+  assert.equal(putImageDataCalls, 2);
+});
+
+test("非外观配置读取可省略壁纸数据，且本地自写入回显会被刷新控制器抑制", async () => {
+  const elements = new Map([
+    ["portal-url", { value: "http://10.10.10.2/" }],
+    ["api-url", { value: "http://10.10.10.2:801/eportal/" }],
+    ["account-prefix", { value: ",0," }],
+    ["login-method", { value: "1" }],
+    ["callback-prefix", { value: "dr" }],
+    ["js-version", { value: "3.3.2" }],
+    ["default-ip", { value: "" }],
+    ["default-mac", { value: "000000000000" }],
+    ["default-ipv6", { value: "" }],
+    ["default-ac-ip", { value: "" }],
+    ["default-ac-name", { value: "" }],
+    ["modernize-portal", { checked: true }],
+    ["auto-refresh-settings", { checked: true }],
+    ["return-to-portal", { checked: true }],
+    ["guard-seconds", { value: "4" }],
+    ["login-on-startup", { checked: false }],
+    ["keep-alive", { checked: true }],
+    ["interval-minutes", { value: "3" }],
+    ["interval-seconds", { value: "0" }]
+  ]);
+  const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
+    clearTimeout,
+    console,
+    document: { addEventListener() {}, getElementById: (id) => elements.get(id) || null },
+    setTimeout
+  });
+  loadOptions(context);
+
+  const nonAppearance = context.readConfig({ includeAppearance: false });
+  assert.equal(Object.hasOwn(nonAppearance.ui, "backgroundImage"), false);
+  assert.equal(nonAppearance.ui.modernizePortal, true);
+
+  let ignore = true;
+  const harness = createRefreshControllerHarness({
+    shouldIgnoreStorageChange: (_changes, areaName) => areaName === "local" && ignore
+  });
+  await harness.controller.handleStorageChange({ drcomAssistantState: { newValue: {} } }, "local");
+  assert.equal(harness.calls.length, 0);
+  ignore = false;
+  await harness.controller.handleStorageChange({ drcomAssistantState: { newValue: {} } }, "local");
+  assert.equal(harness.calls.includes("full"), true);
+});
+
+test("切换语言时保留已折叠侧栏切换按钮的展开提示，导出诊断后给出检查提示", async () => {
+  const paneToggle = { title: "" };
+  const layout = { classList: { contains: (cls) => cls === "nav-compact" } };
+  const context = vm.createContext({
+    DrcomAppearance: require("../CRX/appearance.js"),
+    clearTimeout,
+    console,
+    document: {
+      documentElement: { lang: "zh-CN" },
+      addEventListener() {},
+      getElementById: (id) => (id === "pane-toggle" ? paneToggle : null),
+      querySelector: (selector) => (selector === ".settings-layout" ? layout : null),
+      querySelectorAll: () => []
+    },
+    setTimeout
+  });
+  loadOptions(context);
+
+  context.applyLanguage("en");
+  assert.equal(paneToggle.title, "Expand navigation");
+
+  const diagMod = require("../CRX/options-diagnostics-controller.js");
+  const toasts = [];
+  let revoked = false;
+  const ctrl = diagMod.createController({
+    $: () => null,
+    sendMessage: async () => ({ export: { version: 1 } }),
+    toast: (msg) => toasts.push(msg),
+    t: (key) => (key === "diagnostics_export_review_notice" ? "Diagnostics exported. Please review before sharing." : key),
+    BlobCtor: class FakeBlob {},
+    URLApi: { createObjectURL: () => "blob:1", revokeObjectURL: () => { revoked = true; } },
+    documentRef: { createElement: () => ({ click() {} }) }
+  });
+  await ctrl.exportData();
+  assert.equal(revoked, true);
+  assert.equal(toasts.length, 1);
+  assert.match(toasts[0], /review/i);
 });

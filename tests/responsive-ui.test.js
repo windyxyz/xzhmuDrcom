@@ -41,12 +41,13 @@ test("所有扩展界面支持动态视口、安全区和粗指针触摸目标",
   assert.deepEqual(missing, []);
 });
 
-test("扩展操作弹窗限制最大宽度但允许 320px 视口收缩", () => {
+test("扩展操作弹窗桌面固定 420px 且允许移动或窄视口收缩", () => {
   const css = read("popup.css");
 
-  assert.match(css, /html\s*\{[^}]*width:\s*min\(420px,\s*100vw\);/s);
-  assert.match(css, /html\s*\{[^}]*max-width:\s*100%;/s);
-  assert.match(css, /body\s*\{[^}]*width:\s*100%;/s);
+  assert.match(css, /html\s*\{[^}]*width:\s*420px;/s);
+  assert.match(css, /body\s*\{[^}]*width:\s*420px;/s);
+  assert.match(css, /@media\s*\(pointer:\s*coarse\)[\s\S]*?html\s*\{[^}]*width:\s*min\(420px,\s*100vw\);[^}]*max-width:\s*100%;/s);
+  assert.match(css, /@media\s*\(pointer:\s*coarse\)[\s\S]*?body\s*\{[^}]*width:\s*100%;/s);
 });
 
 test("四个界面的根容器均可在窄屏收缩", () => {

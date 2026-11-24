@@ -46,7 +46,7 @@
         </div>
         <div class="dchar dchar-yellow">
           <span class="dchar-eyes">${barePupils(2)}</span>
-          <span class="dchar-mouth-wrapper"><svg width="80" height="20" viewBox="0 0 80 20"><path class="dchar-yellow-mouth" stroke="#2D2D2D" stroke-width="3" fill="none" stroke-linecap="round"/></svg></span>
+          <span class="dchar-mouth-wrapper"><svg width="80" height="20" viewBox="0 0 80 20"><path class="dchar-yellow-mouth" d="${YELLOW_MOUTH.idle}" stroke="#2D2D2D" stroke-width="3" fill="none" stroke-linecap="round"/></svg></span>
         </div>
       </div>`;
   }
@@ -87,10 +87,32 @@
     let pendingMouse = { x: 0, y: 0 };
 
     const centers = {};
+    const lastHeights = {};
     const face = { purple: { x: 0, y: 0, skew: 0 }, black: { x: 0, y: 0, skew: 0 }, orange: { x: 0, y: 0, skew: 0 }, yellow: { x: 0, y: 0, skew: 0 } };
     const timers = new Set();
+    const blinkTimers = new Map();
+    let peekTimer = 0;
+    let peekGeneration = 0;
     let rafId = 0;
     let lookRafId = 0;
+
+    for (const key of Object.keys(els)) {
+      if (els[key].eyes) {
+        els[key].eyes.style.left = "0px";
+        els[key].eyes.style.top = "0px";
+      }
+      if (els[key].mouth) {
+        els[key].mouth.style.left = "0px";
+        els[key].mouth.style.top = "0px";
+      }
+    }
+
+    function isStageActive() {
+      if (destroyed || reducedMotion()) return false;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
+      if (typeof frame.clientWidth === "number" && frame.clientWidth <= 0) return false;
+      return true;
+    }
 
     function later(fn, ms) {
       const id = setTimeout(() => {
@@ -101,15 +123,49 @@
       return id;
     }
 
+    function cancelTimer(id) {
+      if (!id) return;
+      clearTimeout(id);
+      timers.delete(id);
+    }
+
+    function clearPeekTimer() {
+      peekGeneration += 1;
+      cancelTimer(peekTimer);
+      peekTimer = 0;
+    }
+
+    function stopBlinks() {
+      for (const id of blinkTimers.values()) cancelTimer(id);
+      blinkTimers.clear();
+    }
+
     function scheduleBlink(key) {
-      later(() => {
+      if (!isStageActive()) return;
+      cancelTimer(blinkTimers.get(key));
+      const id = later(() => {
+        blinkTimers.delete(key);
+        if (!isStageActive()) return;
         const { eyeballs } = els[key];
         eyeballs.forEach((eye) => { eye.style.height = "2px"; });
-        later(() => {
+        const reopenId = later(() => {
+          blinkTimers.delete(key);
           eyeballs.forEach((eye) => { eye.style.height = `${CHARACTERS[key].eyes.size}px`; });
           scheduleBlink(key);
         }, 150);
+        blinkTimers.set(key, reopenId);
       }, 3000 + Math.random() * 4000);
+      blinkTimers.set(key, id);
+    }
+
+    function ensureBlinksRunning() {
+      if (!isStageActive()) {
+        stopBlinks();
+        return;
+      }
+      for (const key of Object.keys(els)) {
+        if (!blinkTimers.has(key)) scheduleBlink(key);
+      }
     }
 
     function updateCenters() {
@@ -134,7 +190,7 @@
     }
 
     function applyFrame() {
-      if (destroyed || !hasEntered) return;
+      if (destroyed || !hasEntered || !isStageActive()) return;
       for (const key of Object.keys(els)) {
         face[key] = computeFace(key, pendingMouse.x, pendingMouse.y);
       }
@@ -173,20 +229,29 @@
     }
 
     function renderBodies() {
+      const typingOrHiding = mode === "typing" || mode === "hiding";
       for (const key of Object.keys(els)) {
         els[key].el.style.transform = bodyTransform(key);
-        els[key].el.style.height = `${(mode === "typing" || mode === "hiding") ? CHARACTERS[key].typingHeight : CHARACTERS[key].height}px`;
+        const nextHeight = `${typingOrHiding ? CHARACTERS[key].typingHeight : CHARACTERS[key].height}px`;
+        if (lastHeights[key] !== nextHeight) {
+          lastHeights[key] = nextHeight;
+          els[key].el.style.height = nextHeight;
+        }
         const position = eyesPosition(key);
-        els[key].eyes.style.left = `${position[0]}px`;
-        els[key].eyes.style.top = `${position[1]}px`;
+        els[key].eyes.style.transform = `translate3d(${position[0]}px, ${position[1]}px, 0)`;
         const mouth = mouthPosition(key);
         if (mouth && els[key].mouth) {
-          els[key].mouth.style.left = `${mouth[0]}px`;
-          els[key].mouth.style.top = `${mouth[1]}px`;
+          let mouthTransform = `translate3d(${mouth[0]}px, ${mouth[1]}px, 0)`;
+          if (typingOrHiding && key === "purple") {
+            mouthTransform += ` translateX(13.5px) translateY(-28px) skewX(${-(face.purple.skew - 12)}deg)`;
+          } else if (typingOrHiding && key === "orange") {
+            mouthTransform += " translateX(6px)";
+          }
+          els[key].mouth.style.transform = mouthTransform;
         }
       }
       if (purpleMouth) {
-        purpleMouth.style.setProperty("--counter-skew", (mode === "typing" || mode === "hiding")
+        purpleMouth.style.setProperty("--counter-skew", typingOrHiding
           ? `skewX(${-(face.purple.skew - 12)}deg)`
           : "skewX(0deg)");
       }
@@ -234,20 +299,26 @@
     function renderMouths() {
       stage.dataset.state = mode;
       if (els.yellow.yellowPath) {
-        els.yellow.yellowPath.style.d = mode === "sad" ? `path("${YELLOW_MOUTH.sad}")`
-          : mode === "happy" ? `path("${YELLOW_MOUTH.happy}")`
-            : `path("${YELLOW_MOUTH.idle}")`;
+        const pathData = mode === "sad" ? YELLOW_MOUTH.sad
+          : mode === "happy" ? YELLOW_MOUTH.happy
+            : YELLOW_MOUTH.idle;
+        els.yellow.yellowPath.setAttribute("d", pathData);
+        els.yellow.yellowPath.style.d = `path("${pathData}")`;
       }
       void purpleMouth;
       void orangeMouth;
     }
 
     function schedulePeek() {
-      if (mode !== "visible") return;
-      later(() => {
+      clearPeekTimer();
+      if (mode !== "visible" || !isStageActive()) return;
+      const gen = peekGeneration;
+      peekTimer = later(() => {
+        if (gen !== peekGeneration || mode !== "visible" || !isStageActive()) return;
         peeking = true;
         renderEyes();
-        later(() => {
+        peekTimer = later(() => {
+          if (gen !== peekGeneration || mode !== "visible") return;
           peeking = false;
           renderEyes();
           schedulePeek();
@@ -256,9 +327,10 @@
     }
 
     function animateSuccessLook() {
+      if (reducedMotion()) return;
       const startTime = performance.now();
       const step = (now) => {
-        if (destroyed || mode !== "happy") return;
+        if (destroyed || mode !== "happy" || reducedMotion()) return;
         const progress = Math.min((now - startTime) / 5500, 1);
         const eased = progress < 0.5
           ? 4 * progress * progress * progress
@@ -275,7 +347,7 @@
       const container = document.createElement("div");
       container.className = "dchar-confetti";
       container.setAttribute("aria-hidden", "true");
-      for (let index = 0; index < 180; index += 1) {
+      for (let index = 0; index < 70; index += 1) {
         const piece = document.createElement("span");
         piece.className = "dchar-confetti-piece";
         piece.style.left = `${Math.random() * 100}%`;
@@ -300,6 +372,7 @@
     }
 
     function applyMouse(x, y) {
+      if (!isStageActive()) return;
       pendingMouse = { x, y };
       if (rafId || !hasEntered) return;
       rafId = requestAnimationFrame(() => {
@@ -310,17 +383,32 @@
 
     function handleResize() {
       renderScale();
+      ensureBlinksRunning();
+      if (!isStageActive()) return;
       updateCenters();
       applyFrame();
+    }
+
+    function handleVisibilityChange() {
+      ensureBlinksRunning();
+      if (mode === "visible") {
+        if (isStageActive()) schedulePeek();
+        else clearPeekTimer();
+      }
     }
 
     function setMode(next) {
       if (destroyed || mode === next) return;
       const previous = mode;
       mode = next;
+      if (next !== "visible") {
+        peeking = false;
+        clearPeekTimer();
+      }
       renderMouths();
       renderBodies();
       renderEyes();
+      if (reducedMotion()) return;
       if (next === "typing" && previous !== "typing") {
         looking = true;
         renderBodies();
@@ -354,16 +442,23 @@
       get state() { return mode; },
       refresh() {
         renderScale();
+        ensureBlinksRunning();
+        if (!isStageActive()) return;
         updateCenters();
         applyFrame();
       },
       destroy() {
         destroyed = true;
+        clearPeekTimer();
+        stopBlinks();
         timers.forEach((id) => clearTimeout(id));
         timers.clear();
         if (rafId) cancelAnimationFrame(rafId);
         if (lookRafId) cancelAnimationFrame(lookRafId);
         resizeObserver?.disconnect();
+        if (typeof document !== "undefined") {
+          document.removeEventListener("visibilitychange", handleVisibilityChange);
+        }
         if (typeof window !== "undefined") {
           if (interactive) window.removeEventListener("mousemove", onMouseMove);
           window.removeEventListener("resize", handleResize);
@@ -380,6 +475,9 @@
       if (interactive) window.addEventListener("mousemove", onMouseMove, { passive: true });
       window.addEventListener("resize", handleResize, { passive: true });
     }
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
 
     renderMouths();
     renderScale();
@@ -391,21 +489,18 @@
       hasEntered = true;
       pendingMouse = { x: 0, y: 0 };
       stage.classList.add("entered");
-      later(() => {
-        updateCenters();
-        renderBodies();
-        renderEyes();
-      }, 50);
     } else {
       later(() => {
         hasEntered = true;
         stage.classList.add("entered");
         renderScale();
-        updateCenters();
-        renderBodies();
-        renderEyes();
+        if (isStageActive()) {
+          updateCenters();
+          renderBodies();
+          renderEyes();
+        }
       }, 1400);
-      for (const key of Object.keys(els)) scheduleBlink(key);
+      ensureBlinksRunning();
     }
 
     return controller;

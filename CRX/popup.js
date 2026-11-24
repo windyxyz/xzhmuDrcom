@@ -22,14 +22,16 @@ let state = null;
 let languagePreference = "auto";
 let currentResult = null;
 let languageControlsBound = false;
+let isCreatingNewAccount = false;
+let refreshingStatus = false;
+let cachedDailyWallpaperUrl = "";
 
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
   bindEvents();
   try {
-    await loadLanguage();
-    await loadState();
+    await Promise.all([loadLanguage(), loadState()]);
     await refreshStatus(false);
   } catch (error) {
     renderResult({
@@ -42,9 +44,11 @@ async function init() {
 function bindEvents() {
   bindLanguageControls();
   $("account-select").addEventListener("change", runAsync(async (event) => {
+    isCreatingNewAccount = false;
     await sendMessage({ action: "account:select", accountId: event.target.value });
     await loadState();
   }));
+  $("new-account")?.addEventListener("click", startNewAccount);
   $("refresh-status").addEventListener("click", () => refreshStatus(true));
   $("save-account").addEventListener("click", runAsync(saveCurrentAccount));
   $("login").addEventListener("click", login);
@@ -55,10 +59,21 @@ function bindEvents() {
     $("password").type = event.target.checked ? "text" : "password";
   });
 
+  const submitOnEnter = (event) => {
+    if (event.key !== "Enter" || event.isComposing) return;
+    if (document.body?.dataset?.busy === "true") return;
+    event.preventDefault?.();
+    login();
+  };
+  for (const id of ["label", "username", "password", "wlan-user-ip", "wlan-user-mac"]) {
+    $(id)?.addEventListener("keydown", submitOnEnter);
+  }
+
   $("account-list").addEventListener("click", runAsync(async (event) => {
     const selectButton = event.target.closest("[data-select]");
     const deleteButton = event.target.closest("[data-delete]");
     if (selectButton) {
+      isCreatingNewAccount = false;
       await sendMessage({ action: "account:select", accountId: selectButton.dataset.select });
       await loadState();
     }
@@ -104,18 +119,43 @@ function applyLanguage(preference) {
   if (document.documentElement) document.documentElement.lang = language;
   const toggle = $("language-toggle");
   if (toggle) toggle.textContent = language === "zh-CN" ? "EN" : "中文";
+  const newAccountButton = $("new-account");
+  if (newAccountButton) {
+    const translated = i18n.t("new_account");
+    const label = translated && translated !== "new_account" ? translated : "新建账号";
+    newAccountButton.setAttribute?.("aria-label", label);
+    newAccountButton.setAttribute?.("title", label);
+  }
   if (currentResult) renderResult(currentResult);
   if (state) {
     const selectedAccountId = $("account-select")?.value;
     renderAccountSelect();
-    if (selectedAccountId && Array.from($("account-select")?.options || []).some((option) => option.value === selectedAccountId)) {
+    if (!isCreatingNewAccount && selectedAccountId && Array.from($("account-select")?.options || []).some((option) => option.value === selectedAccountId)) {
       $("account-select").value = selectedAccountId;
     }
     renderAccountList();
   }
 }
 
+function startNewAccount() {
+  isCreatingNewAccount = true;
+  const select = $("account-select");
+  if (select) {
+    select.value = "";
+    select.selectedIndex = -1;
+  }
+  if ($("label")) $("label").value = "";
+  if ($("username")) $("username").value = "";
+  if ($("suffix")) $("suffix").value = "";
+  if ($("password")) $("password").value = "";
+  if ($("wlan-user-ip")) $("wlan-user-ip").value = "";
+  if ($("wlan-user-mac")) $("wlan-user-mac").value = "";
+  if (state) renderAccountList();
+  $("username")?.focus?.();
+}
+
 async function deleteAccount(accountId) {
+  if (!state || !Array.isArray(state.accounts)) return;
   const account = state.accounts.find((item) => item.id === accountId);
   if (!account) return;
   const accountLabel = account.label || makeAccountLabel(account.username, account.suffix);
@@ -149,23 +189,47 @@ function runAsync(fn) {
   };
 }
 
-async function loadState() {
-  const response = await sendMessage({ action: "state:get" });
-  state = response.state;
-  applyAppearance(state.config.ui);
-  $("portal-host").textContent = new URL(state.config.portalUrl).host;
+function parsePortalHost(portalUrl) {
+  try {
+    return new URL(portalUrl).host || portalUrl || "10.10.10.2";
+  } catch (error) {
+    return portalUrl || "10.10.10.2";
+  }
+}
+
+function applyState(nextState) {
+  state = nextState || null;
+  if (!state) return;
+  if (state.config?.ui && globalThis.DrcomAppearance) {
+    applyAppearance(state.config.ui);
+  }
+  const hostEl = $("portal-host");
+  if (hostEl) hostEl.textContent = parsePortalHost(state.config?.portalUrl);
   renderAccountSelect();
   renderAccountList();
-  fillSelectedAccount();
+  if (!isCreatingNewAccount) fillSelectedAccount();
+}
+
+async function loadState() {
+  const response = await sendMessage({ action: "state:get" });
+  applyState(response.state);
 }
 
 function applyAppearance(ui) {
   const appearance = globalThis.DrcomAppearance.applyToRoot(document.documentElement, ui);
-  if (ui.background !== "daily") return appearance;
+  if (!ui || ui.background !== "daily") return appearance;
+  if (cachedDailyWallpaperUrl) {
+    return globalThis.DrcomAppearance.applyToRoot(document.documentElement, {
+      ...ui,
+      background: "custom",
+      backgroundImage: cachedDailyWallpaperUrl
+    });
+  }
   chrome.runtime.sendMessage({ action: "wallpaper:get" }, (response) => {
     if (chrome.runtime.lastError) return;
     const wallpaper = response && response.wallpaper;
     if (wallpaper && wallpaper.ok && wallpaper.dataUrl) {
+      cachedDailyWallpaperUrl = wallpaper.dataUrl;
       globalThis.DrcomAppearance.applyToRoot(document.documentElement, {
         ...ui,
         background: "custom",
@@ -178,33 +242,42 @@ function applyAppearance(ui) {
 
 function renderAccountSelect() {
   const select = $("account-select");
+  if (!select) return;
   select.innerHTML = "";
-  if (!state.accounts.length) {
+  const accounts = Array.isArray(state?.accounts) ? state.accounts : [];
+  if (!accounts.length) {
     select.append(new Option(i18n.t("no_saved_accounts"), ""));
     select.disabled = true;
     return;
   }
 
   select.disabled = false;
-  for (const account of state.accounts) {
+  for (const account of accounts) {
     const option = new Option(account.label || account.username, account.id);
-    option.selected = account.id === state.selectedAccountId;
+    option.selected = !isCreatingNewAccount && account.id === state.selectedAccountId;
     select.append(option);
+  }
+  if (isCreatingNewAccount) {
+    select.value = "";
+    select.selectedIndex = -1;
   }
 }
 
 function renderAccountList() {
   const list = $("account-list");
+  if (!list) return;
   list.innerHTML = "";
-  if (!state.accounts.length) {
+  const accounts = Array.isArray(state?.accounts) ? state.accounts : [];
+  if (!accounts.length) {
     list.innerHTML = `<li class="empty">${escapeHtml(i18n.t("empty_accounts_hint"))}</li>`;
     return;
   }
 
-  for (const account of state.accounts) {
+  for (const account of accounts) {
     const item = document.createElement("li");
     const accountLabel = account.label || account.username;
-    item.className = account.id === state.selectedAccountId ? "account active" : "account";
+    const isActive = !isCreatingNewAccount && account.id === state.selectedAccountId;
+    item.className = isActive ? "account active" : "account";
     item.innerHTML = `
       <button type="button" class="account-main" data-select="${escapeHtml(account.id)}">
         <strong>${escapeHtml(accountLabel)}</strong>
@@ -217,22 +290,32 @@ function renderAccountList() {
 }
 
 function fillSelectedAccount() {
-  const account = state.accounts.find((item) => item.id === state.selectedAccountId);
+  const accounts = Array.isArray(state?.accounts) ? state.accounts : [];
+  const account = accounts.find((item) => item.id === state?.selectedAccountId);
   const parsed = account ? splitAccount(account.username, account.suffix) : { username: "", suffix: "" };
-  $("label").value = account ? account.label : "";
-  $("username").value = parsed.username;
-  $("suffix").value = parsed.suffix;
-  $("password").value = account ? account.password : "";
-  $("wlan-user-ip").value = account ? account.network.wlanUserIp : "";
-  $("wlan-user-mac").value = account ? account.network.wlanUserMac : "";
+  if ($("label")) $("label").value = account ? account.label : "";
+  if ($("username")) $("username").value = parsed.username;
+  if ($("suffix")) $("suffix").value = parsed.suffix;
+  if ($("password")) $("password").value = account ? account.password : "";
+  if ($("wlan-user-ip")) $("wlan-user-ip").value = account?.network?.wlanUserIp || "";
+  if ($("wlan-user-mac")) $("wlan-user-mac").value = account?.network?.wlanUserMac || "";
 }
 
 async function saveCurrentAccount() {
+  if (document.body?.dataset?.busy === "true") return;
   const account = readAccountForm();
-  const response = await sendMessage({ action: "account:save", account });
-  state = response.state;
-  await loadState();
-  toast(i18n.t("account_saved"));
+  if (!account.username) throw new Error(i18n.t("username_required"));
+  if (!account.password) throw new Error(i18n.t("password_required"));
+  setBusy(true);
+  try {
+    const response = await sendMessage({ action: "account:save", account });
+    isCreatingNewAccount = false;
+    if (response.state) applyState(response.state);
+    else await loadState();
+    toast(i18n.t("account_saved"));
+  } finally {
+    setBusy(false);
+  }
 }
 
 async function login() {
@@ -244,8 +327,10 @@ async function login() {
     let result;
     if ($("remember").checked) {
       const saved = await sendMessage({ action: "account:save", account });
+      isCreatingNewAccount = false;
       result = await sendMessage({ action: "drcom:login", accountId: saved.account.id });
-      await loadState();
+      if (saved.state) applyState(saved.state);
+      else await loadState();
     } else {
       result = await sendMessage({ action: "drcom:login", account });
     }
@@ -269,6 +354,12 @@ async function logout() {
 }
 
 async function refreshStatus(showToast) {
+  if (refreshingStatus) return;
+  refreshingStatus = true;
+  const refreshButton = $("refresh-status");
+  const glyph = refreshButton?.querySelector?.(".win-glyph");
+  if (refreshButton) refreshButton.disabled = true;
+  glyph?.classList?.add("spinning");
   try {
     const result = await sendMessage({ action: "drcom:status" });
     renderResult(result);
@@ -281,6 +372,12 @@ async function refreshStatus(showToast) {
       phase: "offline",
       message: i18n.t("refresh_failed", [error.message || error])
     });
+  } finally {
+    refreshingStatus = false;
+    glyph?.classList?.remove("spinning");
+    if (refreshButton && document.body?.dataset?.busy !== "true") {
+      refreshButton.disabled = false;
+    }
   }
 }
 
@@ -289,6 +386,8 @@ function renderResult(result) {
   const online = Object.prototype.hasOwnProperty.call(result, "online") ? Boolean(result.online) : Boolean(result.success);
   const phase = result.phase || (online ? "online" : "offline");
   $("status-dot").dataset.state = phase;
+  const statusPanel = $("status-panel");
+  if (statusPanel?.dataset) statusPanel.dataset.state = phase;
   $("status-label").textContent = i18n.t(STATUS_KEYS[phase] || "status_unknown");
   $("status-message").textContent = result.message
     ? i18n.localizeKnownMessage(result.message)
@@ -297,7 +396,10 @@ function renderResult(result) {
 }
 
 function readAccountForm() {
-  const existing = state.accounts.find((account) => account.id === state.selectedAccountId);
+  const accounts = Array.isArray(state?.accounts) ? state.accounts : [];
+  const existing = isCreatingNewAccount
+    ? null
+    : accounts.find((account) => account.id === state?.selectedAccountId);
   const parsed = splitAccount($("username").value.trim(), $("suffix").value.trim());
   return {
     id: existing ? existing.id : "",
@@ -317,13 +419,14 @@ function setBusy(isBusy) {
   document.querySelectorAll("button, input, select").forEach((element) => {
     element.disabled = isBusy;
   });
-  document.querySelectorAll(".win-glyph").forEach((glyph) => {
-    glyph.classList?.toggle("spinning", isBusy);
-  });
   if (!isBusy) {
     const accountSelect = $("account-select");
     if (accountSelect) {
       accountSelect.disabled = !(state && Array.isArray(state.accounts) && state.accounts.length);
+    }
+    const refreshButton = $("refresh-status");
+    if (refreshButton && refreshingStatus) {
+      refreshButton.disabled = true;
     }
   }
 }

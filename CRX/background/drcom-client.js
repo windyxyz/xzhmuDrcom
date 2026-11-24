@@ -23,6 +23,22 @@ async function fetchDrcom(request, kind) {
       },
       signal: controller.signal
     });
+    if (response && response.type === "opaqueredirect") {
+      const payload = {
+        ok: false,
+        success: false,
+        online: false,
+        statusCode: response.status || 0,
+        failureCode: "unexpected_redirect",
+        message: "DrCOM 接口发生异常重定向，请确认校园网网关地址配置正确。",
+        url: request.redactedUrl,
+        raw: ""
+      };
+      if (kind === "login" || kind === "logout") {
+        await addRequestRecord({ kind, ...payload });
+      }
+      return payload;
+    }
     const text = await readLimitedResponse(response, DRCOM_RESPONSE_LIMIT_BYTES, controller);
     const parsed = parseDrcomText(text);
     const result = normalizeDrcomResult(kind, response.status, parsed, text);
@@ -183,7 +199,7 @@ function buildLoginRequest(account, config, networkOverride = null) {
   url.search = "";
   url.searchParams.set("c", "Portal");
   url.searchParams.set("a", "login");
-  url.searchParams.set("callback", `${config.login.callbackPrefix}${ts}`);
+  url.searchParams.set("callback", `${config.login.callbackPrefix || "dr"}${ts}`);
   url.searchParams.set("login_method", config.login.loginMethod || "1");
   url.searchParams.set("user_account", composeUserAccount(account, config));
   url.searchParams.set("user_password", account.password);
@@ -224,7 +240,7 @@ function buildUnbindRequest(account, config, networkOverride = null) {
   url.search = "";
   url.searchParams.set("c", "Portal");
   url.searchParams.set("a", "unbind_mac");
-  url.searchParams.set("callback", `${config.login.callbackPrefix}${ts}`);
+  url.searchParams.set("callback", `${config.login.callbackPrefix || "dr"}${ts}`);
   url.searchParams.set("user_account", composeLogoutUserAccount(account));
   url.searchParams.set("wlan_user_mac", accountUtils.normalizeMac(network.wlanUserMac) || "000000000000");
   url.searchParams.set("wlan_user_ip", network.wlanUserIp || "");
@@ -240,7 +256,7 @@ function buildPortalLogoutRequest(config, networkOverride = null) {
   url.search = "";
   url.searchParams.set("c", "Portal");
   url.searchParams.set("a", "logout");
-  url.searchParams.set("callback", `${config.login.callbackPrefix}${ts}`);
+  url.searchParams.set("callback", `${config.login.callbackPrefix || "dr"}${ts}`);
   url.searchParams.set("login_method", config.login.loginMethod || "1");
   url.searchParams.set("user_account", "drcom");
   url.searchParams.set("user_password", "123");
@@ -378,9 +394,9 @@ function redactSensitiveText(value) {
   }
 
   const quotedPasswordPattern = /(["']?(?:user_password|password|upass|0MKKey)["']?\s*[:=]\s*)(["'])([\s\S]*?)\2/gi;
-  const quotedAccountPattern = /(["']?user_account["']?\s*[:=]\s*)(["'])([\s\S]*?)\2/gi;
+  const quotedAccountPattern = /(["']?(?:user_account|uid|username|account|user_name|DDDDD)["']?\s*[:=]\s*)(["'])([\s\S]*?)\2/gi;
   const passwordPattern = /(["']?(?:user_password|password|upass|0MKKey)["']?\s*[:=]\s*)([^"'&,;\s}]+)/gi;
-  const accountPattern = /(["']?user_account["']?\s*[:=]\s*)([^"'&;\s}]+)/gi;
+  const accountPattern = /(["']?(?:user_account|uid|username|account|user_name|DDDDD)["']?\s*[:=]\s*)(,0,[^"'&,;\s}]+|[^"'&,;\s}]+)/gi;
   const sanitized = raw
     .replace(quotedPasswordPattern, (match, prefix, quote) => `${prefix}${quote}******${quote}`)
     .replace(quotedAccountPattern, (match, prefix, quote, accountValue) => {

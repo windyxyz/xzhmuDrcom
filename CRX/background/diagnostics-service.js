@@ -24,8 +24,13 @@ function portalDiagnosticsDefaults() {
   };
 }
 
+const PORTAL_DIAGNOSTICS_TEXT_ENCODER = new TextEncoder();
+const PORTAL_DIAGNOSTICS_UNCHANGED = typeof STATE_UNCHANGED === "symbol"
+  ? STATE_UNCHANGED
+  : Symbol("portal-diagnostics-unchanged");
+
 function portalDiagnosticsSerializedBytes(value) {
-  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  return PORTAL_DIAGNOSTICS_TEXT_ENCODER.encode(JSON.stringify(value)).byteLength;
 }
 
 function portalDiagnosticsNonNegativeFinite(value, fallback = 0) {
@@ -182,6 +187,9 @@ function mutatePortalDiagnostics(mutator, options = {}) {
     const stored = await chrome.storage.local.get([PORTAL_DIAGNOSTICS_KEY]);
     const draft = normalizePortalDiagnosticsStore(stored[PORTAL_DIAGNOSTICS_KEY]);
     const value = await mutator(draft);
+    if (value === PORTAL_DIAGNOSTICS_UNCHANGED) {
+      return { store: draft, value: null, unchanged: true };
+    }
     draft.updatedAt = Date.now();
     const store = prunePortalDiagnosticsStore(draft);
     if (options.enforceQuota && !await portalDiagnosticsWithinQuota(store)) {
@@ -237,7 +245,7 @@ async function startPortalDiagnosticsSession(page, sender) {
   const startedAt = Date.now();
   let started = false;
   const result = await mutatePortalDiagnostics((draft) => {
-    if (!draft.enabled || draft.paused) return;
+    if (!draft.enabled || draft.paused) return PORTAL_DIAGNOSTICS_UNCHANGED;
     draft.sessions.push({
       id: sessionId,
       startedAt,
@@ -267,7 +275,7 @@ async function appendPortalDiagnosticRecord(sessionId, record) {
   let stored = false;
   let rejected = false;
   const result = await mutatePortalDiagnostics((draft) => {
-    if (!draft.enabled || draft.paused) return;
+    if (!draft.enabled || draft.paused) return PORTAL_DIAGNOSTICS_UNCHANGED;
     const session = draft.sessions.find((item) => item.id === cleanId);
     if (!session || session.endedAt) {
       draft.droppedRecords += 1;
@@ -296,7 +304,7 @@ async function endPortalDiagnosticsSession(sessionId) {
   let ended = false;
   await mutatePortalDiagnostics((draft) => {
     const session = draft.sessions.find((item) => item.id === cleanId);
-    if (!session || session.endedAt) return;
+    if (!session || session.endedAt) return PORTAL_DIAGNOSTICS_UNCHANGED;
     session.endedAt = Date.now();
     ended = true;
   });

@@ -67,6 +67,9 @@ function createSettingsRefreshController(deps) {
 
   const handleStorageChange = (changes, areaName) => {
     if (!enabled || !changes || typeof changes !== "object") return Promise.resolve(false);
+    if (typeof deps.shouldIgnoreStorageChange === "function" && deps.shouldIgnoreStorageChange(changes, areaName)) {
+      return Promise.resolve(false);
+    }
     if (areaName === "local" && changes.drcomAssistantState) {
       return requestRefresh({ full: true, diagnostics: true });
     }

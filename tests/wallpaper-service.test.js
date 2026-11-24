@@ -167,3 +167,47 @@ test("接口失败或图片超限时返回不可用且不落缓存", async () =>
   assert.equal(result.ok, false);
   assert.equal(service.localStore.drcomDailyWallpaper, undefined);
 });
+
+test("每日壁纸拉取失败时回退到上一日缓存并触发 60 秒失败冷却", async () => {
+  const service = loadWallpaperService({
+    localStore: {
+      drcomDailyWallpaper: { day: "2020-01-01", dataUrl: "data:image/jpeg;base64,OLD" }
+    },
+    fetch: async () => { throw new Error("network offline"); }
+  });
+
+  const first = await service.context.requestDailyWallpaper();
+  assert.equal(first.ok, true);
+  assert.equal(first.stale, true);
+  assert.equal(first.dataUrl, "data:image/jpeg;base64,OLD");
+  assert.equal(service.fetchCalls.length, 1);
+
+  const second = await service.context.requestDailyWallpaper();
+  assert.equal(second.ok, true);
+  assert.equal(second.stale, true);
+  assert.equal(second.dataUrl, "data:image/jpeg;base64,OLD");
+  assert.equal(service.fetchCalls.length, 1, "冷却期内不应重复发起网络请求");
+});
+
+test("fetchWallpaperImage 在 Content-Length 超限时直接拒绝，不调用 response.blob()", async () => {
+  let blobCalled = false;
+  const service = loadWallpaperService({
+    fetch: async (url) => {
+      if (String(url).includes("HPImageArchive")) {
+        return jsonResponse({ images: [{ urlbase: "/th?id=OHR.Oversized" }] });
+      }
+      return {
+        ok: true,
+        headers: { get: (name) => name.toLowerCase() === "content-length" ? String(3 * 1024 * 1024) : null },
+        blob: async () => {
+          blobCalled = true;
+          return { size: 3 * 1024 * 1024, arrayBuffer: async () => new Uint8Array([1]).buffer };
+        }
+      };
+    }
+  });
+
+  const result = await service.context.requestDailyWallpaper();
+  assert.equal(result.ok, false);
+  assert.equal(blobCalled, false);
+});

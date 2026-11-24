@@ -244,7 +244,7 @@
         </header>
         <main class="drcom-stage">
           ${renderBrandPanel(safeTitle, host || t("authentication_gateway"))}
-          <div class="drcom-surface">${content}</div>
+          <div id="drcom-surface" class="drcom-surface">${content}</div>
         </main>
         <footer data-i18n="welcome_privacy">${escapeHtml(t("welcome_privacy"))}</footer>
       </div>
@@ -257,6 +257,7 @@
     localizeTitle,
     normalizeSuffix: accountUtils.normalizeSuffix,
     parseAccount: accountUtils.parse,
+    renderOnlineContent,
     renderPortalMarkup,
     setLanguage,
     shouldTakeOver,

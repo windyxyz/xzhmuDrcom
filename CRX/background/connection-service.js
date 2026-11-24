@@ -231,7 +231,7 @@ function classifyLoginFailure(result) {
       action: "请检查账号、运营商后缀和认证密码。"
     };
   }
-  if (failureCode === "device_limit" || /设备数量|MAC 冲突|AC999|绑定/i.test(message)) {
+  if (failureCode === "device_limit" || failureCode === "network_parameters" || /设备数量|MAC\s*冲突|AC999|绑定/i.test(message)) {
     return {
       category: "device",
       retryable: false,
@@ -335,7 +335,7 @@ async function recordLoginOutcome(result, options = {}) {
 function logout() {
   /* 用户点击注销的那一刻就抑制自动重连：即使注销结果未知或失败，
      也不得在稍后由 keepalive / retry 把用户重新拉上线。 */
-  void setManualLogout(true);
+  void setManualLogout(true).catch(() => {});
   /* 注销与登录共用统一连接操作队列：login 进行中时注销排队等其完成再执行；
      后到的注销操作会拿到新的 operationId，慢登录收尾时不得覆盖注销结果。 */
   return runConnectionOperation("logout", (operation) => performLogout(operation.id));
@@ -511,37 +511,56 @@ function waitForLogoutDelay(delay) {
   return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
+let statusCheckFlight = null;
+
 async function checkStatus() {
-  const state = await getState();
-  const previousRuntime = await getConnectionState();
-  await setConnectionState({
-    phase: "checking",
-    message: "正在检查校园网连接状态。",
-    updatedAt: Date.now()
-  });
+  if (statusCheckFlight) return statusCheckFlight;
+  const operationId = activeConnectionOperationId();
+  const hasActiveConnectionOp = () => hasPendingConnectionOperation()
+    || !isLatestConnectionOperation(operationId);
 
-  let result = await queryPortalSessionStatus(state.config);
-  if (result.state === "unknown") {
-    const pageResult = await queryPortalPageStatus(state.config);
-    if (pageResult.state !== "unknown") result = pageResult;
+  statusCheckFlight = (async () => {
+    const state = await getState();
+    const previousRuntime = await getConnectionState();
+    if (!hasActiveConnectionOp()) {
+      await setConnectionState({
+        phase: "checking",
+        message: "正在检查校园网连接状态。",
+        updatedAt: Date.now()
+      });
+    }
+
+    let result = await queryPortalSessionStatus(state.config);
+    if (result.state === "unknown") {
+      const pageResult = await queryPortalPageStatus(state.config);
+      if (pageResult.state !== "unknown") result = pageResult;
+    }
+
+    const now = Date.now();
+    const runtime = await getConnectionState();
+    let phase = resolveStatusPhase(result.state, runtime, previousRuntime, now);
+    /* 用户主动注销后，offline 不再显示为“门户待认证”，就是普通的离线。 */
+    if (phase === "captive" && await isManualLogoutActive()) phase = "offline";
+    if (!hasActiveConnectionOp()) {
+      if (result.state === "online") await chrome.alarms.clear(RETRY_ALARM);
+      await setConnectionState({
+        phase,
+        attempt: result.state === "online" ? 0 : runtime.attempt,
+        nextRetryAt: result.state === "online" ? 0 : runtime.nextRetryAt,
+        blocked: result.state === "online" ? false : runtime.blocked,
+        message: result.message,
+        updatedAt: now
+      });
+    }
+    await addRequestRecord({ kind: "status", ...result });
+    return { ...result, phase };
+  })();
+
+  try {
+    return await statusCheckFlight;
+  } finally {
+    statusCheckFlight = null;
   }
-
-  const now = Date.now();
-  const runtime = await getConnectionState();
-  let phase = resolveStatusPhase(result.state, runtime, previousRuntime, now);
-  /* 用户主动注销后，offline 不再显示为“门户待认证”，就是普通的离线。 */
-  if (phase === "captive" && await isManualLogoutActive()) phase = "offline";
-  if (result.state === "online") await chrome.alarms.clear(RETRY_ALARM);
-  await setConnectionState({
-    phase,
-    attempt: result.state === "online" ? 0 : runtime.attempt,
-    nextRetryAt: result.state === "online" ? 0 : runtime.nextRetryAt,
-    blocked: result.state === "online" ? false : runtime.blocked,
-    message: result.message,
-    updatedAt: now
-  });
-  await addRequestRecord({ kind: "status", ...result });
-  return { ...result, phase };
 }
 
 async function queryPortalPageStatus(config) {
@@ -557,6 +576,9 @@ async function queryPortalPageStatus(config) {
     const html = await readLimitedResponse(response, PORTAL_HTML_LIMIT_BYTES, controller);
     return parsePortalStatus(response.status, html, config.portalUrl);
   } catch (error) {
+    const portalHost = globalThis.DrcomPortalUrl
+      ? globalThis.DrcomPortalUrl.host(config.portalUrl, "10.10.10.2")
+      : "10.10.10.2";
     return {
       ok: false,
       success: false,
@@ -565,7 +587,7 @@ async function queryPortalPageStatus(config) {
       message: error && error.name === "ResponseSizeLimitError"
         ? "校园网门户响应超过 1 MiB 安全上限，无法确认校园网状态。"
         : error && error.name === "AbortError"
-        ? "访问 10.10.10.2 超时，无法确认校园网状态。"
+        ? `访问 ${portalHost} 超时，无法确认校园网状态。`
         : "无法确认校园网会话状态。",
       statusCode: 0,
       url: config.portalUrl,

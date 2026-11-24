@@ -25,15 +25,39 @@
       return i18n.normalizePreference(stored[LANGUAGE_STORAGE_KEY]);
     }
 
+    async function resolvePortalOrigins() {
+      const defaults = new Set(["http://10.10.10.2", "https://10.10.10.2"]);
+      if (typeof globalThis.trustedPortalOrigins === "function") {
+        try {
+          const origins = await globalThis.trustedPortalOrigins();
+          if (origins && typeof origins.has === "function") return origins;
+        } catch (error) {}
+      }
+      return defaults;
+    }
+
     async function broadcast(preference) {
       const message = { action: "language:changed", preference };
       const tasks = [
         Promise.resolve(runtime.sendMessage(message)).catch(() => undefined)
       ];
       const openTabs = await Promise.resolve(tabs.query({})).catch(() => []);
+      const portalOrigins = openTabs.some((tab) => tab && tab.url && !/^(?:chrome|moz)-extension:\/\//i.test(tab.url))
+        ? await resolvePortalOrigins()
+        : null;
 
       for (const tab of openTabs) {
         if (!Number.isInteger(tab && tab.id)) continue;
+        if (tab.url) {
+          const isExtensionTab = /^(?:chrome|moz)-extension:\/\//i.test(tab.url);
+          let isPortalTab = false;
+          if (!isExtensionTab && portalOrigins) {
+            try {
+              isPortalTab = portalOrigins.has(new URL(tab.url).origin);
+            } catch (error) {}
+          }
+          if (!isExtensionTab && !isPortalTab) continue;
+        }
         tasks.push(Promise.resolve(tabs.sendMessage(tab.id, message)).catch(() => undefined));
       }
 

@@ -145,3 +145,35 @@ test("欢迎页语言保存失败时临时应用并显示安全的未保存提�
   assert.match(elements.get("language-save-status").textContent, /not saved/i);
   assert.doesNotMatch(elements.get("language-save-status").textContent, /quota/i);
 });
+
+test("欢迎页语言切换成功后自动隐藏先前的未保存错误条", async () => {
+  const listeners = new Map();
+  let failSave = true;
+  const elements = new Map(["open-portal", "open-options", "language-toggle", "portal-title", "language-save-status"].map((id) => [id, {
+    hidden: true, textContent: "", dataset: {}, addEventListener(type, listener) { listeners.set(`${id}:${type}`, listener); }, setAttribute() {}
+  }]));
+  const chrome = {
+    i18n: { getUILanguage() { return "zh-CN"; } },
+    runtime: { id: "test", lastError: null, onMessage: { addListener() {} }, sendMessage(message, callback) {
+      if (message.action === "language:set" && failSave) {
+        this.lastError = { message: "QUOTA_BYTES quota exceeded" }; callback(); this.lastError = null; return;
+      }
+      const response = message.action === "language:get" ? { ok: true, preference: "zh-CN" }
+        : message.action === "language:set" ? { ok: true, preference: message.preference }
+          : { ok: true, state: { config: { ui: {}, portalUrl: "http://10.10.10.2/" } } };
+      if (callback) callback(response); else return Promise.resolve(response);
+    }, openOptionsPage() {} }, tabs: { update() {} }
+  };
+  const document = { documentElement: {}, addEventListener(type, listener) { listeners.set(type, listener); }, getElementById(id) { return elements.get(id) || null; }, querySelectorAll() { return []; } };
+  const context = vm.createContext({ URL, chrome, document, navigator: { languages: ["zh-CN"] }, DrcomAppearance: { applyToRoot() {} }, clearTimeout, setTimeout });
+  for (const file of ["i18n-messages.js", "i18n.js", "welcome.js"]) new vm.Script(readFileSync(join(__dirname, "..", "CRX", file), "utf8"), { filename: file }).runInContext(context);
+  await listeners.get("DOMContentLoaded")();
+
+  await listeners.get("language-toggle:click")();
+  assert.equal(elements.get("language-save-status").hidden, false);
+
+  failSave = false;
+  await listeners.get("language-toggle:click")();
+  assert.equal(elements.get("language-save-status").hidden, true);
+  assert.equal(elements.get("language-save-status").textContent, "");
+});

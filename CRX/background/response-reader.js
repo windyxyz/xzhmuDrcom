@@ -1,5 +1,7 @@
 "use strict";
 
+const RESPONSE_READER_TEXT_ENCODER = new TextEncoder();
+
 class ResponseSizeLimitError extends Error {
   constructor(limitBytes) {
     const label = limitBytes === 64 * 1024 ? "64 KiB" : limitBytes === 1024 * 1024 ? "1 MiB" : `${limitBytes} bytes`;
@@ -44,7 +46,7 @@ async function readLimitedResponse(response, limitBytes, controller = null) {
   }
 
   const text = await response.text();
-  if (new TextEncoder().encode(String(text)).byteLength > limitBytes) {
+  if (RESPONSE_READER_TEXT_ENCODER.encode(String(text)).byteLength > limitBytes) {
     if (controller) controller.abort();
     throw new ResponseSizeLimitError(limitBytes);
   }

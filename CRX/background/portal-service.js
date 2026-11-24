@@ -64,7 +64,10 @@ async function syncPortalContentScript(state) {
     origins: [pattern],
     permissions: ["scripting"]
   });
-  if (!hasAccess) return false;
+  if (!hasAccess) {
+    if (existing.length) await scripting.unregisterContentScripts({ ids: [CUSTOM_PORTAL_SCRIPT_ID] });
+    return false;
+  }
 
   const current = existing[0];
   if (currentPortalScriptMatches(current, pattern)) {
@@ -81,7 +84,10 @@ async function syncPortalContentScript(state) {
 
 async function handleTabRedirect(tabId, targetUrl) {
   const guard = await getTabGuard(tabId);
-  if (!guard || Date.now() > guard.until) {
+  if (!guard) {
+    return;
+  }
+  if (Date.now() > guard.until) {
     await setTabGuard(tabId, null);
     return;
   }
@@ -105,12 +111,20 @@ async function handleTabRedirect(tabId, targetUrl) {
   });
 }
 
+async function clearTabGuard(tabId) {
+  if (typeof tabId !== "number") return;
+  const guard = await getTabGuard(tabId);
+  if (!guard) return;
+  await setTabGuard(tabId, null);
+}
+
 /* 扩展更新/重载后，已打开的门户标签页里的内容脚本会孤儿化（消息全部失效）。
    刷新这些标签页让内容脚本重新注入，用户无需了解"要手动 F5"。 */
 async function reloadPortalTabs() {
   const state = await getState();
   const patterns = [...new Set([
     "http://10.10.10.2/*",
+    "https://10.10.10.2/*",
     portalMatchPattern(state.config.portalUrl)
   ].filter(Boolean))];
   let tabs = [];
@@ -146,7 +160,7 @@ async function clearSenderTab(sender) {
   if (!sender || !sender.tab || typeof sender.tab.id !== "number") {
     return;
   }
-  await setTabGuard(sender.tab.id, null);
+  await clearTabGuard(sender.tab.id);
 }
 
 function isPortalUrl(targetUrl, portalUrl) {
@@ -193,6 +207,8 @@ function publicAppearance(input) {
     backgroundPosition: ["left top", "center top", "right top", "left center", "center", "right center", "left bottom", "center bottom", "right bottom"].includes(ui.backgroundPosition)
       ? ui.backgroundPosition
       : "center",
+    backgroundFit: ["cover", "contain", "fill"].includes(ui.backgroundFit) ? ui.backgroundFit : "cover",
+    material: ["solid", "mica", "acrylic", "acrylicStrong", "custom"].includes(ui.material) ? ui.material : "acrylic",
     panelColor: /^#[0-9a-f]{6}$/i.test(String(ui.panelColor || "").trim()) ? String(ui.panelColor).trim() : "",
     panelPattern: ["grid", "dots", "diagonal", "cross", "none"].includes(ui.panelPattern) ? ui.panelPattern : "grid",
     scrimStrength: Number.isFinite(Number(ui.scrimStrength)) ? Math.min(1.4, Math.max(0.4, Number(ui.scrimStrength))) : 1
@@ -208,11 +224,11 @@ function isWebPageSender(sender) {
   return Boolean(sender && typeof sender.url === "string" && /^https?:/i.test(sender.url));
 }
 
-async function trustedPortalOrigins() {
+async function trustedPortalOrigins(state = null) {
   // 默认门户始终可信；用户显式配置的自定义网关只有在保存时逐来源授权后，
   // 内容脚本才会注册到那里，因此这里的配置来源与注入范围保持一致。
   const origins = new Set(DEFAULT_PORTAL_ORIGINS);
-  const currentState = await getState();
+  const currentState = state || await getState();
   const configured = portalUrlUtils.parse(stringValue(currentState?.config?.portalUrl));
   if (configured) origins.add(configured.origin);
   return origins;
@@ -225,7 +241,8 @@ async function validatePortalSender(sender) {
   if (sender.frameId !== 0) {
     throw new Error("网页消息只允许来自门户顶层 frame");
   }
-  const trustedOrigins = await trustedPortalOrigins();
+  const currentState = await getState();
+  const trustedOrigins = await trustedPortalOrigins(currentState);
   if (!trustedOrigins.has(sender.origin)) {
     throw new Error("网页消息来源不是受信任门户");
   }
@@ -253,5 +270,5 @@ async function validatePortalSender(sender) {
   } catch (error) {
     throw new Error("标签页已经离开受信任门户");
   }
-  return true;
+  return currentState;
 }

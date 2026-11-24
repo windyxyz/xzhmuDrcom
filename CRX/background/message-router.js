@@ -15,8 +15,8 @@ async function validateDefaultPortalDiagnosticsSender(sender) {
   }
 }
 
-async function validatePortalNetworkUpdateSource(sourceUrl) {
-  const state = await getState();
+async function validatePortalNetworkUpdateSource(sourceUrl, preloadedState = null) {
+  const state = preloadedState || await getState();
   let source;
   let api;
   try {
@@ -47,9 +47,10 @@ async function handleMessage(message, sender) {
   const fromWebPage = isWebPageSender(sender);
   const fromExtensionPage = isExtensionPageSender(sender);
 
+  let validatedState = null;
   if (fromWebPage) {
     if (PORTAL_DIAGNOSTIC_WEB_ACTIONS.has(action)) await validateDefaultPortalDiagnosticsSender(sender);
-    await validatePortalSender(sender);
+    validatedState = await validatePortalSender(sender);
     if (!WEB_PAGE_ACTIONS.has(action)) {
       if (action === "state:get") {
         throw new Error("网页内容脚本不能读取完整扩展状态");
@@ -93,7 +94,7 @@ async function handleMessage(message, sender) {
       return { ok: true, connection: await getConnectionState() };
 
     case "portal:config:get": {
-      const state = await getState();
+      const state = validatedState || await getState();
       return {
         ok: true,
         portal: {
@@ -107,7 +108,7 @@ async function handleMessage(message, sender) {
     }
 
     case "portal:appearance:get": {
-      const state = await getState();
+      const state = validatedState || await getState();
       const appearance = publicAppearance(state.config.ui);
       if (state.config.ui.background === "daily") {
         const wallpaper = await requestDailyWallpaper();
@@ -165,7 +166,7 @@ async function handleMessage(message, sender) {
       return selectAccount(message.accountId || "");
 
     case "account:network:update": {
-      if (fromWebPage) await validatePortalNetworkUpdateSource(message.sourceUrl);
+      if (fromWebPage) await validatePortalNetworkUpdateSource(message.sourceUrl, validatedState);
       const result = await updateAccountNetwork(message.userAccount || "", message.network || {});
       return fromWebPage ? { ok: result.ok, message: result.message || "" } : result;
     }
@@ -179,11 +180,25 @@ async function handleMessage(message, sender) {
     case "config:reset":
       return resetConfig();
 
-    case "drcom:login":
-      await markSenderTab(sender);
-      return loginAccount(message.accountId || "", message.account || null, {
-        portalPageUrl: fromWebPage ? String(sender.url || "") : ""
-      });
+    case "drcom:login": {
+      if (fromWebPage) {
+        await markSenderTab(sender);
+      }
+      try {
+        const result = await loginAccount(message.accountId || "", message.account || null, {
+          portalPageUrl: fromWebPage ? String(sender.url || "") : ""
+        });
+        if (fromWebPage && (!result || !result.success)) {
+          await clearSenderTab(sender);
+        }
+        return result;
+      } catch (error) {
+        if (fromWebPage) {
+          await clearSenderTab(sender);
+        }
+        throw error;
+      }
+    }
 
     case "drcom:logout":
       return logout();

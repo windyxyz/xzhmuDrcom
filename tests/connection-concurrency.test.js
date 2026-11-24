@@ -646,3 +646,63 @@ test("临时账号登录不参与合并，各自独立执行", async () => {
     "后排队的临时账号必须在其后独立执行");
   assert.equal(background.__sessionStore.drcomAssistantSession.activeIdentity.username, "temporary-b");
 });
+
+test("并发 checkStatus 单飞去重，只发送一次 chkstatus 请求", async () => {
+  let chkstatusCount = 0;
+  let releaseCheck;
+  const gate = new Promise((resolve) => { releaseCheck = resolve; });
+  const background = loadConnectionRuntime({
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.includes("/drcom/chkstatus")) {
+        chkstatusCount += 1;
+        await gate;
+        return response('dr1001({"result":1,"uid":"20220001@cmcc"})', url.toString());
+      }
+      return response("", url.toString());
+    }
+  });
+  setStatusFakes(background);
+
+  const first = background.checkStatus();
+  const second = background.checkStatus();
+  releaseCheck();
+  const [r1, r2] = await Promise.all([first, second]);
+
+  assert.equal(chkstatusCount, 1);
+  assert.equal(r1.state, "online");
+  assert.equal(r2.state, "online");
+});
+
+test("checkStatus 期间启动新连接操作时不得覆盖新操作的状态阶段", async () => {
+  let releaseCheck;
+  const checkGate = new Promise((resolve) => { releaseCheck = resolve; });
+  const background = loadConnectionRuntime({
+    sessionStore: activeSession(),
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.includes("/drcom/chkstatus")) {
+        await checkGate;
+        return response('dr1001({"result":0})', url.toString());
+      }
+      return response('dr1002({"result":1,"msg":"logout success"})', url.toString());
+    }
+  });
+  setStatusFakes(background);
+
+  const pendingCheck = background.checkStatus();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  // 在 checkStatus 飞行期间推进最新连接操作 ID 并模拟新的在线状态
+  const opPromise = background.runConnectionOperation("login", async () => {
+    await background.setConnectionState({ phase: "online", message: "已由新操作更新" });
+    return { ok: true, success: true };
+  }, { dedupeKey: null });
+  await opPromise;
+
+  releaseCheck();
+  await pendingCheck;
+
+  assert.equal(background.__sessionStore.drcomAssistantSession.connection.phase, "online");
+  assert.equal(background.__sessionStore.drcomAssistantSession.connection.message, "已由新操作更新");
+});

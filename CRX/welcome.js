@@ -6,44 +6,10 @@ const i18n = globalThis.DrcomI18n;
 
 document.addEventListener("DOMContentLoaded", async () => {
   bindLanguageControls();
-  await loadLanguage();
-  if (globalThis.DrcomAppearance) {
-    globalThis.DrcomAppearance.applyToRoot(document.documentElement, {});
-  }
-  if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
-    try {
-      const response = await chrome.runtime.sendMessage({ action: "state:get" });
-      if (response && response.state) {
-        const ui = response.state.config.ui;
-        globalThis.DrcomAppearance.applyToRoot(document.documentElement, ui);
-        if (ui.background === "daily") {
-          chrome.runtime.sendMessage({ action: "wallpaper:get" }, (wallpaperResponse) => {
-            if (chrome.runtime.lastError) return;
-            const wallpaper = wallpaperResponse && wallpaperResponse.wallpaper;
-            if (wallpaper && wallpaper.ok && wallpaper.dataUrl) {
-              globalThis.DrcomAppearance.applyToRoot(document.documentElement, {
-                ...ui,
-                background: "custom",
-                backgroundImage: wallpaper.dataUrl
-              });
-            }
-          });
-        }
-        portalUrl = response.state.config.portalUrl || portalUrl;
-        const host = gatewayHost(portalUrl);
-        const title = document.getElementById("portal-title");
-        const button = document.getElementById("open-portal");
-        if (title) title.textContent = host;
-        if (button) button.textContent = i18n.t("gateway_open", [host]);
-      }
-    } catch (error) {}
-  }
-
-  document.getElementById("open-portal").addEventListener("click", () => {
+  document.getElementById("open-portal")?.addEventListener("click", () => {
     chrome.tabs.update({ url: portalUrl });
   });
-
-  document.getElementById("open-options").addEventListener("click", () => {
+  document.getElementById("open-options")?.addEventListener("click", () => {
     chrome.runtime.openOptionsPage();
   });
 
@@ -53,7 +19,51 @@ document.addEventListener("DOMContentLoaded", async () => {
       globalThis.DrcomCharacters.mount(frame, { interactive: true });
     }
   }
+
+  await Promise.all([loadLanguage(), loadWelcomeState()]);
 });
+
+async function loadWelcomeState() {
+  if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+    try {
+      const response = await sendMessage({ action: "state:get" });
+      if (response && response.state) {
+        const ui = response.state.config.ui;
+        if (globalThis.DrcomAppearance) {
+          globalThis.DrcomAppearance.applyToRoot(document.documentElement, ui);
+        }
+        if (ui && ui.background === "daily") {
+          chrome.runtime.sendMessage({ action: "wallpaper:get" }, (wallpaperResponse) => {
+            if (chrome.runtime.lastError) return;
+            const wallpaper = wallpaperResponse && wallpaperResponse.wallpaper;
+            if (wallpaper && wallpaper.ok && wallpaper.dataUrl && globalThis.DrcomAppearance) {
+              globalThis.DrcomAppearance.applyToRoot(document.documentElement, {
+                ...ui,
+                background: "custom",
+                backgroundImage: wallpaper.dataUrl
+              });
+            }
+          });
+        }
+        portalUrl = response.state.config.portalUrl || portalUrl;
+        updatePortalCopy();
+        return;
+      }
+    } catch (error) {}
+  }
+
+  if (globalThis.DrcomAppearance) {
+    globalThis.DrcomAppearance.applyToRoot(document.documentElement, {});
+  }
+}
+
+function updatePortalCopy() {
+  const host = gatewayHost(portalUrl);
+  const title = document.getElementById("portal-title");
+  const button = document.getElementById("open-portal");
+  if (title) title.textContent = host;
+  if (button) button.textContent = i18n.t("gateway_open", [host]);
+}
 
 function gatewayHost(value) {
   try { return new URL(value).host || i18n.t("authentication_gateway"); }
@@ -65,6 +75,7 @@ function bindLanguageControls() {
     const preference = i18n.getLanguage() === "zh-CN" ? "en" : "zh-CN";
     try {
       const response = await sendMessage({ action: "language:set", preference });
+      clearLanguageSaveFailure();
       applyLanguage(response.preference || preference);
     } catch (error) {
       applyLanguage(preference);
@@ -83,6 +94,13 @@ function showLanguageSaveFailure() {
   if (!status) return;
   status.textContent = i18n.t("language_not_saved");
   status.hidden = false;
+}
+
+function clearLanguageSaveFailure() {
+  const status = document.getElementById("language-save-status");
+  if (!status) return;
+  status.textContent = "";
+  status.hidden = true;
 }
 
 async function loadLanguage() {
@@ -105,11 +123,7 @@ function applyLanguage(preference) {
   }
   const toggle = document.getElementById("language-toggle");
   if (toggle) toggle.textContent = language === "zh-CN" ? "EN" : "中文";
-  const host = gatewayHost(portalUrl);
-  const title = document.getElementById("portal-title");
-  const button = document.getElementById("open-portal");
-  if (title) title.textContent = host;
-  if (button) button.textContent = i18n.t("gateway_open", [host]);
+  updatePortalCopy();
 }
 
 function sendMessage(message) {

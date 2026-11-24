@@ -7,8 +7,14 @@ const WALLPAPER_STORAGE_KEY = "drcomDailyWallpaper";
 const WALLPAPER_ORIGINS = ["https://cn.bing.com/*"];
 const WALLPAPER_IMAGE_MAX_BYTES = 1_400_000; // 转 Data URL 后须低于 Chrome 内联样式 ~2,048,000 字符上限
 const WALLPAPER_FETCH_TIMEOUT_MS = 10000;
+const WALLPAPER_FAILURE_COOLDOWN_MS = 60 * 1000;
 
 let wallpaperFlight = null;
+let wallpaperFailedAt = 0;
+
+function resetWallpaperCooldown() {
+  wallpaperFailedAt = 0;
+}
 
 function wallpaperToday(now = new Date()) {
   const year = now.getFullYear();
@@ -64,6 +70,13 @@ async function fetchWallpaperImage(imageUrl) {
   try {
     const response = await fetch(imageUrl, { cache: "no-store", signal: controller.signal });
     if (!response.ok) return null;
+    const declaredLength = Number(response.headers && typeof response.headers.get === "function"
+      ? response.headers.get("content-length")
+      : NaN);
+    if (Number.isFinite(declaredLength) && declaredLength > WALLPAPER_IMAGE_MAX_BYTES) {
+      controller.abort();
+      return null;
+    }
     const blob = await response.blob();
     if (!blob || blob.size > WALLPAPER_IMAGE_MAX_BYTES || !blob.size) return null;
     const buffer = await blob.arrayBuffer();
@@ -125,12 +138,23 @@ async function requestDailyWallpaper() {
     if (cached && cached.day === today && typeof cached.dataUrl === "string" && cached.dataUrl) {
       return wallpaperResult(cached.dataUrl);
     }
+    const staleFallback = () => (cached && typeof cached.dataUrl === "string" && cached.dataUrl)
+      ? { ok: true, dataUrl: cached.dataUrl, day: cached.day || "", stale: true }
+      : { ok: false, dataUrl: "" };
     if (!await isWallpaperPermissionGranted()) {
       return { ok: false, dataUrl: "", reason: "permission" };
     }
+    if (wallpaperFailedAt && (Date.now() - wallpaperFailedAt) < WALLPAPER_FAILURE_COOLDOWN_MS) {
+      return staleFallback();
+    }
     const dataUrl = await fetchDailyWallpaper();
-    if (dataUrl) await writeWallpaperCache({ day: today, dataUrl, fetchedAt: Date.now() });
-    return wallpaperResult(dataUrl);
+    if (dataUrl) {
+      wallpaperFailedAt = 0;
+      await writeWallpaperCache({ day: today, dataUrl, fetchedAt: Date.now() });
+      return wallpaperResult(dataUrl);
+    }
+    wallpaperFailedAt = Date.now();
+    return staleFallback();
   })();
   try {
     return await wallpaperFlight;
@@ -144,9 +168,11 @@ if (typeof module === "object" && module.exports) {
   module.exports = {
     WALLPAPER_ORIGINS,
     WALLPAPER_IMAGE_MAX_BYTES,
+    WALLPAPER_FAILURE_COOLDOWN_MS,
     bytesToBase64,
     fetchDailyWallpaper,
     requestDailyWallpaper,
+    resetWallpaperCooldown,
     wallpaperMimeFromSignature,
     wallpaperToday
   };

@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="design-tokens.css">
   <link rel="stylesheet" href="popup.css">
 </head>
-<body class="app-themed-page">
+<body class="app-themed-page popup-page">
   <main class="shell">
     <header class="popup-header">
       <div>
@@ -20,7 +20,7 @@
       </div>
     </header>
 
-    <section id="status-panel" class="status-panel glass-chrome" role="status" aria-live="polite">
+    <section id="status-panel" class="status-panel" role="status" aria-live="polite">
       <div class="status-line">
         <span id="status-dot" aria-hidden="true"></span>
         <strong id="status-label" data-i18n="status_checking">检查中</strong>
@@ -30,10 +30,13 @@
     </section>
 
     <section class="account-panel" data-i18n-aria-label="login_account" aria-label="登录账号">
-      <label class="field">
-        <span><span class="full-label" data-i18n="select_account">选择账号</span><span class="compact-label" data-i18n="account_short" aria-hidden="true">账号</span></span>
-        <select id="account-select"></select>
-      </label>
+      <div class="field account-select-field">
+        <label for="account-select"><span class="full-label" data-i18n="select_account">选择账号</span><span class="compact-label" data-i18n="account_short" aria-hidden="true">账号</span></label>
+        <div class="account-select-row">
+          <select id="account-select"></select>
+          <button id="new-account" class="secondary icon-button" type="button" data-i18n-aria-label="new_account" data-i18n-title="new_account" aria-label="新建账号" title="新建账号">+</button>
+        </div>
+      </div>
 
       <div class="grid-two">
         <label class="field">

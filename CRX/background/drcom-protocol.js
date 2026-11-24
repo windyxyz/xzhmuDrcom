@@ -115,7 +115,11 @@
       if (/^[a-zA-Z0-9+/]+={0,2}$/.test(text) && !/[\u4e00-\u9fa5]/.test(text) && text.length % 4 === 0) {
         const binary = atob(text);
         const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-        return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(decoded)) {
+          return text;
+        }
+        return decoded;
       }
     } catch (error) {
       return text;

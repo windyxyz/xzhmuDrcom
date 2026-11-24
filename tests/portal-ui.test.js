@@ -229,3 +229,80 @@ test("门户个性化入口包含提示、无障碍名称和 44 像素点击区�
   assert.match(markup, /title="个性化"/);
   assert.match(css, /#drcom-open-options[^}]*min-width:\s*44px[^}]*min-height:\s*44px/s);
 });
+
+test("动画角色在 reduced-motion 下不响应鼠标且黄色嘴部同时写入 SVG d 属性", () => {
+  const characters = require(join(__dirname, "..", "CRX", "animated-characters.js"));
+  const markup = characters.renderMarkup();
+  assert.match(markup, /class="dchar-yellow-mouth"[^>]*d="M0 10/);
+
+  let mouseMoveHandler = null;
+  let rafCalls = 0;
+  const yellowAttrs = new Map();
+  const makeNode = (cls = "") => ({
+    className: cls,
+    dataset: {},
+    style: { setProperty() {} },
+    classList: { add() {}, remove() {} },
+    setAttribute(k, v) { if (cls === "dchar-yellow-mouth") yellowAttrs.set(k, v); },
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }),
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+    append() {},
+    remove() {}
+  });
+  const yellowPath = makeNode("dchar-yellow-mouth");
+  const charNodes = new Map(["purple", "black", "orange", "yellow"].map((key) => {
+    const eyes = makeNode("dchar-eyes");
+    const mouth = makeNode(key === "yellow" ? "dchar-mouth-wrapper" : `dchar-mouth-${key}`);
+    const node = makeNode(`dchar-${key}`);
+    node.querySelector = (sel) => {
+      if (sel === ".dchar-eyes") return eyes;
+      if (sel.includes("dchar-mouth")) return mouth;
+      if (sel === ".dchar-yellow-mouth") return yellowPath;
+      return null;
+    };
+    return [key, { node, eyes, mouth }];
+  }));
+  const stage = makeNode("dchar-stage");
+  stage.querySelector = (sel) => {
+    const m = /^\.dchar-(purple|black|orange|yellow)$/.exec(sel);
+    if (m) return charNodes.get(m[1]).node;
+    if (sel === ".dchar-mouth-purple") return charNodes.get("purple").mouth;
+    if (sel === ".dchar-mouth-orange") return charNodes.get("orange").mouth;
+    return null;
+  };
+  const frame = {
+    clientWidth: 400,
+    innerHTML: "",
+    style: {},
+    querySelector: (sel) => (sel === ".dchar-stage" ? stage : null),
+    append() {}
+  };
+
+  const prevMatchMedia = globalThis.matchMedia;
+  const prevWindow = globalThis.window;
+  const prevRaf = globalThis.requestAnimationFrame;
+  try {
+    globalThis.matchMedia = () => ({ matches: true });
+    globalThis.window = {
+      addEventListener(type, fn) { if (type === "mousemove") mouseMoveHandler = fn; },
+      removeEventListener() {}
+    };
+    globalThis.requestAnimationFrame = () => { rafCalls += 1; return 1; };
+
+    const ctrl = characters.mount(frame, { interactive: true });
+    assert.match(charNodes.get("purple").eyes.style.transform, /^translate3d\(/);
+    assert.match(yellowAttrs.get("d"), /^M0 10/);
+
+    mouseMoveHandler?.({ clientX: 200, clientY: 200 });
+    assert.equal(rafCalls, 0);
+
+    ctrl.setState("happy");
+    assert.match(yellowAttrs.get("d"), /^M0 2/);
+    ctrl.destroy();
+  } finally {
+    globalThis.matchMedia = prevMatchMedia;
+    globalThis.window = prevWindow;
+    globalThis.requestAnimationFrame = prevRaf;
+  }
+});

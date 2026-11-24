@@ -6,11 +6,17 @@
   const characters = globalThis.DrcomCharacters;
   const i18n = globalThis.DrcomI18n;
   const t = (key, substitutions) => i18n.t(key, substitutions);
+  const FIT_TO_CSS = { cover: "cover", contain: "contain", fill: "100% 100%" };
+  const READINESS_OBSERVER_TIMEOUT_MS = 15_000;
   let activePortalConfig = null;
   let languagePreference = "auto";
   let currentPortalInput = null;
   let hostDocumentMetadata = null;
   let portalReadinessObserver = null;
+  let portalReadinessTimeout = 0;
+  let portalReadinessLoadListener = null;
+  let appearanceSyncBound = false;
+  let appearanceRefreshInFlight = null;
   let recognitionQueued = false;
   let userRestoredOriginal = false;
   let characterController = null;
@@ -28,6 +34,7 @@
       if (!capture) throw new Error("门户捕获模块未加载");
       capture.install({ ui, sendMessage: safeSend });
       bindLanguageMessages();
+      bindAppearanceSync();
       activePortalConfig = await loadPortalConfig();
       await loadLanguage();
       if (activePortalConfig.enabled !== true) return;
@@ -44,6 +51,53 @@
       if (message?.action !== "language:changed") return;
       applyLanguage(message.preference);
     });
+  }
+
+  function bindAppearanceSync() {
+    if (appearanceSyncBound) return;
+    appearanceSyncBound = true;
+    chrome.storage?.onChanged?.addListener((changes, areaName) => {
+      if (areaName !== "local" || !changes?.drcomAssistantState) return;
+      if (userRestoredOriginal || !document.getElementById("drcom-modern-root")) return;
+      void refreshPortalAppearance();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      if (userRestoredOriginal || !document.getElementById("drcom-modern-root")) return;
+      void refreshPortalAppearance();
+    });
+  }
+
+  function applyPortalAppearance(root, appearanceInput) {
+    if (!root || !globalThis.DrcomAppearance) return;
+    const normalized = globalThis.DrcomAppearance.normalizeAppearance(appearanceInput || {});
+    globalThis.DrcomAppearance.applyToRoot(root, {
+      ...normalized,
+      background: "fresh",
+      backgroundImage: ""
+    });
+    root.dataset.appearanceBackground = normalized.background;
+    installPrivateAppearance(normalized);
+  }
+
+  async function refreshPortalAppearance() {
+    if (appearanceRefreshInFlight) return appearanceRefreshInFlight;
+    appearanceRefreshInFlight = (async () => {
+      try {
+        const response = await sendMessage({ action: "portal:appearance:get" });
+        if (userRestoredOriginal) return;
+        const root = document.getElementById("drcom-modern-root");
+        if (!root) return;
+        const appearance = response?.appearance || {};
+        if (activePortalConfig) activePortalConfig.appearance = appearance;
+        applyPortalAppearance(root, appearance);
+      } catch (error) {
+        // Ignore transient background errors during live appearance refresh.
+      } finally {
+        appearanceRefreshInFlight = null;
+      }
+    })();
+    return appearanceRefreshInFlight;
   }
 
   async function loadLanguage() {
@@ -110,9 +164,36 @@
     if (portalReadinessObserver || userRestoredOriginal) return;
     portalReadinessObserver = new MutationObserver(() => schedulePortalRecognition());
     portalReadinessObserver.observe(document.documentElement, { childList: true, subtree: true });
+    const armTimeout = () => {
+      if (portalReadinessTimeout || !portalReadinessObserver) return;
+      portalReadinessTimeout = setTimeout(() => {
+        portalReadinessTimeout = 0;
+        stopPortalReadinessObserver();
+      }, READINESS_OBSERVER_TIMEOUT_MS);
+      if (portalReadinessTimeout && typeof portalReadinessTimeout.unref === "function") {
+        portalReadinessTimeout.unref();
+      }
+    };
+    if (document.readyState === "complete") {
+      armTimeout();
+    } else if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      portalReadinessLoadListener = () => {
+        portalReadinessLoadListener = null;
+        armTimeout();
+      };
+      window.addEventListener("load", portalReadinessLoadListener, { once: true });
+    }
   }
 
   function stopPortalReadinessObserver() {
+    if (portalReadinessTimeout) {
+      clearTimeout(portalReadinessTimeout);
+      portalReadinessTimeout = 0;
+    }
+    if (portalReadinessLoadListener && typeof window !== "undefined" && typeof window.removeEventListener === "function") {
+      window.removeEventListener("load", portalReadinessLoadListener);
+      portalReadinessLoadListener = null;
+    }
     portalReadinessObserver?.disconnect();
     portalReadinessObserver = null;
   }
@@ -173,14 +254,7 @@
       root.innerHTML = ui.renderPortalMarkup(currentPortalInput);
       if (statusKey) root.querySelector("#drcom-form-status").dataset.i18nKey = statusKey;
       if (globalThis.DrcomAppearance) {
-        const normalized = globalThis.DrcomAppearance.normalizeAppearance(config.appearance || {});
-        globalThis.DrcomAppearance.applyToRoot(root, {
-          ...normalized,
-          background: "fresh",
-          backgroundImage: ""
-        });
-        root.dataset.appearanceBackground = normalized.background;
-        installPrivateAppearance(normalized);
+        applyPortalAppearance(root, config.appearance || {});
       }
       hostDocumentMetadata = {
         lang: document.documentElement.getAttribute("lang"),
@@ -211,13 +285,15 @@
     host.setAttribute("aria-hidden", "true");
     const shadow = host.attachShadow({ mode: "closed" });
     const image = appearance.backgroundImage.replace(/["\\\r\n\f]/g, "");
+    const position = appearance.backgroundPosition || "center";
+    const fit = FIT_TO_CSS[appearance.backgroundFit] || "cover";
     const dark = appearance.theme === "dark";
     shadow.innerHTML = `
       <style>
         :host { all: initial; }
         .layer, .image, .veil { position: absolute; inset: 0; pointer-events: none; }
         .layer { overflow: hidden; background: #f2f3f5; }
-        .image { inset: -48px; background: var(--appearance-position, center) / var(--appearance-fit, cover) no-repeat url("${image}"); filter: blur(${appearance.backgroundBlur}px); transform: scale(${appearance.backgroundScale}); }
+        .image { inset: -48px; background: ${position} / ${fit} no-repeat url("${image}"); filter: blur(${appearance.backgroundBlur}px); transform: scale(${appearance.backgroundScale}); }
         .veil { background: rgba(${dark ? "8, 12, 20" : "238, 241, 246"}, ${appearance.backgroundDim}); }
         @media (prefers-color-scheme: dark) { .system .veil { background: rgba(8, 12, 20, ${appearance.backgroundDim}); } }
       </style>
@@ -367,14 +443,7 @@
       void sendMessage({ action: "options:open" });
     });
     if (online) {
-      root.querySelector("#drcom-logout")?.addEventListener("click", (event) => {
-        if (!event.isTrusted) return;
-        void logoutFromPortal(root);
-      });
-      root.querySelector("#drcom-refresh-status")?.addEventListener("click", (event) => {
-        if (!event.isTrusted) return;
-        void refreshPortalStatus(root);
-      });
+      bindOnlineActionEvents(root);
       return;
     }
     root.querySelector("#drcom-login-form")?.addEventListener("submit", (event) => {
@@ -391,10 +460,57 @@
       const remember = root.querySelector("#drcom-remember");
       if (username) username.value = "";
       if (suffix) suffix.value = "";
-      if (password) password.value = "";
+      if (password) {
+        password.value = "";
+        password.type = "password";
+      }
       if (remember) remember.checked = true;
       setPortalStatus(root, "", "");
     });
+  }
+
+  function bindOnlineActionEvents(root) {
+    root.querySelector("#drcom-logout")?.addEventListener("click", (event) => {
+      if (!event.isTrusted) return;
+      void logoutFromPortal(root);
+    });
+    root.querySelector("#drcom-refresh-status")?.addEventListener("click", (event) => {
+      if (!event.isTrusted) return;
+      void refreshPortalStatus(root);
+    });
+  }
+
+  function patchOnlinePortalStatus(root, config, statusResult) {
+    const surface = root?.querySelector?.("#drcom-surface") || root?.querySelector?.(".drcom-surface");
+    if (!surface || typeof ui.renderOnlineContent !== "function") {
+      mountPortal(config, true, statusResult);
+      return;
+    }
+    const statusKey = statusResult?.message === i18n.t("portal_session_online", undefined, "zh-CN")
+      || statusResult?.message === i18n.t("portal_session_online", undefined, "en")
+      ? "portal_session_online" : "";
+    currentPortalInput = {
+      title: config.title || "",
+      online: true,
+      host: portalHost(config.portalUrl),
+      onlineDetailMode: config.onlineDetailMode || "classic",
+      session: statusResult && statusResult.session,
+      statusMessage: statusKey ? t(statusKey) : (statusResult && statusResult.message) || "",
+      checkedAt: statusResult && statusResult.checkedAt
+    };
+    surface.innerHTML = ui.renderOnlineContent({
+      title: ui.localizeTitle(currentPortalInput.title),
+      session: currentPortalInput.session,
+      onlineDetailMode: currentPortalInput.onlineDetailMode,
+      statusMessage: currentPortalInput.statusMessage,
+      checkedAt: currentPortalInput.checkedAt
+    });
+    if (statusKey) {
+      const statusEl = surface.querySelector("#drcom-form-status");
+      if (statusEl) statusEl.dataset.i18nKey = statusKey;
+    }
+    bindOnlineActionEvents(root);
+    setPortalBusy(root, false);
   }
 
   async function refreshPortalStatus(root) {
@@ -404,6 +520,10 @@
       if (userRestoredOriginal) return;
       if (result.state === "offline") {
         mountPortal(activePortalConfig || {}, false);
+        return;
+      }
+      if (currentPortalInput?.online === true && document.getElementById("drcom-modern-root") === root) {
+        patchOnlinePortalStatus(root, activePortalConfig || {}, result);
         return;
       }
       mountPortal(activePortalConfig || {}, true, result);
@@ -553,11 +673,38 @@
     return input && "value" in input ? String(input.value || "").trim() : "";
   }
 
+  const IGNORED_TEXT_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "SVG"]);
+
+  function extractNonScriptBodyText() {
+    const body = document.body;
+    if (!body) return "";
+    if (typeof document.createTreeWalker === "function" && typeof NodeFilter !== "undefined") {
+      const chunks = [];
+      const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          let parent = node.parentElement;
+          while (parent && parent !== body) {
+            if (IGNORED_TEXT_TAGS.has(parent.tagName) || parent.hidden || parent.id === "drcom-modern-root") {
+              return NodeFilter.FILTER_REJECT;
+            }
+            parent = parent.parentElement;
+          }
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      });
+      let current;
+      while ((current = walker.nextNode())) {
+        if (current.nodeValue && current.nodeValue.trim()) chunks.push(current.nodeValue);
+      }
+      return chunks.join(" ");
+    }
+    return body.innerText || body.textContent || "";
+  }
+
   function isOnlinePage() {
     if (document.querySelector('input[name="logout"], button[name="logout"], [name="logout"], [data-localize*="logout"]')) return true;
-    const passwordInput = document.querySelector('input[type="password"]');
-    const text = document.body ? document.body.innerText || "" : "";
-    return /注销|下线|已登录|已连接|online|logout/i.test(text) && !passwordInput;
+    if (document.querySelector('input[type="password"]')) return false;
+    return /注销|下线|已登录|已连接|online|logout/i.test(extractNonScriptBodyText());
   }
 
 
@@ -577,7 +724,7 @@
       hint.setAttribute("role", "alert");
       hint.innerHTML = `<span>${t("portal_context_lost")}</span>`
         + `<button id="drcom-context-lost-refresh" type="button">${t("portal_refresh_page")}</button>`;
-      hint.style.cssText = "position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:12px;padding:10px 16px;background:#1a1a1a;color:#fff;font:13px/1.5 system-ui,sans-serif;border:1px solid rgba(255,255,255,.2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);";
+      hint.style.cssText = "position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;flex-wrap:wrap;gap:12px;max-width:calc(100vw - 24px);box-sizing:border-box;padding:10px 16px;background:#1a1a1a;color:#fff;font:13px/1.5 system-ui,sans-serif;border:1px solid rgba(255,255,255,.2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);";
       hint.querySelector("#drcom-context-lost-refresh")?.addEventListener("click", (event) => {
         if (!event.isTrusted) return;
         window.location.reload();

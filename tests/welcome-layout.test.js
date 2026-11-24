@@ -397,7 +397,7 @@ test("扩展弹窗在标准任务宽度内完整显示且不横向溢出", { tim
     assert.equal(layout.viewportWidth, 420, `弹窗应保持标准任务宽度：${JSON.stringify(layout)}`);
     assert.ok(layout.scrollWidth <= layout.viewportWidth, `弹窗不应产生横向溢出：${JSON.stringify(layout)}`);
     assert.ok(layout.titleHeight <= 28, `标题应保持一行：${JSON.stringify(layout)}`);
-    assert.ok(layout.selectWidth >= 340, `表单控件应使用弹窗可用宽度：${JSON.stringify(layout)}`);
+    assert.ok(layout.selectWidth >= 300, `表单控件应使用弹窗可用宽度：${JSON.stringify(layout)}`);
   } finally {
     await cleanupBrowserProfile(child, profile);
   }
@@ -525,7 +525,7 @@ test("弹窗关键操作在标准宽度保持清晰的三列布局", { timeout: 
       const savedTitle = await waitFor('#saved-accounts-title');
       const actions = await waitFor('.actions');
       for (let attempt = 0; attempt < 50; attempt += 1) {
-        if (getComputedStyle(actions).display === 'grid' && getComputedStyle(login).minHeight === '44px') break;
+        if (getComputedStyle(actions).display === 'grid' && parseFloat(getComputedStyle(login).minHeight) >= 32) break;
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
       return {

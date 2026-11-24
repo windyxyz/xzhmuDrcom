@@ -45,7 +45,7 @@
   function normalizeImage(value) {
     const raw = String(value || "").trim();
     if (!raw || raw.length > 6000000) return "";
-    if (/^data:image\/(?:png|jpe?g|webp|avif);base64,[a-z0-9+/=]+$/i.test(raw)) return raw;
+    if (/^data:image\/(?:png|jpe?g|webp|avif|gif);base64,[a-z0-9+/=]+$/i.test(raw)) return raw;
     try {
       const url = new URL(raw);
       return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";

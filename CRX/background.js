@@ -83,6 +83,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.url) {
-    void backgroundReady.then(() => handleTabRedirect(tabId, changeInfo.url));
+    void backgroundReady.then(() => handleTabRedirect(tabId, changeInfo.url)).catch(() => {});
   }
 });
+
+if (chrome.tabs && chrome.tabs.onRemoved) {
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    void backgroundReady.then(() => clearTabGuard(tabId)).catch(() => {});
+  });
+}

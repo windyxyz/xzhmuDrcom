@@ -96,6 +96,12 @@ class FakeElement {
 
   set innerHTML(value) {
     this._innerHTML = String(value);
+    if (this.parent && this.id === "drcom-surface") {
+      this.parent._innerHTML = this.parent._innerHTML.replace(
+        /(<div id="drcom-surface"[^>]*>)[\s\S]*?(<\/div>\s*<\/main>)/,
+        `$1${this._innerHTML}$2`
+      );
+    }
     this.childrenById.clear();
     this.localizableNodes = [];
     const tags = this._innerHTML.matchAll(/<([a-z][a-z0-9-]*)\b([^>]*)>/gi);
@@ -103,6 +109,7 @@ class FakeElement {
       const id = match[2].match(/\bid="([^"]+)"/i)?.[1];
       if (!id && !/data-i18n/.test(match[2])) continue;
       const element = new FakeElement(this.document, match[1], id);
+      element.parent = this;
       element.checked = /\bchecked\b/i.test(match[2]);
       for (const attribute of match[2].matchAll(/\b([a-z][a-z0-9-]*)="([^"]*)"/gi)) {
         element.setAttribute(attribute[1], attribute[2]);
@@ -112,8 +119,14 @@ class FakeElement {
       }
       const closing = this._innerHTML.indexOf(`</${match[1]}>`, match.index + match[0].length);
       if (closing >= 0) element.textContent = this._innerHTML.slice(match.index + match[0].length, closing).replace(/<[^>]*>/g, "");
-      if (id) this.childrenById.set(id, element);
-      if (/data-i18n/.test(match[2])) this.localizableNodes.push(element);
+      if (id) {
+        this.childrenById.set(id, element);
+        if (this.parent) this.parent.childrenById.set(id, element);
+      }
+      if (/data-i18n/.test(match[2])) {
+        this.localizableNodes.push(element);
+        if (this.parent) this.parent.localizableNodes.push(element);
+      }
     }
   }
 
@@ -1056,4 +1069,68 @@ test("缺省门户标题在原位切换后显示当前语言品牌", async () =>
   assert.equal(harness.document.getElementById("drcom-modern-root"), root);
   assert.equal(harness.document.getElementById("drcom-login-title").textContent, "XZHMU Campus Network");
   assert.deepEqual(harness.messages.slice(messagesBefore).map((message) => message.action), ["language:set"]);
+});
+
+test("门户自定义壁纸闭合影子样式直接写入焦点位置与填充模式", async () => {
+  const harness = createHarness({
+    responses: {
+      "portal:appearance:get": {
+        ok: true,
+        appearance: {
+          theme: "dark",
+          background: "custom",
+          backgroundImage: "data:image/webp;base64,AAAA",
+          backgroundPosition: "right top",
+          backgroundFit: "fill",
+          backgroundBlur: 12,
+          backgroundDim: 0.5,
+          backgroundScale: 1.05
+        }
+      }
+    }
+  });
+  await loadModernizer(harness);
+  const host = harness.document.getElementById("drcom-private-appearance");
+  const shadow = harness.document.closedShadowRoots.get(host);
+  assert.ok(shadow);
+  assert.match(shadow.innerHTML, /background:\s*right top \/ 100% 100% no-repeat url\("data:image\/webp;base64,AAAA"\)/);
+  assert.doesNotMatch(shadow.innerHTML, /var\(--appearance-position/);
+});
+
+test("门户重置按钮会将已显式显示的密码恢复为 password 类型", async () => {
+  const harness = createHarness();
+  await loadModernizer(harness);
+  const password = harness.document.getElementById("drcom-password");
+  password.value = "secret";
+  password.type = "text";
+
+  await harness.document.getElementById("drcom-reset").emit("click", { isTrusted: true, preventDefault() {} });
+  assert.equal(password.value, "");
+  assert.equal(password.type, "password");
+});
+
+test("在线状态刷新原位更新会话详情，不销毁根节点或打断庆祝动画", async () => {
+  const harness = createHarness({
+    online: true,
+    responses: {
+      "portal:status:get": {
+        ok: true,
+        state: "online",
+        message: "当前校园网会话在线。",
+        checkedAt: 1788339720000,
+        session: { account: "20***18", usedMinutes: 12, totalKilobytes: 4096 }
+      }
+    }
+  });
+  await loadModernizer(harness);
+  await harness.flush();
+  const root = harness.document.getElementById("drcom-modern-root");
+  const mountsAfterInitial = harness.modernRootMountCount();
+
+  await harness.document.getElementById("drcom-refresh-status").emit("click", { isTrusted: true });
+  await harness.flush();
+
+  assert.equal(harness.document.getElementById("drcom-modern-root"), root);
+  assert.equal(harness.modernRootMountCount(), mountsAfterInitial);
+  assert.equal(harness.document.getElementById("drcom-used-time").textContent, "12 分钟");
 });

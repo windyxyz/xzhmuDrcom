@@ -64,7 +64,20 @@ test("中文运行时品牌和门户更新提示使用正式产品名顺序", ()
 
 test("只翻译扩展自有的已知网关状态，未知文本保持原样", () => {
   assert.equal(i18n.localizeKnownMessage("需要登录", "en"), "Sign-in required");
+  assert.equal(i18n.localizeKnownMessage("当前需要登录校园网。", "en"), "Sign-in required");
   assert.equal(i18n.localizeKnownMessage("登录成功。", "en"), "Signed in successfully.");
+  assert.equal(i18n.localizeKnownMessage("下线成功。", "en"), "Signed out.");
+  assert.equal(i18n.localizeKnownMessage("正在登录校园网。", "en"), "Signing in to campus network.");
   assert.equal(i18n.localizeKnownMessage("正在检查校园网连接状态。", "en"), "Checking the campus network connection.");
+  assert.equal(i18n.localizeKnownMessage("DrCOM 接口超时，请确认校园网网关可访问。", "en"), "DrCOM request timed out. Make sure the campus gateway is reachable.");
   assert.equal(i18n.localizeKnownMessage("未知网关错误 <734>", "en"), "未知网关错误 <734>");
+});
+
+test("新增新建账号与诊断导出提示键在双语字典完整且背景上限文案一致为 1.9 MB", () => {
+  assert.equal(i18n.t("new_account", undefined, "zh-CN"), "新建账号");
+  assert.equal(i18n.t("new_account", undefined, "en"), "New account");
+  assert.equal(i18n.t("diagnostics_export_review_notice", undefined, "zh-CN"), "已导出诊断日志，分享前请先检查内容。");
+  assert.equal(i18n.t("diagnostics_export_review_notice", undefined, "en"), "Diagnostics exported. Please review before sharing.");
+  assert.match(i18n.t("background_storage_note", undefined, "zh-CN"), /1\.9 MB/);
+  assert.match(i18n.t("background_storage_note", undefined, "en"), /1\.9 MB/);
 });

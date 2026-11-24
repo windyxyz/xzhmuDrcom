@@ -11,7 +11,8 @@
       $, getState, setState, getEditingId, setEditingId, setAccountFormDirty,
       splitAccount, suffixLabel, makeAccountLabel, naturalAccountKey,
       maskAccount, escapeHtml, t, sendMessage, renderRequestLog, loadState,
-      toast, confirmDialog, setSettingsFormDirty
+      toast, confirmDialog, setSettingsFormDirty,
+      renderGatewaySecurityWarning, scheduleSettingsAutoSave, onSelfWrite
     } = deps;
 
     function renderAccounts() {
@@ -60,7 +61,14 @@
       $("account-ipv6").value = account?.network?.wlanUserIpv6 || "";
       $("account-ac-ip").value = account?.network?.wlanAcIp || "";
       $("account-ac-name").value = account?.network?.wlanAcName || "";
+      const deleteButton = $("account-delete");
+      if (deleteButton) deleteButton.disabled = !editingId;
       setAccountFormDirty(false);
+    }
+
+    function startNew() {
+      fillEditor(null);
+      $("account-username")?.focus?.();
     }
 
     function readEdited() {
@@ -83,7 +91,9 @@
 
     async function saveEdited(event) {
       event.preventDefault();
+      onSelfWrite?.();
       const response = await sendMessage({ action: "account:save", account: readEdited() });
+      onSelfWrite?.();
       setState(response.state);
       fillEditor(response.account);
       renderAccounts();
@@ -92,7 +102,9 @@
     }
 
     async function loginEdited() {
+      onSelfWrite?.();
       const saved = await sendMessage({ action: "account:save", account: readEdited() });
+      onSelfWrite?.();
       setState(saved.state);
       fillEditor(saved.account);
       renderAccounts();
@@ -123,7 +135,9 @@
         confirmLabel: t("delete_account_confirm")
       });
       if (!confirmed) return;
+      onSelfWrite?.();
       const response = await sendMessage({ action: "account:delete", accountId });
+      onSelfWrite?.();
       setState(response.state);
       renderAccounts();
       renderRequestLog();
@@ -133,7 +147,9 @@
     }
 
     async function selectAccount(accountId) {
+      onSelfWrite?.();
       const response = await sendMessage({ action: "account:select", accountId });
+      onSelfWrite?.();
       setState(response.state);
       renderAccounts();
     }
@@ -155,6 +171,8 @@
         $("login-method").value = params.get("login_method") || $("login-method").value || "1";
         $("js-version").value = params.get("jsVersion") || $("js-version").value || "3.3.2";
         setSettingsFormDirty(true);
+        renderGatewaySecurityWarning?.();
+        scheduleSettingsAutoSave?.();
         const parsedSuffix = { "": "carrier_campus", "@telecom": "carrier_telecom", "@unicom": "carrier_unicom", "@cmcc": "carrier_mobile" }[parsed.suffix];
         toast(t("parse_success", [parsedSuffix ? t(parsedSuffix) : suffixLabel(parsed.suffix)]));
       } catch (error) {
@@ -186,7 +204,9 @@
         if (!confirmed) return;
         account.id = existing.id;
       }
+      onSelfWrite?.();
       const response = await sendMessage({ action: "account:save", account });
+      onSelfWrite?.();
       setState(response.state);
       fillEditor(response.account);
       renderAccounts();
@@ -195,7 +215,7 @@
       toast(t("account_saved_with_provider", [savedSuffix ? t(savedSuffix) : suffixLabel(response.account.suffix)]));
     }
 
-    return { renderAccounts, handleListClick, fillEditor, readEdited, saveEdited, loginEdited, logout, deleteEdited, deleteAccount, selectAccount, parseCapturedUrl, saveParsed };
+    return { renderAccounts, handleListClick, fillEditor, startNew, readEdited, saveEdited, loginEdited, logout, deleteEdited, deleteAccount, selectAccount, parseCapturedUrl, saveParsed };
   }
 
   return { createController };

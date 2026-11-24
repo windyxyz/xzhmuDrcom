@@ -85,6 +85,8 @@
         } finally {
           URLApi.revokeObjectURL(url);
         }
+        const notice = t("diagnostics_export_review_notice");
+        toast(notice && notice !== "diagnostics_export_review_notice" ? notice : "已导出诊断日志，分享前请先检查内容。");
         return true;
       } finally {
         if (button) button.disabled = false;

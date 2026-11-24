@@ -41,6 +41,11 @@ let languageControlsBound = false;
 let latestConnection;
 let latestDiagnostics;
 let latestRefreshStatus;
+let suppressSelfStorageEchoUntil = 0;
+
+function markSelfStorageWrite(ms = 800) {
+  suppressSelfStorageEchoUntil = Math.max(suppressSelfStorageEchoUntil, Date.now() + ms);
+}
 
 document.addEventListener("DOMContentLoaded", init);
 
@@ -93,6 +98,7 @@ function bindEvents() {
     confirmReload: confirmSettingsReload,
     reloadPage: () => globalThis.location.reload(),
     isVisible: () => document.visibilityState !== "hidden",
+    shouldIgnoreStorageChange: (_changes, areaName) => areaName === "local" && Date.now() < suppressSelfStorageEchoUntil,
     setIntervalFn: (callback, delay) => globalThis.setInterval(callback, delay),
     clearIntervalFn: (interval) => globalThis.clearInterval(interval),
     now: () => Date.now()
@@ -142,6 +148,7 @@ function bindEvents() {
   $("overview-open-portal").addEventListener("click", openConfiguredPortal);
   $("test-connection").addEventListener("click", runAsync(testConnection));
   $("account-form").addEventListener("submit", runAsync(saveEditedAccount));
+  $("account-new")?.addEventListener("click", startNewAccount);
   $("account-login").addEventListener("click", runAsync(loginEditedAccount));
   $("account-logout").addEventListener("click", runAsync(logoutAccount));
   $("account-delete").addEventListener("click", runAsync(deleteEditedAccount));
@@ -251,12 +258,14 @@ function bindEvents() {
   }));
   $("background-file").addEventListener("change", runAsync(handleBackgroundFile));
   $("clear-background").addEventListener("click", runAsync(clearBackgroundImage));
-  ["background-blur", "background-dim", "background-scale", "guard-seconds"].forEach((id) => {
+  ["background-blur", "background-dim", "background-scale"].forEach((id) => {
     $(id).addEventListener("input", () => {
       syncAppearanceControls();
-      syncGuardSeconds();
       applyCurrentAppearance();
     });
+  });
+  $("guard-seconds").addEventListener("input", () => {
+    syncGuardSeconds();
   });
   ["background-blur", "background-dim", "background-scale"].forEach((id) => {
     $(id).addEventListener("change", runAsync(async () => {
@@ -297,7 +306,14 @@ function bindLanguageControls() {
 function handleSettingsFormMutation(event, type) {
   if (event.target?.closest?.("#appearance-section, #ui-language")) return;
   settingsFormDirty = true;
-  if (type === "change") scheduleSettingsAutoSave();
+  if (type === "change") {
+    if (event.target && (event.target.id === "portal-url" || event.target.id === "api-url")) {
+      clearTimeout(settingsAutoSaveTimer);
+      runAsync(() => autoSaveSettings({ announce: true }))();
+      return;
+    }
+    scheduleSettingsAutoSave();
+  }
 }
 
 function syncRuntimeVersion() {
@@ -323,6 +339,23 @@ function applyLanguage(preference) {
   if (document.documentElement) document.documentElement.lang = language;
   const select = $("ui-language");
   if (select) select.value = languagePreference;
+  const newAccountBtn = $("account-new");
+  if (newAccountBtn) {
+    const newAccountLabel = i18n.t("new_account");
+    const resolvedNewAccount = newAccountLabel && newAccountLabel !== "new_account"
+      ? newAccountLabel
+      : (language === "zh-CN" ? "新建账号" : "New account");
+    newAccountBtn.title = resolvedNewAccount;
+    newAccountBtn.setAttribute?.("aria-label", resolvedNewAccount);
+    const labelSpan = newAccountBtn.querySelector?.("[data-i18n=\"new_account\"]");
+    if (labelSpan) labelSpan.textContent = resolvedNewAccount;
+  }
+  const paneToggle = $("pane-toggle");
+  const settingsLayout = typeof document.querySelector === "function" ? document.querySelector(".settings-layout") : null;
+  if (paneToggle && settingsLayout) {
+    const compact = settingsLayout.classList.contains("nav-compact");
+    paneToggle.title = compact ? i18n.t("navigation_expand") : i18n.t("navigation_collapse");
+  }
   refreshSettingsNavigationCopy();
   if (state) {
     renderAccounts();
@@ -464,7 +497,9 @@ function portalDiagnosticsExportFilename(now = new Date()) {
 }
 
 async function setPortalDiagnosticsEnabled(enabled, previous = null) {
+  markSelfStorageWrite();
   const result = await ensurePortalDiagnosticsController().setEnabled(enabled, previous);
+  markSelfStorageWrite();
   latestDiagnostics = ensurePortalDiagnosticsController().latest();
   return result;
 }
@@ -474,7 +509,9 @@ async function exportPortalDiagnostics() {
 }
 
 async function clearPortalDiagnostics() {
+  markSelfStorageWrite();
   const result = await ensurePortalDiagnosticsController().clear();
+  markSelfStorageWrite();
   latestDiagnostics = ensurePortalDiagnosticsController().latest();
   return result;
 }
@@ -588,18 +625,24 @@ function syncAccentControls() {
 /* ---------- WinUI ColorPicker（光谱 + 明度 + hex，即时生效） ---------- */
 
 const colorPicker = { h: 212, s: 1, v: 0.5 };
+let lastDrawnSpectrumV = -1;
+let lastDrawnSpectrumWidth = 0;
+let lastDrawnSpectrumHeight = 0;
 
 function pickerHex() {
   const { r, g, b } = hsvToRgb(colorPicker.h, colorPicker.s, colorPicker.v);
   return rgbToHex(r, g, b);
 }
 
-function drawSpectrum() {
+function drawSpectrum(force = false) {
   const canvas = $("cp-canvas");
   if (!canvas || !canvas.getContext) return;
-  const context = canvas.getContext("2d");
   const width = canvas.width;
   const height = canvas.height;
+  if (!force && Math.abs(colorPicker.v - lastDrawnSpectrumV) < 1e-4 && width === lastDrawnSpectrumWidth && height === lastDrawnSpectrumHeight) {
+    return;
+  }
+  const context = canvas.getContext("2d");
   const image = context.createImageData(width, height);
   for (let y = 0; y < height; y += 1) {
     const s = 1 - y / (height - 1);
@@ -613,6 +656,9 @@ function drawSpectrum() {
     }
   }
   context.putImageData(image, 0, 0);
+  lastDrawnSpectrumV = colorPicker.v;
+  lastDrawnSpectrumWidth = width;
+  lastDrawnSpectrumHeight = height;
 }
 
 function syncPicker(persist = false) {
@@ -628,6 +674,9 @@ function syncPicker(persist = false) {
   handle.style.setProperty("--cp-handle-ring", (colorPicker.v > 0.5 && colorPicker.s < 0.5) ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.9)");
   if (preview) preview.style.backgroundColor = hex;
   if (valueSlider) {
+    if (document.activeElement !== valueSlider) {
+      valueSlider.value = String(Math.round(colorPicker.v * 100));
+    }
     const pure = hsvToRgb(colorPicker.h, 1, 1);
     valueSlider.style.background = `linear-gradient(to right, #000000, rgb(${pure.r}, ${pure.g}, ${pure.b}))`;
     valueSlider.disabled = false;
@@ -654,21 +703,43 @@ function syncPickerFromHex(hex) {
 function setupColorPicker() {
   const spectrum = $("cp-spectrum");
   if (!spectrum) return;
-  const updateFromEvent = (event) => {
+  let pendingMoveRaf = 0;
+  let pendingMoveCoords = null;
+  const applyCoords = (clientX, clientY) => {
     const rect = spectrum.getBoundingClientRect();
-    colorPicker.h = clampNumber((event.clientX - rect.left) / Math.max(1, rect.width) * 360, 0, 359.9);
-    colorPicker.s = clampNumber(1 - (event.clientY - rect.top) / Math.max(1, rect.height), 0, 1);
+    colorPicker.h = clampNumber((clientX - rect.left) / Math.max(1, rect.width) * 360, 0, 359.9);
+    colorPicker.s = clampNumber(1 - (clientY - rect.top) / Math.max(1, rect.height), 0, 1);
     syncPicker(false);
+  };
+  const updateFromEvent = (event) => {
+    applyCoords(event.clientX, event.clientY);
   };
   spectrum.addEventListener("pointerdown", (event) => {
     spectrum.setPointerCapture(event.pointerId);
     updateFromEvent(event);
   });
   spectrum.addEventListener("pointermove", (event) => {
-    if (spectrum.hasPointerCapture?.(event.pointerId)) updateFromEvent(event);
+    if (!spectrum.hasPointerCapture?.(event.pointerId)) return;
+    pendingMoveCoords = { x: event.clientX, y: event.clientY };
+    if (pendingMoveRaf) return;
+    const schedule = typeof globalThis.requestAnimationFrame === "function"
+      ? globalThis.requestAnimationFrame
+      : (cb) => setTimeout(cb, 16);
+    pendingMoveRaf = schedule(() => {
+      pendingMoveRaf = 0;
+      if (!pendingMoveCoords) return;
+      const { x, y } = pendingMoveCoords;
+      pendingMoveCoords = null;
+      applyCoords(x, y);
+    });
   });
   spectrum.addEventListener("pointerup", (event) => {
     if (spectrum.hasPointerCapture?.(event.pointerId)) {
+      if (pendingMoveRaf && typeof globalThis.cancelAnimationFrame === "function") {
+        globalThis.cancelAnimationFrame(pendingMoveRaf);
+        pendingMoveRaf = 0;
+      }
+      pendingMoveCoords = null;
       spectrum.releasePointerCapture(event.pointerId);
       updateFromEvent(event);
       persistAppearance().then(() => toast(i18n.t("accent_applied"))).catch(() => {});
@@ -828,10 +899,12 @@ function renderSettingsRefreshStatus(status = {}) {
 }
 
 async function persistAutoRefreshPreference(enabled) {
+  markSelfStorageWrite();
   const response = await sendMessage({
     action: "config:save",
     config: { ui: { autoRefreshSettings: enabled === true } }
   });
+  markSelfStorageWrite();
   if (response.state) state = response.state;
   return response;
 }
@@ -1082,6 +1155,8 @@ function ensureAccountController() {
       splitAccount, suffixLabel, makeAccountLabel, naturalAccountKey, maskAccount, escapeHtml,
       t: (key, substitutions) => i18n.t(key, substitutions),
       sendMessage, renderRequestLog, loadState, toast,
+      renderGatewaySecurityWarning, scheduleSettingsAutoSave,
+      onSelfWrite: markSelfStorageWrite,
       confirmDialog: globalThis.DrcomConfirmDialog
     });
   }
@@ -1123,6 +1198,7 @@ function isRequestRecordOk(record) {
 
 async function handleAccountListClick(event) { return ensureAccountController().handleListClick(event); }
 function fillAccountEditor(account) { return ensureAccountController().fillEditor(account); }
+function startNewAccount() { return ensureAccountController().startNew(); }
 function readEditedAccount() { return ensureAccountController().readEdited(); }
 async function saveEditedAccount(event) { return ensureAccountController().saveEdited(event); }
 async function loginEditedAccount() { return ensureAccountController().loginEdited(); }
@@ -1164,7 +1240,7 @@ function markSettingsAutoSaved() {
 async function autoSaveSettings({ announce = false } = {}) {
   if (!settingsFormDirty || !state) return false;
   const previousConfig = state.config;
-  const config = readConfig();
+  const config = readConfig({ includeAppearance: false });
   const gatewayWarning = gatewaySecurityWarning(state.config, config);
   if (gatewayWarning) {
     const confirmed = await globalThis.DrcomConfirmDialog.ask({
@@ -1179,7 +1255,9 @@ async function autoSaveSettings({ announce = false } = {}) {
   if (config.ui.background === "daily" && !await ensureWallpaperPermission()) {
     throw new Error(i18n.t("bing_permission_required"));
   }
+  markSelfStorageWrite();
   const response = await sendMessage({ action: "config:save", config });
+  markSelfStorageWrite();
   state = response.state;
   try {
     await revokeUnusedGatewayAccess(previousConfig, state?.config || config);
@@ -1222,7 +1300,9 @@ async function resetConfig() {
   });
   if (!confirmed) return;
 
+  markSelfStorageWrite();
   const response = await sendMessage({ action: "config:reset" });
+  markSelfStorageWrite();
   state = response.state;
   hydrateForm();
   renderAccounts();
@@ -1240,13 +1320,21 @@ async function clearRequestLog() {
   });
   if (!confirmed) return;
 
+  markSelfStorageWrite();
   const response = await sendMessage({ action: "requestLog:clear" });
+  markSelfStorageWrite();
   state = response.state;
   renderRequestLog();
   toast(i18n.t("request_records_cleared"));
 }
 
-function readConfig() {
+function readConfig({ includeAppearance = true } = {}) {
+  const ui = {
+    modernizePortal: $("modernize-portal").checked,
+    autoRefreshSettings: $("auto-refresh-settings").checked,
+    title: i18n.t("campus_network_short")
+  };
+  if (includeAppearance) Object.assign(ui, readAppearanceConfig());
   return {
     portalUrl: $("portal-url").value.trim(),
     apiUrl: $("api-url").value.trim(),
@@ -1264,12 +1352,7 @@ function readConfig() {
       wlanAcIp: $("default-ac-ip").value.trim(),
       wlanAcName: $("default-ac-name").value.trim()
     },
-    ui: {
-      modernizePortal: $("modernize-portal").checked,
-      autoRefreshSettings: $("auto-refresh-settings").checked,
-      title: i18n.t("campus_network_short"),
-      ...readAppearanceConfig()
-    },
+    ui,
     redirect: {
       returnToPortal: $("return-to-portal").checked,
       guardSeconds: Number($("guard-seconds").value) || 4
@@ -1325,10 +1408,12 @@ async function persistAppearance() {
   const previousAppearance = state?.config?.ui || null;
   const dirtyBeforePersist = settingsFormDirty;
   try {
+    markSelfStorageWrite();
     const response = await sendMessage({
       action: "config:save",
       config: { ui: readAppearanceConfig() }
     });
+    markSelfStorageWrite();
     if (response.state) {
       state = response.state;
       hydrateAppearance(response.state.config.ui);
@@ -1348,7 +1433,7 @@ function syncAppearanceControls() {
   const daily = source === "daily";
   const imageData = $("background-image-data").value;
   const hasImage = Boolean(imageData);
-  $("background-controls").hidden = !custom;
+  $("background-controls").hidden = !(custom || daily);
   $("clear-background").disabled = !hasImage;
   $("background-blur-value").value = `${Number($("background-blur").value)} px`;
   $("background-dim-value").value = `${Math.round(Number($("background-dim").value) * 100)}%`;

@@ -54,7 +54,7 @@ body.app-themed-page {
   border-right: 1px solid var(--divider-stroke);
   overflow-y: auto;
   overflow-x: hidden;
-  transition: width var(--normal-duration) cubic-bezier(0, 0, 0.35, 0.15, 1);
+  transition: width var(--normal-duration) cubic-bezier(0, 0, 0, 1);
 }
 
 /* 折叠态：48px compact，只显示字形（文字彻底隐藏不占位，图标按内容区居中） */
@@ -363,6 +363,17 @@ body.app-themed-page {
   align-items: center;
   gap: 12px;
 }
+.section-heading-with-action {
+  flex-wrap: wrap;
+}
+.section-heading-copy {
+  flex: 1;
+  min-width: 0;
+}
+.account-new-button {
+  flex: none;
+  margin-left: auto;
+}
 .section-heading .section-icon { color: var(--accent-fill-default); font-size: 20px; }
 .section-heading h2 {
   margin: 0;
@@ -410,9 +421,12 @@ body.app-themed-page {
 
 .duration-control {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 .duration-control .duration-word { color: var(--text-secondary); font-size: 13px; white-space: nowrap; }
 .duration-control select { width: 72px; min-width: 72px; }
@@ -557,6 +571,9 @@ body.app-themed-page {
   background-repeat: no-repeat;
   background-position: right 10px center;
   background-size: 10px;
+}
+:root[data-resolved-theme="dark"] .settings-shell select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8.098 4.598'%3E%3Cpath fill='%23c8c8c8' d='M.195.195C.39 0 .708 0 .903.195L4.049 3.342 7.195.195C7.39 0 7.708 0 7.903.195C8.098.39 8.098.708 7.903.903L4.403 4.403C4.208 4.598 3.89 4.598 3.695 4.403L.195.903C0 .708 0 .39 .195.195Z'/%3E%3C/svg%3E");
 }
 
 #ui-language { min-height: 44px; width: min(220px, 100%); white-space: nowrap; }
@@ -825,7 +842,7 @@ body.app-themed-page {
   border-bottom: 1px solid var(--divider-stroke);
   overflow: visible;
 }
-:root[data-nav-pane-position="top"] .sidebar-top { margin: 0 4px 0 0; }
+:root[data-nav-pane-position="top"] .sidebar-top { display: none; }
 :root[data-nav-pane-position="top"] .sidebar-brand {
   margin: 0 12px 0 0;
   padding: 4px 8px;
@@ -936,7 +953,33 @@ body.app-themed-page {
 .accent-hex { width: 100% !important; font-family: var(--font-mono) !important; }
 
 .background-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
-.file-picker { cursor: pointer; }
+.settings-shell label.file-picker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 5px 11px 6px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--ctrl-fill-default);
+  border: 1px solid var(--stroke-default);
+  border-bottom-color: var(--stroke-secondary);
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  transition: color var(--fast-duration) var(--fast-out-slow-in),
+    background-color var(--fast-duration) var(--fast-out-slow-in),
+    border-color var(--fast-duration) var(--fast-out-slow-in);
+}
+.settings-shell label.file-picker:hover { background: var(--ctrl-fill-secondary); }
+.settings-shell label.file-picker:active { background: var(--ctrl-fill-tertiary); color: var(--text-secondary); }
+.settings-shell label.file-picker:focus-within {
+  outline: 2px solid var(--focus-stroke-outer);
+  outline-offset: 1px;
+  box-shadow: inset 0 0 0 1px var(--focus-stroke-inner);
+}
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -953,6 +996,7 @@ body.app-themed-page {
   border: 1px solid var(--card-stroke);
   border-radius: var(--overlay-radius);
   background-color: var(--solid-bg-secondary);
+  background-repeat: no-repeat;
   background-size: cover;
   background-position: var(--preview-position, center);
   overflow: hidden;
@@ -1046,16 +1090,24 @@ body.app-themed-page {
   .cp-side { width: 100%; min-width: 0; }
 }
 
+@media (max-width: 960px) {
+  .appearance-layout { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 640px) {
-  .settings-autosave-status { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+  .settings-autosave-status,
+  .toast { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* ---------- 响应式：≤640 底部 Dock（WinUI 底部 NavigationView） ---------- */
 
 @media (max-width: 640px) {
-  .settings-layout { display: block; }
+  :root .settings-layout,
+  :root[data-nav-pane-position="top"] .settings-layout { display: block; }
 
-  .settings-sidebar {
+  :root .settings-layout .settings-sidebar,
+  :root .settings-layout.nav-compact .settings-sidebar,
+  :root[data-nav-pane-position="top"] .settings-layout .settings-sidebar {
     position: fixed;
     left: 0;
     right: 0;
@@ -1070,6 +1122,7 @@ body.app-themed-page {
     gap: 0;
     padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px));
     border-right: 0;
+    border-bottom: 0;
     border-top: 1px solid var(--divider-stroke);
     background: var(--flyout-bg);
     -webkit-backdrop-filter: var(--flyout-backdrop-filter);
@@ -1077,15 +1130,20 @@ body.app-themed-page {
     overflow: visible;
   }
 
-  .sidebar-brand, .sidebar-note { display: none; }
+  :root .settings-sidebar .sidebar-top,
+  :root .settings-sidebar .sidebar-brand,
+  :root .settings-sidebar .sidebar-note { display: none; }
 
-  .sidebar-nav {
+  :root .settings-sidebar .sidebar-nav,
+  :root[data-nav-pane-position="top"] .settings-sidebar .sidebar-nav {
     flex: 1;
     flex-direction: row;
     gap: 0;
   }
 
-  .settings-sidebar .win-nav-item {
+  :root .settings-layout .settings-sidebar .win-nav-item,
+  :root .settings-layout.nav-compact .settings-sidebar .win-nav-item,
+  :root[data-nav-pane-position="top"] .settings-layout .settings-sidebar .win-nav-item {
     flex: 1;
     flex-direction: column;
     justify-content: center;
@@ -1095,9 +1153,11 @@ body.app-themed-page {
     padding: 4px 0;
     font-size: 11px;
   }
-  .settings-sidebar .win-nav-item .win-glyph { font-size: 16px; }
+  :root .settings-layout.nav-compact .win-nav-item > span:not(.win-glyph) { display: inline; }
+  :root .settings-layout.nav-compact .win-nav-item .win-glyph { transform: none; }
+  :root .settings-sidebar .win-nav-item .win-glyph { font-size: 16px; }
 
-  .settings-sidebar .win-nav-item::before {
+  :root .settings-sidebar .win-nav-item::before {
     left: 50%;
     top: auto;
     bottom: 0;
@@ -1105,7 +1165,8 @@ body.app-themed-page {
     height: 0;
     transform: translateX(-50%);
   }
-  .settings-sidebar .win-nav-item[aria-current="page"]::before { height: 3px; }
+  :root .settings-layout .settings-sidebar .win-nav-item[aria-current="page"]::before,
+  :root .settings-layout.nav-compact .settings-sidebar .win-nav-item[aria-current="page"]::before { height: 3px; }
 
   .settings-workspace { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 
@@ -1120,20 +1181,23 @@ body.app-themed-page {
   .diagnostics-actions button { flex: 1; }
 
   .settings-row { flex-wrap: wrap; }
+
+  .slider-control { width: 100%; }
 }
 
 @media (max-width: 340px) {
   .sidebar-nav { overflow-x: auto; }
 }
 
-/* 横屏矮视口 */
-@media (max-height: 540px) and (orientation: landscape) {
-  .settings-sidebar { position: static; width: 200px; height: auto; }
+/* 横屏矮视口（仅桌面左侧栏生效，避免覆盖移动端底部 Dock 与顶部导航） */
+@media (min-width: 641px) and (max-height: 540px) and (orientation: landscape) {
+  :root:not([data-nav-pane-position="top"]) .settings-sidebar { position: static; width: 200px; height: auto; }
   .settings-layout { min-height: 0; }
 }
 
 @media (pointer: coarse) {
   .settings-shell button,
+  .settings-shell label.file-picker,
   .settings-shell input:not([type="checkbox"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]),
   .settings-shell select,
   .settings-shell textarea { min-height: 44px; }
@@ -1155,6 +1219,7 @@ body.app-themed-page {
 
 @media (prefers-reduced-motion: reduce) {
   .settings-shell button,
+  .settings-shell label.file-picker,
   .check-row input[type="checkbox"],
   .switch input[type="checkbox"],
   .refresh-toggle input,
@@ -1167,4 +1232,5 @@ body.app-themed-page {
 @media (forced-colors: active) {
   .settings-sidebar { border-right: 1px solid CanvasText; }
   .settings-row, .diagnostics-card, .simple-account { border: 1px solid CanvasText; }
+  .settings-shell select { appearance: auto; background-image: none; }
 }

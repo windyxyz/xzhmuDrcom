@@ -21,3 +21,16 @@ test("SSH 的明确登录成功仍必须复核在线，未知状态按失败处�
   assert.match(successBranch, /\[ "\$state" = "online" \]/);
   assert.ok(successBranch.indexOf("query_status_state") < successBranch.indexOf("save_session"));
 });
+
+test("SSH 配置解析使用可移植 tr 清除 CR，短账号脱敏返回 ****，debug_server 失败时退避", () => {
+  const loadConfig = source.match(/load_config\(\) \{([\s\S]*?)\n\}/)?.[1] || "";
+  assert.match(loadConfig, /tr -d '\\r'/);
+  assert.doesNotMatch(loadConfig, /sed[^'\n]*\\r\$/);
+
+  const maskAccount = source.match(/mask_account\(\) \{([\s\S]*?)\n\}/)?.[1] || "";
+  assert.match(maskAccount, /\[ "\$length" -le 4 \]/);
+  assert.match(maskAccount, /printf '%s' "\*\*\*\*"/);
+
+  const debugServer = source.match(/cmd_debug_server\(\) \{([\s\S]*?)\n\}/)?.[1] || "";
+  assert.match(debugServer, /if ! \{[\s\S]*nc -l -s "\$DEBUG_BIND" -p "\$DEBUG_PORT"; then\s+sleep 1/);
+});

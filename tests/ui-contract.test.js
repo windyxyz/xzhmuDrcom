@@ -93,10 +93,10 @@ test("welcome.js 引用的必需元素都存在于欢迎页", () => {
   assert.deepEqual(Array.from(referenced).filter((id) => !declared.has(id)), []);
 });
 
-test("默认门户可读取扩展内置图标字体且公开范围仅限网关", () => {
+test("门户和自定义网关仅公开扩展内置图标字体资源", () => {
   const expected = [{
     resources: ["fonts/segoe-fluent-icons.ttf"],
-    matches: ["http://10.10.10.2/*", "https://10.10.10.2/*"]
+    matches: ["http://*/*", "https://*/*"]
   }];
   for (const fileName of ["manifest.json", "manifest.firefox.json"]) {
     const manifest = JSON.parse(readExtensionFile(fileName));

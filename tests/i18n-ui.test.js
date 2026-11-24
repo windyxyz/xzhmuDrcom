@@ -35,7 +35,8 @@ test("界面消息目录提供稳定状态和设置页品牌翻译", () => {
 test("紧凑语言控件不会换行且满足触控高度", () => {
   const popupCss = readFileSync(join(CRX, "popup.css"), "utf8");
   const optionsCss = readFileSync(join(CRX, "options.css"), "utf8");
-  assert.match(popupCss, /#language-toggle\s*\{[^}]*white-space:\s*nowrap[^}]*min-height:\s*44px/s);
+  assert.match(popupCss, /#language-toggle\s*\{[^}]*white-space:\s*nowrap/s);
+  assert.match(popupCss, /@media\s*\(pointer:\s*coarse\)\s*\{[^}]*#language-toggle\s*\{[^}]*min-height:\s*44px/s);
   assert.match(optionsCss, /#ui-language\s*\{[^}]*min-height:\s*44px/s);
 });
 

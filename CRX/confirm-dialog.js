@@ -10,6 +10,7 @@
   function createController(elements, localization = {}) {
     let pendingResolve = null;
     let pendingOptions = null;
+    let previousFocus = null;
     const t = (key) => typeof localization.t === "function"
       ? localization.t(key)
       : root.DrcomI18n?.t?.(key) || key;
@@ -24,9 +25,16 @@
     function finish(value) {
       if (!pendingResolve) return;
       const resolve = pendingResolve;
+      const restoreTarget = previousFocus;
       pendingResolve = null;
       pendingOptions = null;
+      previousFocus = null;
       if (elements.dialog.open) elements.dialog.close();
+      if (restoreTarget && typeof restoreTarget.focus === "function" && restoreTarget.isConnected !== false) {
+        try {
+          restoreTarget.focus();
+        } catch (error) {}
+      }
       resolve(value);
     }
 
@@ -47,6 +55,8 @@
     return {
       ask(options = {}) {
         if (pendingResolve) return Promise.resolve(false);
+        previousFocus = elements.dialog?.ownerDocument?.activeElement
+          || (typeof document !== "undefined" ? document.activeElement : null);
         pendingOptions = options;
         render(options);
 

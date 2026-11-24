@@ -145,6 +145,11 @@ function isLatestConnectionOperation(operationId) {
 function activeConnectionOperationId() {
   return latestConnectionOperationId;
 }
+
+function hasPendingConnectionOperation() {
+  return pendingConnectionOperations.size > 0;
+}
+const STATE_TEXT_ENCODER = new TextEncoder();
 const STATE_UNCHANGED = Symbol("state-unchanged");
 const WEB_PAGE_ACTIONS = new Set([
   "language:get",
@@ -212,21 +217,25 @@ async function getState() {
   );
   const normalized = withRecentRequests(normalizedState, normalizedRecentRequests);
   const storedMainSerialized = storedState ? JSON.stringify(stripRecentRequests(storedState)) : "";
-  const normalizedMainSerialized = JSON.stringify(stripRecentRequests(normalized));
   const storedRecentSerialized = Array.isArray(storedRecentRequests)
-    ? JSON.stringify(normalizeRecentRequests(storedRecentRequests))
+    ? JSON.stringify(storedRecentRequests)
     : "";
   const normalizedRecentSerialized = JSON.stringify(normalizedRecentRequests);
   const hasLegacyRecentRequests = Boolean(storedState && Object.prototype.hasOwnProperty.call(storedState, "recentRequests"));
   const needsRecentWrite = hasLegacyRecentRequests
     || (Array.isArray(storedRecentRequests) && storedRecentSerialized !== normalizedRecentSerialized);
-  const needsMainWrite = !storedState
+  let needsMainWrite = !storedState
     || storedState.schemaVersion !== SCHEMA_VERSION
     || hasLegacyCredentials
-    || hasLegacyRecentRequests
-    || (persistedStateSerialized === null
-      ? storedMainSerialized !== normalizedMainSerialized
-      : storedMainSerialized !== persistedStateSerialized);
+    || hasLegacyRecentRequests;
+  if (!needsMainWrite) {
+    if (persistedStateSerialized !== null) {
+      needsMainWrite = storedMainSerialized !== persistedStateSerialized;
+    } else {
+      const normalizedMainSerialized = JSON.stringify(stripRecentRequests(normalized));
+      needsMainWrite = storedMainSerialized !== normalizedMainSerialized;
+    }
+  }
 
   if (needsRecentWrite) {
     await setRecentRequests(normalizedRecentRequests);
@@ -245,8 +254,9 @@ async function setState(state, options = {}) {
   const normalized = normalizeState(state);
   const recentRequests = normalizeRecentRequests(normalized.recentRequests);
   const persistentState = stripRecentRequests(normalized);
-  assertStateStorageBudget(persistentState);
-  persistedStateSerialized = JSON.stringify(persistentState);
+  const serialized = JSON.stringify(persistentState);
+  assertStateStorageBudget(persistentState, serialized);
+  persistedStateSerialized = serialized;
   if (options.writeRecentRequests !== false) {
     await setRecentRequests(recentRequests);
   }
@@ -255,13 +265,12 @@ async function setState(state, options = {}) {
 }
 
 function stripRecentRequests(state) {
-  const persistentState = clone(state || {});
-  delete persistentState.recentRequests;
+  const { recentRequests, ...persistentState } = state && typeof state === "object" ? state : {};
   return persistentState;
 }
 
 function withRecentRequests(state, recentRequests) {
-  return { ...clone(state || {}), recentRequests: normalizeRecentRequests(recentRequests) };
+  return { ...(state && typeof state === "object" ? state : {}), recentRequests: normalizeRecentRequests(recentRequests) };
 }
 
 function normalizeRecentRequests(records) {
@@ -304,6 +313,12 @@ function normalizeState(input) {
 
   state.config.portalUrl = normalizeUrl(state.config.portalUrl, DEFAULT_STATE.config.portalUrl);
   state.config.apiUrl = normalizeUrl(state.config.apiUrl, DEFAULT_STATE.config.apiUrl);
+  const rawCallbackPrefix = stringValue(state.config.login.callbackPrefix).trim();
+  state.config.login.callbackPrefix = /^[A-Za-z_$][\w$]*$/.test(rawCallbackPrefix)
+    ? rawCallbackPrefix
+    : DEFAULT_STATE.config.login.callbackPrefix;
+  state.config.login.loginMethod = stringValue(state.config.login.loginMethod).trim() || DEFAULT_STATE.config.login.loginMethod;
+  state.config.login.jsVersion = stringValue(state.config.login.jsVersion).trim() || DEFAULT_STATE.config.login.jsVersion;
   state.config.ui.accent = normalizeAccent(state.config.ui.accent);
   state.config.ui.theme = ["system", "light", "dark"].includes(state.config.ui.theme)
     ? state.config.ui.theme
@@ -448,12 +463,12 @@ function mutateRequestLog(mutator) {
 }
 
 async function saveConfig(patch) {
-  const previous = await getState();
+  let wasKeeping = false;
   const { state } = await mutateState((draft) => {
+    wasKeeping = draft.config.automation.keepAlive === true;
     draft.config = normalizeState({ ...draft, config: mergePatch(draft.config, patch) }).config;
   });
   /* 用户把自动连接重新打开视为“明确重新启用自动连接”，清除主动注销抑制。 */
-  const wasKeeping = previous.config.automation.keepAlive === true;
   const nowKeeping = state.config.automation.keepAlive === true;
   if (!wasKeeping && nowKeeping && await isManualLogoutActive()) {
     await setManualLogout(false);
@@ -613,7 +628,7 @@ async function updateActionBadge(connection) {
   }
   if (typeof chrome.action.setTitle === "function") {
     await chrome.action.setTitle({
-      title: connection.message || "校园网助手"
+      title: connection.message || "徐医校园网xzhmu"
     });
   }
 }
@@ -634,8 +649,11 @@ function normalizeUrl(value, fallback) {
   }
 }
 
-function assertStateStorageBudget(state) {
-  const bytes = new TextEncoder().encode(JSON.stringify(stripRecentRequests(state))).byteLength;
+function assertStateStorageBudget(state, preSerialized = null) {
+  const serialized = typeof preSerialized === "string"
+    ? preSerialized
+    : JSON.stringify(stripRecentRequests(state));
+  const bytes = STATE_TEXT_ENCODER.encode(serialized).byteLength;
   if (bytes > MAX_STATE_BYTES) {
     throw new Error("本地存储空间不足。请清除或更换尺寸更小的自定义背景后再保存。");
   }

@@ -63,3 +63,20 @@ test("语言服务拒绝无效值且不写入存储", async () => {
   await assert.rejects(() => service.setPreference("javascript:alert(1)"), /语言/);
   assert.deepEqual(dependencies.storageWrites, []);
 });
+
+test("语言广播在标签携带 URL 时仅通知扩展页和门户页", async () => {
+  const dependencies = fakeDependencies();
+  dependencies.tabs.query = async () => [
+    { id: 1, url: "chrome-extension://test-id/options.html" },
+    { id: 2, url: "http://10.10.10.2/a79.htm" },
+    { id: 3, url: "https://example.com/article" },
+    { id: 4 }
+  ];
+  const service = createLanguageService(dependencies);
+
+  await service.setPreference("zh-CN");
+  assert.deepEqual(
+    dependencies.tabMessages.map((item) => item.tabId),
+    [1, 2, 4]
+  );
+});

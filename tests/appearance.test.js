@@ -92,3 +92,13 @@ test("浅色强调色会自动改用深色文字保证对比度", () => {
   const result = appearance.applyToRoot({ dataset: {}, style: { setProperty() {} } }, { accent: "#4cc2ff" });
   assert.equal(result.onAccent, "#000000");
 });
+
+test("自定义背景接受合法 data:image/gif base64 图片", () => {
+  const gif = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  const normalized = appearance.normalizeAppearance({
+    background: "custom",
+    backgroundImage: gif
+  });
+  assert.equal(normalized.background, "custom");
+  assert.equal(normalized.backgroundImage, gif);
+});

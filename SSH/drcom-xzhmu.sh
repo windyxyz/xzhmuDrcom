@@ -66,7 +66,7 @@ config_assign() {
 load_config() {
   [ -r "$CONFIG_FILE" ] || fail "config not found: $CONFIG_FILE"
   while IFS= read -r config_line || [ -n "$config_line" ]; do
-    config_line="$(printf '%s' "$config_line" | sed 's/^[[:space:]]*//;s/[[:space:]]*\r$//;s/[[:space:]]*$//')"
+    config_line="$(printf '%s' "$config_line" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
     case "$config_line" in
       ''|\#*|\;*) continue ;;
     esac
@@ -752,9 +752,12 @@ mask_account() {
   [ -n "$value" ] || { printf '%s' ""; return; }
   short="$(printf '%s' "$value" | sed 's/@.*$//')"
   length="${#short}"
+  if [ "$length" -le 4 ]; then
+    printf '%s' "****"
+    return
+  fi
   prefix="$(printf '%s' "$short" | cut -c 1-2)"
   start=$((length - 1))
-  [ "$start" -lt 1 ] && start=1
   suffix="$(printf '%s' "$short" | cut -c "$start"-"$length")"
   printf '%s***%s' "$prefix" "$suffix"
 }
@@ -918,14 +921,16 @@ cmd_debug_server() {
   while true; do
     body="$(debug_json)"
     length="$(printf '%s' "$body" | wc -c | tr -d ' ')"
-    {
+    if ! {
       printf 'HTTP/1.1 200 OK\r\n'
       printf 'Content-Type: application/json; charset=utf-8\r\n'
       printf 'Cache-Control: no-store\r\n'
       printf 'Content-Length: %s\r\n' "$length"
       printf '\r\n'
       printf '%s' "$body"
-    } | nc -l -s "$DEBUG_BIND" -p "$DEBUG_PORT"
+    } | nc -l -s "$DEBUG_BIND" -p "$DEBUG_PORT"; then
+      sleep 1
+    fi
   done
 }
 

@@ -78,7 +78,7 @@
         }
         const logout = target.closest('input[name="logout" i], button[name="logout" i], button[id*="logout" i], button[class*="logout" i], [data-localize*="logout" i], [data-action*="logout" i]');
         if (logout) trustedNetworkCaptureUntil = Date.now() + 5000;
-      }, true);
+      }, { capture: true, passive: true });
     });
   }
 

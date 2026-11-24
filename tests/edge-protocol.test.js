@@ -125,3 +125,8 @@ test("非 UTF-8 Base64 候选保持原文而不是抛错", () => {
   const original = "/+7d";
   assert.equal(typeof protocol.decodeMessage(original), "string");
 });
+
+test("decodeMessage 拒绝解码出 C0/DEL 控制字符的短 ASCII 字符串", () => {
+  assert.equal(protocol.decodeMessage("USER"), "USER");
+  assert.equal(protocol.decodeMessage("AAAA"), "AAAA");
+});

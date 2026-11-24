@@ -313,6 +313,7 @@ body.app-themed-page {
   background-image: var(--appearance-image);
   background-position: var(--appearance-position, center);
   background-size: var(--appearance-fit, cover);
+  background-repeat: no-repeat;
   filter: blur(var(--appearance-blur));
   transform: scale(var(--appearance-scale));
 }
@@ -357,10 +358,18 @@ body.app-themed-page > :not(.skip-link) {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes drcom-popup-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .app-themed-page .welcome-shell,
-.app-themed-page .settings-shell,
-.app-themed-page .shell {
+.app-themed-page .settings-shell {
   animation: drcom-content-enter var(--entrance-duration) var(--decelerate) both;
+}
+
+.app-themed-page .shell {
+  animation: drcom-popup-enter var(--fast-duration) var(--decelerate) both;
 }
 
 #drcom-modern-root .drcom-surface {
@@ -441,13 +450,25 @@ body.app-themed-page > :not(.skip-link) {
 
 @media (max-width: 640px), (pointer: coarse) {
   :root { --glass-blur: 16px; }
+}
+@media (max-width: 640px) {
+  .app-themed-page:not(.popup-page) button,
+  .app-themed-page:not(.popup-page) input:not([type="checkbox"]),
+  .app-themed-page:not(.popup-page) select,
+  #drcom-modern-root button,
+  #drcom-modern-root input:not([type="checkbox"]),
+  #drcom-modern-root select { min-height: 44px; }
+  /* 开关轨道固定 40×20，不参与 44px 触控增高（触控目标由所在行提供） */
+  .app-themed-page:not(.popup-page) input[type="checkbox"],
+  #drcom-modern-root input[type="checkbox"] { min-height: 20px; }
+}
+@media (pointer: coarse) {
   .app-themed-page button,
   .app-themed-page input:not([type="checkbox"]),
   .app-themed-page select,
   #drcom-modern-root button,
   #drcom-modern-root input:not([type="checkbox"]),
   #drcom-modern-root select { min-height: 44px; }
-  /* 开关轨道固定 40×20，不参与 44px 触控增高（触控目标由所在行提供） */
   .app-themed-page input[type="checkbox"],
   #drcom-modern-root input[type="checkbox"] { min-height: 20px; }
 }
@@ -705,6 +726,16 @@ body.app-themed-page > :not(.skip-link) {
     inset 0 -2px 0 0 var(--accent-fill-default);
   outline: none;
 }
+:root[data-theme="dark"] .win-select,
+#drcom-modern-root[data-theme="dark"] .win-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8.098 4.598'%3E%3Cpath fill='%23d0d0d0' d='M.195.195C.39 0 .708 0 .903.195L4.049 3.342 7.195.195C7.39 0 7.708 0 7.903.195C8.098.39 8.098.708 7.903.903L4.403 4.403C4.208 4.598 3.89 4.598 3.695 4.403L.195.903C0 .708 0 .39 .195.195Z'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .win-select,
+  #drcom-modern-root:not([data-theme="light"]) .win-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8.098 4.598'%3E%3Cpath fill='%23d0d0d0' d='M.195.195C.39 0 .708 0 .903.195L4.049 3.342 7.195.195C7.39 0 7.708 0 7.903.195C8.098.39 8.098.708 7.903.903L4.403 4.403C4.208 4.598 3.89 4.598 3.695 4.403L.195.903C0 .708 0 .39 .195.195Z'/%3E%3C/svg%3E");
+  }
+}
 
 /* ---------- 16. 共享控件：Slider ---------- */
 
@@ -835,8 +866,8 @@ body.app-themed-page > :not(.skip-link) {
 /* ---------- 19. 共享控件：ContentDialog（危险操作确认） ---------- */
 
 .confirm-dialog {
-  width: min(548px, calc(100vw - 32px));
-  min-width: 320px;
+  width: min(548px, calc(100vw - 24px));
+  min-width: min(320px, calc(100vw - 24px));
   min-height: 184px;
   border: 1px solid var(--stroke-default);
   border-radius: var(--overlay-radius);
@@ -888,6 +919,7 @@ body.app-themed-page > :not(.skip-link) {
 .confirm-dialog-cancel {
   background: var(--ctrl-fill-default);
   color: var(--text-primary);
+  border-color: var(--stroke-default);
   border-bottom-color: var(--stroke-secondary);
 }
 .confirm-dialog-cancel:hover { background: var(--ctrl-fill-secondary); }
@@ -900,6 +932,7 @@ body.app-themed-page > :not(.skip-link) {
 }
 
 @media (max-width: 420px), (pointer: coarse) {
+  .confirm-dialog-surface { padding: 18px; }
   .confirm-dialog-actions { grid-template-columns: 1fr; }
   .confirm-dialog-actions button { min-height: 44px; }
 }
@@ -926,6 +959,10 @@ body.app-themed-page > :not(.skip-link) {
   stroke-dasharray: 0.001 99.999;
   animation: win-ring-trim 2s linear infinite;
 }
+.primary .win-ring circle,
+.win-btn--accent .win-ring circle {
+  stroke: var(--accent-text);
+}
 
 @keyframes win-ring-orbit {
   from { transform: rotate(-90deg); }
@@ -933,8 +970,8 @@ body.app-themed-page > :not(.skip-link) {
 }
 @keyframes win-ring-trim {
   0% { stroke-dasharray: 0.001 99.999; stroke-dashoffset: 0; }
-  50% { stroke-dasharray: 0.5 99.5; stroke-dashoffset: 0; }
-  100% { stroke-dasharray: 0.5 99.5; stroke-dashoffset: -50; }
+  50% { stroke-dasharray: 50 50; stroke-dashoffset: 0; }
+  100% { stroke-dasharray: 0.001 99.999; stroke-dashoffset: -100; }
 }
 
 /* 按钮内联小环 */
@@ -1039,6 +1076,7 @@ button .win-ring--inline + span { vertical-align: middle; }
   padding: 10px 16px;
   font-size: 14px;
   color: var(--text-primary);
+  background: var(--flyout-bg);
   border: 1px solid var(--stroke-default);
   border-radius: var(--overlay-radius);
   box-shadow: var(--shadow-flyout);
@@ -1229,4 +1267,5 @@ button .win-ring--inline + span { vertical-align: middle; }
   .glass-chrome { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
   .win-btn { border: 1px solid ButtonText; }
   .win-flyout { border: 1px solid CanvasText; }
+  select, .win-select { appearance: auto; background-image: none; }
 }
