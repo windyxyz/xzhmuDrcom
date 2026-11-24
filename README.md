@@ -10,6 +10,7 @@
   <a href="https://microsoftedge.microsoft.com/addons/detail/cdcpalakhfpmnkfpogooipghkflmboei">Edge 扩展商店</a> ·
   <a href="https://addons.mozilla.org/zh-CN/firefox/addon/%E5%BE%90%E5%8C%BB%E6%A0%A1%E5%9B%AD%E7%BD%91xzhmu/">Firefox Add-ons</a>
 </p>
+
 ## 安装
 
 | 平台 | 安装方式 |
