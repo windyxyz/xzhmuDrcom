@@ -1,119 +1,80 @@
 <p align="center">
-  <img src="docs/assets/xuyi-helper-this-version-300-transparent.png" width="160" height="160" alt="徐医校园网xzhmu Logo">
+  <img src="docs/assets/xzhmu-drcom-logo.png" width="320" height="320" alt="徐医校园网xzhmu Logo">
 </p>
 
 <h1 align="center">徐医校园网xzhmu</h1>
 
-<p align="center">为徐州医科大学 Dr.COM 校园网提供现代登录界面、多账号管理、自动登录、连接恢复与可靠下线。</p>
+<p align="center">为徐州医科大学 Dr.COM 校园网提供快捷登录、多账号管理和掉线重连的浏览器扩展。</p>
+<p align="center">
+  <a href="https://github.com/windyxyz/xzhmuDrcom/releases/latest">GitHub Releases</a> ·
+  <a href="https://microsoftedge.microsoft.com/addons/detail/cdcpalakhfpmnkfpogooipghkflmboei">Edge 扩展商店</a> ·
+  <a href="https://addons.mozilla.org/zh-CN/firefox/addon/%E5%BE%90%E5%8C%BB%E6%A0%A1%E5%9B%AD%E7%BD%91xzhmu/">Firefox Add-ons</a>
+</p>
 
-扩展默认服务于 `10.10.10.2`，保留学校原始页面作为随时可切换的兜底入口，不代理学校业务，也不会把账号或诊断数据上传到项目服务器。
+## v1.1.3 有什么变化
+
+- 修复桌面扩展弹窗过窄和内容过高的问题，调整移动端设置页底部导航以及校园网门户的窄屏布局。
+- 弹窗和设置页新增独立的「新建账号」入口。每日壁纸支持调节模糊、暗化、缩放和焦点，加载失败时可使用已有缓存。
+- 修复刷新连接状态可能覆盖登录或注销结果的问题，并减少重复请求与存储写入。
+
+完整记录见 [更新日志](CHANGELOG.md#113---2026-11-24)。
 
 ## 安装
 
-推荐从浏览器官方扩展商店安装，浏览器会负责签名校验和后续更新；商店上架版本由各商店审核分发：
+| 平台 | 安装方式 |
+| --- | --- |
+| Edge 桌面 | [Edge 扩展商店](https://microsoftedge.microsoft.com/addons/detail/cdcpalakhfpmnkfpogooipghkflmboei) |
+| Firefox 桌面 | [Firefox Add-ons](https://addons.mozilla.org/zh-CN/firefox/addon/%E5%BE%90%E5%8C%BB%E6%A0%A1%E5%9B%AD%E7%BD%91xzhmu/) |
+| Chrome 桌面 / Edge 桌面手动安装 | 从 [GitHub Releases](https://github.com/windyxyz/xzhmuDrcom/releases/latest) 下载 Chromium ZIP，解压后在扩展管理页加载 |
 
-- [Firefox Add-ons：徐医校园网xzhmu](https://addons.mozilla.org/zh-CN/firefox/addon/%E5%BE%90%E5%8C%BB%E6%A0%A1%E5%9B%AD%E7%BD%91xzhmu/)
-- [Microsoft Edge 扩展：徐医校园网xzhmu](https://microsoftedge.microsoft.com/addons/detail/cdcpalakhfpmnkfpogooipghkflmboei)
+当前开发版本为 **1.1.3**。商店版的可用版本以各商店审核和上架进度为准。
 
-当前验证和支持范围为 Chrome 桌面、Edge 桌面、Edge Android 和 Firefox 桌面。
+支持范围为 Chrome 桌面、Edge 桌面、Edge Android 和 Firefox 桌面。移动端布局通过 Chromium 移动视口模拟验证。Edge Android 真机完整链路仍未验证。Chrome Android 不在支持范围内。
 
-- Chrome Android 不提供常规扩展支持，因此不在支持范围内，本项目不宣称支持。
-- Edge Android 依赖浏览器的移动视口模拟桌面扩展运行；Edge Android 真机表现尚未验证完全部机型，建议先在桌面端完成账号配置。
-- 当前开发版本为 **1.1.2**。
+**手动安装 Chromium 版**
 
-开发者也可以从源码加载 Chrome/Edge 版本：
+1. 解压 Release 中的 `drcom-xuzhou-medical-chrome-1.1.3.zip`。
+2. 打开 `chrome://extensions/` 或 `edge://extensions/`，开启开发者模式。
+3. 选择「加载已解压的扩展程序」，打开包含 `manifest.json` 的解压目录。从源码安装时选择仓库内的 `CRX/`。
+4. 连上校园网后打开 `http://10.10.10.2`，或从浏览器工具栏打开扩展。
 
-1. 下载或克隆仓库。
-2. 打开 `chrome://extensions/` 或 `edge://extensions/`，开启“开发人员模式”。
-3. 选择“加载解压缩的扩展”，指向仓库中的 `CRX/`。
-4. 连接校园网后访问 `http://10.10.10.2`，按首次安装引导完成登录。
+Firefox 的 Release ZIP 用于商店提交。日常安装请使用 Firefox Add-ons 提供的签名版本。
 
 ## 账号保存规则
 
-现代登录页和学校原始登录页采用两条不同的保存路径：
-
-- **现代登录页**：勾选“保存账号”后，可信的真实提交会直接保存并登录；未勾选时只进行本次临时登录，不会保存账号或密码。
-- **学校原始登录页**：扩展只在真实用户提交后的短窗口内捕获候选，并将其暂存并确认。登录跳转后会打开设置页显示来源、脱敏账号和覆盖提示；只有用户确认才写入持久账号，丢弃、超时或来源变化都不会保存。
-
-网页内容脚本不能直接覆盖已经保存的账号，也不能改变当前选择或触发自动登录。
+- 在扩展提供的现代登录页勾选「保存账号」后，登录时会保存该账号。取消勾选可临时登录。
+- 在学校原始登录页提交表单时，扩展短暂接收候选账号。启用「暂存并确认」后，可到设置页查看来源和掩码提示，并确认是否写入账号库。
 
 ## 界面语言
 
-扩展提供“跟随浏览器”“中文”和“English”三种语言模式。默认为“跟随浏览器”：浏览器首选语言为中文时显示中文，否则显示英文；手动选择中文或 English 后会固定使用该语言。
+可选择「跟随浏览器」「简体中文」或「English」。跟随浏览器时，中文语言环境显示简体中文，其他语言环境显示 English。
 
 ## 主要功能
 
-- 校园网、联通、电信、移动账号管理，支持保存账号与一次性临时登录。
-- 现代认证页与学校原始页面无刷新切换；验证码或页面异常时自动恢复原页面。
-- 所有入口共享单一登录任务，避免弹窗、门户、浏览器启动和保活重复认证。
-- WinUI 3 风格界面、浅色/深色/跟随系统主题、强调色、材质、遮罩、自定义背景与必应每日壁纸。
-- 在线信息可选经典、完整、简化或隐藏模式；账号、IP、MAC 和请求参数在界面、请求日志和导出中脱敏。
-- 门户诊断模式默认关闭，仅在本机保存脱敏结构，最多 10 个会话、总计 1 MiB。
+- **登录与连接恢复**｜在工具栏登录、注销或查询连接状态，按需启用自动登录和掉线重连。
+- **多账号管理**｜保存、切换或新建账号，支持校园网、电信、联通和移动账号后缀。
+- **校园网门户美化**｜在现代界面与学校原始页面之间切换。账号激活、找回密码和使用说明仍通过学校页面办理。
+- **外观与诊断**｜切换主题、强调色和背景，使用自定义图片或每日壁纸。需要排查问题时可按需启用增强诊断并导出日志。
 
-## 使用提醒
+## 隐私
 
-- 二维码和移动端验证码没有复刻。
-- 自助服务、账号激活、找回密码和使用说明均在新窗口打开学校官方页面，扩展不会读取这些外部页面。
-- 自定义网关只有在用户保存时才申请对应来源权限；默认网关无需额外授权。
-- 如果更新扩展后旧门户标签页没有响应，请刷新该标签页，让新内容脚本重新注入。
+保存账号时，凭据存放在当前浏览器配置文件的扩展 `storage.local` 中。默认 Dr.COM 网关通过 HTTP GET 发送认证凭据。界面、日志和导出默认隐藏密码。校园网页面的宿主脚本可能观察输入或用户事件，设备失陷或安装恶意扩展也可能导致凭据泄露。报告问题时请移除真实账号、密码、Cookie、认证 URL、IP 和 MAC。详见 [安全策略](SECURITY.md)。
 
-## 安全与隐私
+## OpenWrt / SSH
 
-为了实现保存账号和自动登录，密码会以明文保存在当前浏览器配置文件的扩展 `storage.local` 中；它不是独立密码保险库。默认 Dr.COM 协议使用 HTTP GET 发送凭据，扩展无法把学校既有协议升级为 HTTPS。
+`SSH/drcom-xzhmu.sh` 可在 OpenWrt 的 BusyBox `ash` 环境独立运行，提供状态查询、登录、保活和注销。安装和配置见 [OpenWrt / SSH 使用指南](SSH/README.md)。
 
-门户内嵌密码框仍位于 HTTP 宿主页面，宿主脚本可能观察输入或真实用户事件；closed Shadow DOM 不能完整隔离跨文档键盘观察。
+## 开发与贡献
 
-如果本机、浏览器配置文件或扩展权限环境发生设备失陷，或同一浏览器中存在恶意扩展，已保存凭据仍可能被读取；高风险设备建议不要保存账号。
-
-请勿在公共 Issue、聊天或测试数据中提交真实账号、密码、Cookie、完整认证 URL、HAR、IP 或 MAC。完整边界与报告方式见 [SECURITY.md](SECURITY.md)。
-
-## OpenWrt / SSH 脚本
-
-`SSH/drcom-xzhmu.sh` 可在 OpenWrt/BusyBox `ash` 环境中独立完成状态检查、登录、保活和注销，不依赖浏览器、Node.js、curl、jq 或 Python。
-
-脚本与扩展采用相同的生产登录参数和终端解绑顺序，限制 API/门户响应大小，不执行会话文件内容，并默认避免把认证 URL 暴露在进程参数中。部署步骤和安全边界见 [SSH/README.md](SSH/README.md)。
-
-## 项目文档
-
-- [开发指南](docs/development-guide.md)：架构、数据结构、消息接口、登录/注销数据流、测试和发布。
-- [产品设计](docs/product-design.md)：交互、视觉、账号保存语义与验收条件。
-- [变更日志](CHANGELOG.md)：各版本的完整变化。
-- [贡献指南](CONTRIBUTING.md)：开发约束、测试和提交要求。
-- [安全策略](SECURITY.md)：凭据威胁模型、延期风险与漏洞报告方式。
-
-核心后台按职责拆分，其中 `background/state-store.js` 负责 schema 13、主状态与独立请求日志的迁移和串行写入。完整文件职责表见开发指南。
-
-## 开发与验证
-
-项目运行时不依赖第三方 npm 包；真实浏览器测试要求 Node.js 22 或更高版本。
+项目使用原生 HTML、CSS 和 JavaScript。开发需要 Node.js 22 或更高版本，后台状态由 `CRX/background/state-store.js` 管理。
 
 ```powershell
 npm test
-# 等价命令：npm run test:all / npm run verify
-```
-
-统一命令依次完成静态检查、单元与运行测试（其中已经包含 `test:edge`）、真实 Chromium 界面测试和确定性打包验证，并在最后输出阶段汇总。某一阶段失败后仍会继续执行后续阶段，最终以非零状态退出。所有自动化测试都使用合成数据，不访问真实校园网。
-
-生成商店审核包：
-
-```powershell
 npm run package
 npm run package:firefox
+npm run verify:release -- v1.1.3
 ```
 
-产物位于 `dist/`：
+构建输出位于 `dist/`，包含 `drcom-xuzhou-medical-chrome-1.1.3.zip`、`drcom-xuzhou-medical-firefox-1.1.3.zip` 和各自的 SHA-256 校验文件。推送版本标签后，GitHub Actions 验证源码和包，再创建 Release。
 
-- `drcom-xuzhou-medical-chrome-1.1.2.zip` 与 SHA-256；
-- `drcom-xuzhou-medical-firefox-1.1.2.zip` 与 SHA-256。
-
-发布标签检查：
-
-```powershell
-npm run verify:release -- v1.X.X
-```
-
-详细发布流程、白名单规则和 GitHub Actions 行为见开发指南。版本说明由 `CHANGELOG.md` 生成，不在 README 重复维护。
-
-## 许可证
-
-项目按 [GNU General Public License v3.0 only](LICENSE) 发布。
+[开发指南](docs/development-guide.md) · [产品设计](docs/product-design.md) · [测试指南](docs/testing-guide.md) · [贡献指南](CONTRIBUTING.md) · [GPL-3.0-only](LICENSE)

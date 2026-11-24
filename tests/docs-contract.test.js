@@ -51,7 +51,9 @@ test("README 只链接仍在维护的正式文档并说明自动化发布命令"
   assert.match(readme, /npm run verify:release/);
   assert.match(readme, /background\/state-store\.js/);
   assert.match(readme, /暂存并确认/);
-  assert.match(readme, /xuyi-helper-this-version-300-transparent\.png/);
+  const logoPath = "docs/assets/xzhmu-drcom-logo.png";
+  assert.ok(readme.includes(`src="${logoPath}"`));
+  assert.ok(existsSync(join(projectRoot, logoPath)));
   assert.match(readme, /addons\.mozilla\.org/);
   assert.match(readme, /microsoftedge\.microsoft\.com/);
   assert.doesNotMatch(readme, /1\.1\.0 依据生产抓包恢复/);

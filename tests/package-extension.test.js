@@ -118,17 +118,14 @@ test("扩展 ZIP 只包含固定顺序的运行白名单并排除预览与源码
       .map((entry) => entry.archivePath);
 
     assert.deepEqual(entries.map((entry) => entry.name), expected);
-    /* Edge Add-ons 会拒绝 STORE 方式的包（报"不是有效的 ZIP"），
-       因此除极小文件外必须使用 DEFLATE；同时保留固定 DOS 时间戳，
-       保证同一 Node 版本下重复构建字节一致。 */
+    /* Edge Add-ons 需要 DEFLATE 打包。PNG 已经压缩过，可以保留为 STORE。 */
     assert.ok(
       entries.every((entry) => entry.method === 0 || entry.method === 8),
       "只允许 STORE 或 DEFLATE 压缩方法"
     );
-    assert.ok(
-      entries.filter((entry) => entry.compressedSize < entry.size).length >= entries.length - 2,
-      "绝大多数条目应实际被压缩"
-    );
+    const runtimeText = entries.filter((entry) => /\.(?:json|js|css|html)$/.test(entry.name));
+    assert.ok(runtimeText.every((entry) => entry.method === 8 && entry.compressedSize < entry.size),
+      "运行时文本文件应实际使用 DEFLATE 压缩");
     assert.ok(entries.every((entry) => entry.dosTime === FIXED_DOS_TIME));
     assert.ok(entries.every((entry) => entry.dosDate === FIXED_DOS_DATE));
     assert.ok(!entries.some((entry) => entry.name.includes("portal-preview")));
@@ -184,21 +181,37 @@ test("相同源码重复打包会生成逐字节一致的 ZIP 与 SHA-256", () =
   }
 });
 
-test("Chrome 与 Firefox 分发包使用各自的安全清单", () => {
+test("Chrome 与 Firefox 分发包使用各自的安全清单并包含扩展图标", () => {
   const projectRoot = join(__dirname, "..");
   const outputDirectory = mkdtempSync(join(tmpdir(), "drcom-browser-manifests-"));
 
   try {
     const chromePackage = buildPackage({ projectRoot, outputDirectory, target: "chrome" });
     const firefoxPackage = buildPackage({ projectRoot, outputDirectory, target: "firefox" });
-    const chromeManifest = JSON.parse(readStoredZipEntry(readFileSync(chromePackage.zipPath), "manifest.json"));
-    const firefoxManifest = JSON.parse(readStoredZipEntry(readFileSync(firefoxPackage.zipPath), "manifest.json"));
+    const chromeArchive = readFileSync(chromePackage.zipPath);
+    const firefoxArchive = readFileSync(firefoxPackage.zipPath);
+    const chromeManifest = JSON.parse(readStoredZipEntry(chromeArchive, "manifest.json"));
+    const firefoxManifest = JSON.parse(readStoredZipEntry(firefoxArchive, "manifest.json"));
 
     assert.equal(Object.hasOwn(chromeManifest, "key"), false);
     assert.equal(Object.hasOwn(firefoxManifest, "key"), false);
     assert.equal(Object.hasOwn(firefoxManifest, "options_page"), false);
     assert.equal(firefoxManifest.options_ui.page, "options.html");
     assert.equal(firefoxManifest.browser_specific_settings.gecko.id, "xzhmu-campus-net@xzhmu.local");
+
+    for (const [manifest, archive] of [[chromeManifest, chromeArchive], [firefoxManifest, firefoxArchive]]) {
+      for (const size of [16, 32, 48, 128]) {
+        const iconPath = manifest.icons[size];
+        assert.ok(iconPath, `缺少 ${size}px 扩展图标`);
+        const png = readStoredZipEntry(archive, iconPath);
+        assert.equal(png.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+        assert.equal(png.readUInt32BE(16), size);
+        assert.equal(png.readUInt32BE(20), size);
+      }
+      for (const size of [16, 32]) {
+        assert.equal(manifest.action.default_icon[size], manifest.icons[size]);
+      }
+    }
   } finally {
     rmSync(outputDirectory, { recursive: true, force: true });
   }

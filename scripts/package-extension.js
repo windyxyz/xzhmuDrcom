@@ -18,6 +18,10 @@ const DEFLATED_METHOD = 8;
 const RELEASE_FILES = [
   ["CRX/manifest.json", "manifest.json"],
   ["LICENSE", "LICENSE"],
+  ["CRX/icons/icon-16.png", "icons/icon-16.png"],
+  ["CRX/icons/icon-32.png", "icons/icon-32.png"],
+  ["CRX/icons/icon-48.png", "icons/icon-48.png"],
+  ["CRX/icons/icon-128.png", "icons/icon-128.png"],
   ["CRX/i18n-messages.js", "i18n-messages.js"],
   ["CRX/i18n.js", "i18n.js"],
   ["CRX/_locales/zh_CN/messages.json", "_locales/zh_CN/messages.json"],
